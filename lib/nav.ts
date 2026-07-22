@@ -6,6 +6,7 @@ import {
   FolderKanban,
   BookOpen,
   Brain,
+  Settings,
   type LucideIcon,
 } from "lucide-react";
 
@@ -24,4 +25,5 @@ export const dashboardNav: NavItem[] = [
   { label: "Projects", href: "/dashboard/projects", icon: FolderKanban, description: "The work of your life" },
   { label: "Journal", href: "/dashboard/journal", icon: BookOpen, description: "Your journey, remembered" },
   { label: "AI Companion", href: "/dashboard/ai", icon: Brain, description: "Understands your life" },
+  { label: "Settings", href: "/dashboard/settings", icon: Settings, description: "Password & preferences" },
 ];

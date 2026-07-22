@@ -12,3 +12,10 @@ export const SUPABASE_URL =
 export const SUPABASE_ANON_KEY =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
   "sb_publishable_z9-NnuFSm7XGgd5d3-Vhlw_k2G7R96V";
+
+/**
+ * LifeOS is a single-user, personal system. Behind the scenes there is one
+ * fixed "owner" identity; the password you choose on first launch is the key
+ * to it. You only ever see a single password field — never this address.
+ */
+export const OWNER_EMAIL = "owner@lifeos.app";
