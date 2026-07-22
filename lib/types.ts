@@ -33,6 +33,7 @@ export type Profile = {
   fitness_goal: string | null;
   calorie_target: number | null;
   protein_target_g: number | null;
+  icsb_hourly_rate: number | null;
   onboarded: boolean;
   updated_at: string;
 };
@@ -97,12 +98,120 @@ export type JournalEntry = {
 export type CalendarEvent = {
   id: string;
   user_id: string;
+  life_area_id: string | null;
   title: string;
   description: string | null;
   start_at: string;
   end_at: string;
   all_day: boolean;
+  source: "manual" | "google";
   category: string | null;
+  priority: "low" | "medium" | "high" | null;
+  location: string | null;
+  reminder_minutes_before: number | null;
+  subtype: string | null;
+  recurrence_rule: string | null;
+  parent_event_id: string | null;
+  google_event_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type GoogleCalendarConnection = {
+  id: string;
+  user_id: string;
+  access_token: string;
+  refresh_token: string;
+  token_expires_at: string;
+  google_calendar_id: string;
+  sync_token: string | null;
+  sync_enabled: boolean;
+  last_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LifeArea = {
+  id: string;
+  user_id: string;
+  name: string;
+  icon: string | null;
+  color: string | null;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Shift = {
+  id: string;
+  user_id: string;
+  shift_type: "morning" | "afternoon" | "night" | "holiday" | "vacation" | "training";
+  start_at: string;
+  end_at: string;
+  hourly_rate: number | null;
+  notes: string | null;
+  created_at: string;
+};
+
+export type Apiary = {
+  id: string;
+  user_id: string;
+  name: string;
+  location_text: string | null;
+  hive_count: number | null;
+  notes: string | null;
+  created_at: string;
+};
+
+export type HoneyHarvestLog = {
+  id: string;
+  user_id: string;
+  apiary_id: string | null;
+  harvest_date: string;
+  quantity_kg: number;
+  notes: string | null;
+  created_at: string;
+};
+
+export type HabitEntry = {
+  id: string;
+  user_id: string;
+  entry_date: string;
+  bible_study: boolean;
+  workout: boolean;
+  water_ml: number | null;
+  mood: number | null;
+  energy: number | null;
+  focus_score: number | null;
+  notes: string | null;
+  created_at: string;
+};
+
+/** A single concrete occurrence rendered on the calendar, merged from every
+ * source module. `editable` is false for read-only linked items (e.g. a
+ * goal's target date) — dragging those calls back into their own module's
+ * update action rather than mutating calendar_events. */
+export type CalendarItem = {
+  id: string;
+  title: string;
+  start: string;
+  end: string;
+  allDay: boolean;
+  color: string;
+  icon: string;
+  kind: "event" | "shift" | "goal" | "project" | "document" | "responsibility" | "milestone";
+  editable: boolean;
+  sourceTable: string;
+  sourceId: string;
+  priority: "low" | "medium" | "high" | null;
+  location: string | null;
+  description: string | null;
+  recurrenceRule: string | null;
+  isRecurringInstance: boolean;
+  lifeAreaId: string | null;
+  reminderMinutesBefore: number | null;
+  subtype: string | null;
+  fromGoogle: boolean;
 };
 
 export type AiMemory = {

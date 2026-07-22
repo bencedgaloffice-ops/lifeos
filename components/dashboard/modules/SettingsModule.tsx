@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Settings,
   Lock,
@@ -11,16 +12,29 @@ import {
   CalendarDays,
   Copy,
   RefreshCcw,
+  Link2,
+  Unlink,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { locales, localeLabels, type Locale } from "@/lib/i18n/translations";
 import { ModuleHeader, Panel, Field, inputClass } from "@/components/dashboard/ui";
-import { rotateCalendarToken, saveLocale } from "@/app/dashboard/settings/actions";
+import { rotateCalendarToken, saveLocale, disconnectGoogle, syncGoogleNow } from "@/app/dashboard/settings/actions";
 import { cn } from "@/lib/utils";
 
-export function SettingsModule({ feedToken }: { feedToken: string | null }) {
+export function SettingsModule({
+  feedToken,
+  googleConfigured,
+  googleConnection,
+}: {
+  feedToken: string | null;
+  googleConfigured: boolean;
+  googleConnection: { syncEnabled: boolean; lastSyncedAt: string | null } | null;
+}) {
   const { t, tList, locale, setLocale } = useLocale();
+  const searchParams = useSearchParams();
+  const googleStatus = searchParams.get("google");
+  const [googlePending, startGoogleTransition] = useTransition();
   const googleSteps = tList("settings.calendarGoogleSteps");
   const appleSteps = tList("settings.calendarAppleSteps");
   const [next, setNext] = useState("");
@@ -173,6 +187,79 @@ export function SettingsModule({ feedToken }: { feedToken: string | null }) {
               </div>
 
               <p className="text-xs leading-relaxed text-white/35">{t("settings.calendarOneWay")}</p>
+            </div>
+          )}
+        </Panel>
+
+        {/* Google Calendar two-way sync */}
+        <Panel>
+          <CardHead icon={Link2} title={t("settings.google.title")} hint={t("settings.google.hint")} />
+
+          {googleStatus && (
+            <p
+              className={cn(
+                "mb-4 rounded-xl border px-4 py-2.5 text-sm",
+                googleStatus === "connected"
+                  ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-200"
+                  : "border-red-500/25 bg-red-500/10 text-red-200",
+              )}
+            >
+              {googleStatus === "connected" && t("settings.google.connectSuccess")}
+              {googleStatus === "not_configured" && t("settings.google.notConfigured")}
+              {googleStatus === "no_refresh_token" && t("settings.google.noRefreshToken")}
+              {googleStatus === "error" && t("settings.google.connectError")}
+            </p>
+          )}
+
+          {!googleConnection ? (
+            <a
+              href={googleConfigured ? "/api/auth/google/start" : undefined}
+              aria-disabled={!googleConfigured}
+              className={cn(
+                "inline-flex items-center gap-2 rounded-full bg-white px-5 py-2.5 text-sm font-medium text-black transition-transform",
+                googleConfigured ? "hover:-translate-y-0.5" : "pointer-events-none opacity-50",
+              )}
+            >
+              <Link2 className="h-4 w-4" />
+              {t("settings.google.connect")}
+            </a>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="inline-flex items-center gap-1.5 text-emerald-300">
+                  <Check className="h-3.5 w-3.5" />
+                  {t("settings.google.connected")}
+                </span>
+                <span className="text-white/40">
+                  {t("settings.google.lastSynced")}:{" "}
+                  {googleConnection.lastSyncedAt ? new Date(googleConnection.lastSyncedAt).toLocaleString(locale === "hu" ? "hu-HU" : "en-US") : t("settings.google.never")}
+                </span>
+              </div>
+
+              {!googleConnection.syncEnabled && (
+                <p className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-2.5 text-xs text-amber-200">
+                  {t("settings.google.disabledHint")}
+                </p>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() => startGoogleTransition(() => syncGoogleNow())}
+                  disabled={googlePending}
+                  className="inline-flex items-center gap-1.5 rounded-full glass px-4 py-2 text-xs font-medium text-white/70 transition-colors hover:text-white disabled:opacity-50"
+                >
+                  <RefreshCcw className={cn("h-3.5 w-3.5", googlePending && "animate-spin")} />
+                  {t("settings.google.syncNow")}
+                </button>
+                <button
+                  onClick={() => startGoogleTransition(() => disconnectGoogle())}
+                  disabled={googlePending}
+                  className="inline-flex items-center gap-1.5 rounded-full glass px-4 py-2 text-xs font-medium text-red-300/80 transition-colors hover:text-red-300 disabled:opacity-50"
+                >
+                  <Unlink className="h-3.5 w-3.5" />
+                  {t("settings.google.disconnect")}
+                </button>
+              </div>
             </div>
           )}
         </Panel>

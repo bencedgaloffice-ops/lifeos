@@ -1,26 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useTransition } from "react";
 import { motion } from "framer-motion";
 import {
   Target,
   Wallet,
   FolderKanban,
   CalendarDays,
-  Bell,
   BookOpen,
   Sparkles,
   ArrowRight,
-  Plus,
-  Trash2,
   TrendingUp,
   Heart,
 } from "lucide-react";
-import { Panel, StatCard, Progress, Pill, Field, inputClass, ScoreRing } from "@/components/dashboard/ui";
+import { Panel, StatCard, Progress, Pill, ScoreRing } from "@/components/dashboard/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
-import { createEvent, deleteEvent } from "@/app/dashboard/actions";
 
 export type OverviewData = {
   name: string;
@@ -37,7 +32,7 @@ export type OverviewData = {
   journalCount: number;
   goals: { id: string; title: string; progress: number; category: string | null }[];
   projects: { id: string; name: string; progress: number; deadline: string | null }[];
-  reminders: { id: string; title: string; when: string; kind: string; deletable: boolean }[];
+  todayCalendar: { count: number; nextTitle: string | null; nextWhen: string | null };
   growth: { label: string; value: string }[];
   latestJournal: { title: string | null; body: string | null; date: string } | null;
   lifeScore: {
@@ -50,10 +45,7 @@ export type OverviewData = {
 };
 
 export function OverviewModule({ data }: { data: OverviewData }) {
-  const [addOpen, setAddOpen] = useState(false);
-  const [, startTransition] = useTransition();
   const { t, locale } = useLocale();
-  const today = new Date().toISOString().slice(0, 10);
   const fc = (n: number) => formatCurrency(n, data.currency, { locale });
 
   return (
@@ -166,72 +158,31 @@ export function OverviewModule({ data }: { data: OverviewData }) {
           </div>
         </OverviewCard>
 
-        {/* Reminders / calendar */}
-        <OverviewCard
-          icon={CalendarDays}
-          title={t("overview.calendarTitle")}
-          href="/dashboard"
-          className="lg:col-span-2"
-          action={
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                setAddOpen((v) => !v);
-              }}
-              className="inline-flex items-center gap-1.5 rounded-full glass px-3 py-1.5 text-xs text-white/70 transition-colors hover:text-white"
-            >
-              <Plus className="h-3.5 w-3.5" /> {t("overview.add")}
-            </button>
-          }
-        >
-          {addOpen && (
-            <form
-              action={(fd) => {
-                startTransition(() => createEvent(fd));
-                setAddOpen(false);
-              }}
-              className="mb-4 grid gap-3 rounded-2xl bg-white/[0.03] p-4 sm:grid-cols-2"
-            >
-              <div className="sm:col-span-2">
-                <Field label={t("overview.formWhat")}>
-                  <input name="title" required placeholder={t("overview.formWhatPlaceholder")} className={inputClass} />
-                </Field>
-              </div>
-              <Field label={t("overview.formDate")}>
-                <input type="date" name="date" defaultValue={today} className={inputClass} />
-              </Field>
-              <Field label={t("overview.formTime")}>
-                <input type="time" name="time" className={inputClass} />
-              </Field>
-              <div className="sm:col-span-2">
-                <button className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-white">
-                  {t("overview.addToCalendar")}
-                </button>
-              </div>
-            </form>
-          )}
-          {data.reminders.length === 0 ? (
-            <Empty text={t("overview.emptyReminders")} />
+        {/* Today — compact link into the full Calendar module */}
+        <OverviewCard icon={CalendarDays} title={t("overview.calendarTitle")} href="/dashboard/calendar" className="lg:col-span-2">
+          {data.todayCalendar.count === 0 ? (
+            <Empty text={t("overview.emptyToday")} />
           ) : (
-            <div className="divide-y divide-hairline">
-              {data.reminders.map((r) => (
-                <div key={r.id} className="group flex items-center gap-3 py-2.5">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/6 text-accent-soft">
-                    {r.kind === "event" ? <CalendarDays className="h-3.5 w-3.5" /> : <Bell className="h-3.5 w-3.5" />}
-                  </span>
-                  <span className="flex-1 truncate text-sm text-white/80">{r.title}</span>
-                  <span className="text-xs text-white/40">{r.when}</span>
-                  {r.deletable && (
-                    <form action={() => startTransition(() => deleteEvent(r.id))}>
-                      <button className="text-white/25 opacity-0 transition-opacity hover:text-red-300 group-hover:opacity-100" aria-label="Delete">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </form>
-                  )}
+            <div className="space-y-3">
+              <p className="text-sm text-white/70">{t("overview.todayCount", { n: data.todayCalendar.count })}</p>
+              {data.todayCalendar.nextTitle && (
+                <div>
+                  <p className="text-xs uppercase tracking-wider text-white/40">{t("overview.nextUp")}</p>
+                  <p className="mt-1 text-sm font-medium text-white/85">
+                    {data.todayCalendar.nextTitle}
+                    {data.todayCalendar.nextWhen && <span className="ml-2 text-xs font-normal text-white/40">{data.todayCalendar.nextWhen}</span>}
+                  </p>
                 </div>
-              ))}
+              )}
             </div>
           )}
+          <Link
+            href="/dashboard/calendar"
+            className="mt-4 inline-flex items-center gap-1.5 text-xs font-medium text-accent-soft transition-colors hover:text-accent"
+          >
+            {t("overview.openCalendar")}
+            <ArrowRight className="h-3 w-3" />
+          </Link>
         </OverviewCard>
 
         {/* Personal growth */}

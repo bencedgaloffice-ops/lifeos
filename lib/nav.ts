@@ -11,6 +11,7 @@ import {
   Landmark,
   ChefHat,
   Salad,
+  CalendarDays,
   type LucideIcon,
 } from "lucide-react";
 
@@ -23,6 +24,7 @@ export type NavItem = {
 
 export const dashboardNav: NavItem[] = [
   { key: "overview", href: "/dashboard", icon: LayoutGrid },
+  { key: "calendar", href: "/dashboard/calendar", icon: CalendarDays },
   { key: "protection", href: "/dashboard/protection", icon: ShieldCheck },
   { key: "finance", href: "/dashboard/finance", icon: Wallet },
   { key: "legacy", href: "/dashboard/legacy", icon: Landmark },
