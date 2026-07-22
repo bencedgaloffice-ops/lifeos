@@ -137,7 +137,7 @@ export function mergeCalendarItems(input: {
       lifeAreaId: icsbArea?.id ?? null,
       reminderMinutesBefore: null,
       subtype: shift.shift_type,
-      fromGoogle: false,
+      fromGoogle: Boolean(shift.google_event_id),
     });
   }
 

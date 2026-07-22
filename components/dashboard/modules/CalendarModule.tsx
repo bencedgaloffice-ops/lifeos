@@ -47,7 +47,7 @@ export function CalendarModule({
 }) {
   const { t } = useLocale();
   const [view, setView] = useState<View>("today");
-  const [focus, setFocus] = useState<"all" | "icsb" | "beekeeping">("all");
+  const [focus, setFocus] = useState<"all" | "icsb" | "beekeeping" | "google">("all");
   const [anchor, setAnchor] = useState(new Date());
   const [modalOpen, setModalOpen] = useState(false);
   const [activeItem, setActiveItem] = useState<CalendarItem | null>(null);
@@ -111,6 +111,7 @@ export function CalendarModule({
   const focusedItems = useMemo(() => {
     if (focus === "icsb") return items.filter((it) => it.kind === "shift" || it.lifeAreaId === icsbAreaId);
     if (focus === "beekeeping") return items.filter((it) => it.lifeAreaId === beekeepingAreaId);
+    if (focus === "google") return items.filter((it) => it.fromGoogle);
     return items;
   }, [items, focus, icsbAreaId, beekeepingAreaId]);
 
@@ -118,6 +119,7 @@ export function CalendarModule({
     { value: "all" as const, label: t("calendar.focus.all") },
     { value: "icsb" as const, label: t("calendar.focus.icsb") },
     { value: "beekeeping" as const, label: t("calendar.focus.beekeeping") },
+    { value: "google" as const, label: t("calendar.focus.google") },
   ];
 
   return (

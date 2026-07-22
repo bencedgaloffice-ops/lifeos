@@ -150,6 +150,7 @@ export type Shift = {
   end_at: string;
   hourly_rate: number | null;
   notes: string | null;
+  google_event_id: string | null;
   created_at: string;
 };
 

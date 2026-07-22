@@ -517,6 +517,7 @@ const en = {
       all: "All",
       icsb: "ICSB Security",
       beekeeping: "Beekeeping",
+      google: "Google Calendar",
     },
     search: {
       placeholder: "Search events…",
@@ -1212,6 +1213,7 @@ const hu: typeof en = {
       all: "Összes",
       icsb: "ICSB Biztonság",
       beekeeping: "Méhészet",
+      google: "Google Naptár",
     },
     search: {
       placeholder: "Események keresése…",
