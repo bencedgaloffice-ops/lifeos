@@ -1,8 +1,11 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
+import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ICON_REGISTRY, PICKABLE_ICON_NAMES, CATEGORY_COLOR_SWATCHES, resolveIcon } from "@/lib/icon-registry";
 
 /** Glass panel used across all modules. */
 export function Panel({
@@ -221,6 +224,142 @@ export function ScoreRing({
         </div>
       </div>
       <span className="text-xs font-medium text-white/55">{label}</span>
+    </div>
+  );
+}
+
+/** Pill-group view switcher — the active option slides via layout animation. */
+export function Segmented<T extends string>({
+  value,
+  onChange,
+  options,
+  className,
+}: {
+  value: T;
+  onChange: (value: T) => void;
+  options: { value: T; label: string }[];
+  className?: string;
+}) {
+  return (
+    <div className={cn("inline-flex flex-wrap items-center gap-1 rounded-full glass p-1", className)}>
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={() => onChange(opt.value)}
+          className={cn(
+            "relative rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors",
+            value === opt.value ? "text-black" : "text-white/55 hover:text-white/80",
+          )}
+        >
+          {value === opt.value && (
+            <motion.span
+              layoutId={`segmented-${className ?? "default"}`}
+              className="absolute inset-0 rounded-full bg-white"
+              transition={{ type: "spring", stiffness: 500, damping: 35 }}
+            />
+          )}
+          <span className="relative z-10">{opt.label}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Icon + color picker used by Life Categories and every event form. */
+export function CategoryPicker({
+  icon,
+  color,
+  onIconChange,
+  onColorChange,
+}: {
+  icon: string;
+  color: string;
+  onIconChange: (icon: string) => void;
+  onColorChange: (color: string) => void;
+}) {
+  const [open, setOpen] = useState<"icon" | "color" | null>(null);
+  const SelectedIcon = resolveIcon(icon);
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen(open === "icon" ? null : "icon")}
+          className="flex h-11 w-11 items-center justify-center rounded-xl glass-strong transition-transform hover:-translate-y-0.5"
+          style={{ color }}
+        >
+          <SelectedIcon className="h-5 w-5" strokeWidth={1.75} />
+        </button>
+        <AnimatePresence>
+          {open === "icon" && (
+            <motion.div
+              initial={{ opacity: 0, y: -6, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -6, scale: 0.96 }}
+              transition={{ duration: 0.15 }}
+              className="absolute left-0 top-13 z-20 grid w-64 grid-cols-6 gap-1 rounded-2xl glass-strong p-3 shadow-glass"
+            >
+              {PICKABLE_ICON_NAMES.map((name) => {
+                const IconOpt = ICON_REGISTRY[name];
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    onClick={() => {
+                      onIconChange(name);
+                      setOpen(null);
+                    }}
+                    className={cn(
+                      "flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-white/10",
+                      icon === name && "bg-accent/20 text-accent-soft",
+                    )}
+                  >
+                    <IconOpt className="h-4 w-4" strokeWidth={1.75} />
+                  </button>
+                );
+              })}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setOpen(open === "color" ? null : "color")}
+          className="flex h-11 w-11 items-center justify-center rounded-xl glass-strong"
+        >
+          <span className="h-5 w-5 rounded-full" style={{ backgroundColor: color }} />
+        </button>
+        <AnimatePresence>
+          {open === "color" && (
+            <motion.div
+              initial={{ opacity: 0, y: -6, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -6, scale: 0.96 }}
+              transition={{ duration: 0.15 }}
+              className="absolute left-0 top-13 z-20 grid w-56 grid-cols-5 gap-2 rounded-2xl glass-strong p-3 shadow-glass"
+            >
+              {CATEGORY_COLOR_SWATCHES.map((swatch) => (
+                <button
+                  key={swatch}
+                  type="button"
+                  onClick={() => {
+                    onColorChange(swatch);
+                    setOpen(null);
+                  }}
+                  className="flex h-8 w-8 items-center justify-center rounded-full transition-transform hover:scale-110"
+                  style={{ backgroundColor: swatch }}
+                >
+                  {color === swatch && <Check className="h-4 w-4 text-black/70" strokeWidth={2.5} />}
+                </button>
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }

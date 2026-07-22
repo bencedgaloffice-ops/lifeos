@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/format";
 import type { Locale } from "@/lib/i18n/translations";
+import { expandOccurrences } from "@/lib/calendar/recurrence";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -76,6 +77,15 @@ const R = {
       topSuggestion
         ? `You have ${count} item${count === 1 ? "" : "s"} in your kitchen. Based on what's there, you could make ${topSuggestion} — check Kitchen for the full recipe.`
         : `You have ${count} item${count === 1 ? "" : "s"} in your kitchen, but not quite enough for a suggested meal yet — add a few more staples.`,
+    freeTimeNone: "Today is completely open — no events on your calendar.",
+    freeTimeSummary: (slots: string) => `Today's open blocks: ${slots}. Good windows for deep work or rest.`,
+    busiestDaySummary: (day: string, count: number) =>
+      `${day} is your busiest day this week, with ${count} scheduled item${count === 1 ? "" : "s"}. Everything else this week is lighter — worth protecting ${day} from anything non-essential.`,
+    busiestDayNone: "This week looks evenly paced — nothing stands out as overloaded.",
+    suggestSlot: (activity: string, when: string) =>
+      `${when} looks open for ${activity} — want me to note it as a reminder in Calendar?`,
+    suggestSlotNone: (activity: string) =>
+      `I couldn't find a clear gap today or tomorrow for ${activity} — your schedule is tight. Check the Week view in Calendar to find the best fit.`,
   },
   hu: {
     fallbackName: "barátom",
@@ -118,6 +128,15 @@ const R = {
       topSuggestion
         ? `${count} tételed van a konyhában. Ami megvan, abból elkészíthetnéd ezt: ${topSuggestion} — a teljes receptért nézd meg a Konyhát.`
         : `${count} tételed van a konyhában, de még nem elég egy ételjavaslathoz — adj hozzá pár alapanyagot.`,
+    freeTimeNone: "Ma teljesen szabad a naptárad — nincs benne esemény.",
+    freeTimeSummary: (slots: string) => `Mai szabad időszakok: ${slots}. Jó alkalom mélymunkára vagy pihenésre.`,
+    busiestDaySummary: (day: string, count: number) =>
+      `${day} a legzsúfoltabb napod ezen a héten, ${count} beütemezett elemmel. A hét többi része nyugodtabb — érdemes megvédeni ${day} napot mindentől, ami nem elengedhetetlen.`,
+    busiestDayNone: "Ez a hét egyenletesnek tűnik — semmi nem tűnik túlterheltnek.",
+    suggestSlot: (activity: string, when: string) =>
+      `${when} szabadnak tűnik erre: ${activity} — jelöljem emlékeztetőként a Naptárban?`,
+    suggestSlotNone: (activity: string) =>
+      `Nem találtam szabad rést ma vagy holnap erre: ${activity} — tele van a naptárad. Nézd meg a Naptár Hét nézetét a legjobb időpontért.`,
   },
 } as const;
 
@@ -131,22 +150,35 @@ export async function askCompanion(question: string, locale: Locale = "en"): Pro
   const q = question.toLowerCase();
   const L = R[locale] ?? R.en;
 
-  const [{ data: profile }, { data: goals }, { data: tx }, { data: projects }, { data: documents }, { data: responsibilities }, { data: dreams }, { data: milestones }, { data: kitchenItems }] =
-    await Promise.all([
-      supabase
-        .from("profiles")
-        .select("display_name, preferred_currency, current_savings, financial_goal")
-        .eq("id", user.id)
-        .maybeSingle(),
-      supabase.from("goals").select("title, progress_percent, target_date, status"),
-      supabase.from("transactions").select("amount, direction, occurred_at"),
-      supabase.from("projects").select("name, progress_percent, deadline, status"),
-      supabase.from("documents").select("expires_at"),
-      supabase.from("responsibilities").select("due_date, completed"),
-      supabase.from("dreams").select("id"),
-      supabase.from("milestones").select("id"),
-      supabase.from("kitchen_items").select("name"),
-    ]);
+  const [
+    { data: profile },
+    { data: goals },
+    { data: tx },
+    { data: projects },
+    { data: documents },
+    { data: responsibilities },
+    { data: dreams },
+    { data: milestones },
+    { data: kitchenItems },
+    { data: calendarEvents },
+    { data: shifts },
+  ] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("display_name, preferred_currency, current_savings, financial_goal")
+      .eq("id", user.id)
+      .maybeSingle(),
+    supabase.from("goals").select("title, progress_percent, target_date, status"),
+    supabase.from("transactions").select("amount, direction, occurred_at"),
+    supabase.from("projects").select("name, progress_percent, deadline, status"),
+    supabase.from("documents").select("expires_at"),
+    supabase.from("responsibilities").select("due_date, completed"),
+    supabase.from("dreams").select("id"),
+    supabase.from("milestones").select("id"),
+    supabase.from("kitchen_items").select("name"),
+    supabase.from("calendar_events").select("start_at, end_at, all_day, recurrence_rule"),
+    supabase.from("shifts").select("start_at, end_at"),
+  ]);
 
   const currency = profile?.preferred_currency || "USD";
   const name = profile?.display_name?.split(" ")[0] || L.fallbackName;
@@ -208,6 +240,84 @@ export async function askCompanion(question: string, locale: Locale = "en"): Pro
     const { suggestMeals } = await import("@/app/dashboard/kitchen/suggestions");
     const suggestions = suggestMeals(items.map((i) => i.name), 1);
     return L.kitchenSummary(items.length, suggestions[0]?.name ?? null);
+  }
+
+  // Busy windows for today (and tomorrow), used by both the free-time and
+  // suggestion branches below — expands recurring events, includes ICSB
+  // shifts, and merges overlapping intervals.
+  function busyWindowsOn(day: Date): { start: number; end: number }[] {
+    const dayStart = new Date(day);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(day);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const windows: { start: number; end: number }[] = [];
+    for (const e of calendarEvents ?? []) {
+      if (e.all_day) continue;
+      for (const occ of expandOccurrences(e, dayStart, dayEnd)) {
+        windows.push({ start: occ.start.getTime(), end: occ.end.getTime() });
+      }
+    }
+    for (const s of shifts ?? []) {
+      const start = new Date(s.start_at).getTime();
+      if (start >= dayStart.getTime() && start <= dayEnd.getTime()) {
+        windows.push({ start, end: new Date(s.end_at).getTime() });
+      }
+    }
+    return windows.sort((a, b) => a.start - b.start);
+  }
+
+  function freeGaps(day: Date, dayStartHour = 7, dayEndHour = 22): { start: number; end: number }[] {
+    const busy = busyWindowsOn(day);
+    const dayStart = new Date(day);
+    dayStart.setHours(dayStartHour, 0, 0, 0);
+    const dayEnd = new Date(day);
+    dayEnd.setHours(dayEndHour, 0, 0, 0);
+
+    const gaps: { start: number; end: number }[] = [];
+    let cursor = dayStart.getTime();
+    for (const b of busy) {
+      if (b.start > cursor) gaps.push({ start: cursor, end: Math.min(b.start, dayEnd.getTime()) });
+      cursor = Math.max(cursor, b.end);
+    }
+    if (cursor < dayEnd.getTime()) gaps.push({ start: cursor, end: dayEnd.getTime() });
+    return gaps.filter((g) => g.end - g.start >= 30 * 60_000);
+  }
+
+  const timeFmt = (ms: number) => new Date(ms).toLocaleTimeString(locale === "hu" ? "hu-HU" : "en-US", { hour: "numeric", minute: "2-digit" });
+
+  if (/(free time|am i free|available|schedule.*today|szabad.*idő|ráérek|programom.*ma)/.test(q)) {
+    const gaps = freeGaps(now);
+    if (!gaps.length) return L.freeTimeNone;
+    const slots = gaps.slice(0, 4).map((g) => `${timeFmt(g.start)}–${timeFmt(g.end)}`).join(", ");
+    return L.freeTimeSummary(slots);
+  }
+
+  if (/(busiest|overload|too much|too busy|elfoglalt|túlterhelt|zsúfolt)/.test(q)) {
+    const weekCounts: { day: Date; count: number }[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(now);
+      d.setDate(d.getDate() + i);
+      weekCounts.push({ day: d, count: busyWindowsOn(d).length });
+    }
+    const busiest = weekCounts.reduce((max, cur) => (cur.count > max.count ? cur : max), weekCounts[0]);
+    if (busiest.count === 0) return L.busiestDayNone;
+    const dayLabel = new Intl.DateTimeFormat(locale === "hu" ? "hu-HU" : "en-US", { weekday: "long" }).format(busiest.day);
+    return L.busiestDaySummary(dayLabel, busiest.count);
+  }
+
+  if (/(bible study|when should i (study|pray)|mikor.*bibli|bibliatanulmány)/.test(q)) {
+    const gaps = [...freeGaps(now), ...freeGaps(new Date(now.getTime() + 86_400_000))];
+    const activity = locale === "hu" ? "bibliatanulmányozás" : "Bible study";
+    if (!gaps.length) return L.suggestSlotNone(activity);
+    return L.suggestSlot(activity, timeFmt(gaps[0].start));
+  }
+
+  if (/(workout|exercise|when should i (train|work ?out)|mikor.*edz|edzés)/.test(q)) {
+    const gaps = [...freeGaps(now), ...freeGaps(new Date(now.getTime() + 86_400_000))];
+    const activity = locale === "hu" ? "edzés" : "a workout";
+    if (!gaps.length) return L.suggestSlotNone(activity);
+    return L.suggestSlot(activity, timeFmt(gaps[0].start));
   }
 
   if (/(who am i|about me|profile|myself|ki vagyok|magamról|profilom)/.test(q)) {

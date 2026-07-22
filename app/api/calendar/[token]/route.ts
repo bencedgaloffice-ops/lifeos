@@ -11,6 +11,7 @@ type FeedEvent = {
   end_at: string;
   all_day: boolean;
   category: string | null;
+  recurrence_rule: string | null;
   updated_at: string;
 };
 
@@ -99,6 +100,7 @@ export async function GET(
     lines.push(fold(`SUMMARY:${icsEscape(e.title)}`));
     if (e.description) lines.push(fold(`DESCRIPTION:${icsEscape(e.description)}`));
     if (e.category) lines.push(fold(`CATEGORIES:${icsEscape(e.category)}`));
+    if (e.recurrence_rule) lines.push(fold(`RRULE:${e.recurrence_rule}`));
     lines.push("END:VEVENT");
   }
 
