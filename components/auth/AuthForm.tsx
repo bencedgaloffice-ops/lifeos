@@ -97,7 +97,7 @@ export function AuthForm() {
         <div className="mb-8 flex flex-col items-center text-center">
           <Link href="/" className="mb-6 flex items-center gap-2.5" aria-label="LifeOS home">
             <Logo className="h-8 w-8" />
-            <span className="text-base font-semibold tracking-[0.15em]">LIFEOS</span>
+            <span className="text-base font-semibold tracking-[0.06em]">LifeOS</span>
           </Link>
           <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl glass text-accent-soft shadow-glow-sm">
             {needsSetup ? <ShieldCheck className="h-5 w-5" /> : <Lock className="h-5 w-5" />}

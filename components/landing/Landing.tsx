@@ -37,8 +37,8 @@ export function Landing() {
         className="absolute left-1/2 top-8 z-10 flex -translate-x-1/2 items-center gap-2.5"
       >
         <Logo className="h-6 w-6" />
-        <span className="text-sm font-semibold tracking-[0.2em] text-white/80">
-          LIFEOS
+        <span className="text-sm font-semibold tracking-[0.08em] text-white/80">
+          LifeOS
         </span>
       </motion.div>
 

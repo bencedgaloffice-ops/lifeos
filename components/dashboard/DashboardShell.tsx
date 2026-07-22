@@ -145,7 +145,7 @@ function SidebarContent({
         className="mb-8 flex items-center gap-2.5 px-2"
       >
         <Logo className="h-7 w-7" />
-        <span className="text-[0.95rem] font-semibold tracking-[0.15em]">LIFEOS</span>
+        <span className="text-[0.95rem] font-semibold tracking-[0.06em]">LifeOS</span>
       </Link>
 
       <nav className="flex flex-1 flex-col gap-1">
