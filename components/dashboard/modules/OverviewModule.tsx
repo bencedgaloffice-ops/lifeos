@@ -18,7 +18,8 @@ import {
   Heart,
 } from "lucide-react";
 import { Panel, StatCard, Progress, Pill, Field, inputClass } from "@/components/dashboard/ui";
-import { formatCurrency, formatDate, relativeDays } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
+import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { createEvent, deleteEvent } from "@/app/dashboard/actions";
 
 export type OverviewData = {
@@ -44,7 +45,9 @@ export type OverviewData = {
 export function OverviewModule({ data }: { data: OverviewData }) {
   const [addOpen, setAddOpen] = useState(false);
   const [, startTransition] = useTransition();
+  const { t, locale } = useLocale();
   const today = new Date().toISOString().slice(0, 10);
+  const fc = (n: number) => formatCurrency(n, data.currency, { locale });
 
   return (
     <div className="space-y-5">
@@ -58,8 +61,8 @@ export function OverviewModule({ data }: { data: OverviewData }) {
                   <Sparkles className="h-5 w-5" />
                 </div>
                 <div>
-                  <p className="text-sm font-semibold">Set up your Life Profile</p>
-                  <p className="text-xs text-white/45">Tell LifeOS who you are — it&apos;s the foundation of everything.</p>
+                  <p className="text-sm font-semibold">{t("overview.nudgeTitle")}</p>
+                  <p className="text-xs text-white/45">{t("overview.nudgeHint")}</p>
                 </div>
               </div>
               <ArrowRight className="h-4 w-4 text-white/50" />
@@ -71,28 +74,33 @@ export function OverviewModule({ data }: { data: OverviewData }) {
       {/* Hero line */}
       <div>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-          Your life, <span className="gradient-text-accent">in one place.</span>
+          {t("overview.heroTitle1")}
+          <span className="gradient-text-accent">{t("overview.heroTitleAccent")}</span>
         </h1>
         {data.mission ? (
           <p className="mt-1.5 max-w-2xl text-sm text-white/50">“{data.mission}”</p>
         ) : (
-          <p className="mt-1.5 text-sm text-white/45">A complete snapshot of where you are and where you&apos;re going.</p>
+          <p className="mt-1.5 text-sm text-white/45">{t("overview.missionFallback")}</p>
         )}
       </div>
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Net worth" value={formatCurrency(data.netWorth, data.currency)} accent hint="Savings + investments" />
-        <StatCard label="Savings rate" value={`${data.savingsRate}%`} hint="This month" />
-        <StatCard label="Goal momentum" value={data.goalsAvg === null ? "—" : `${data.goalsAvg}%`} hint={`${data.activeGoals} active`} />
-        <StatCard label="Active projects" value={String(data.activeProjects)} hint="In motion" />
+        <StatCard label={t("overview.statNetWorth")} value={fc(data.netWorth)} accent hint={t("overview.hintSavingsInvestments")} />
+        <StatCard label={t("overview.statSavingsRate")} value={`${data.savingsRate}%`} hint={t("overview.hintThisMonth")} />
+        <StatCard
+          label={t("overview.statGoalMomentum")}
+          value={data.goalsAvg === null ? "—" : `${data.goalsAvg}%`}
+          hint={`${data.activeGoals} ${t("overview.hintActiveSuffix")}`}
+        />
+        <StatCard label={t("overview.statActiveProjects")} value={String(data.activeProjects)} hint={t("overview.hintInMotion")} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Goals */}
-        <OverviewCard icon={Target} title="Goals" href="/dashboard/goals" className="lg:col-span-2">
+        <OverviewCard icon={Target} title={t("overview.goalsTitle")} href="/dashboard/goals" className="lg:col-span-2">
           {data.goals.length === 0 ? (
-            <Empty text="No goals yet — add what you're building toward." />
+            <Empty text={t("overview.emptyGoals")} />
           ) : (
             <div className="space-y-4">
               {data.goals.map((g) => (
@@ -112,14 +120,14 @@ export function OverviewModule({ data }: { data: OverviewData }) {
         </OverviewCard>
 
         {/* Finance snapshot */}
-        <OverviewCard icon={Wallet} title="Finance" href="/dashboard/finance">
+        <OverviewCard icon={Wallet} title={t("overview.financeTitle")} href="/dashboard/finance">
           <div className="space-y-3">
-            <Row label="Income · month" value={formatCurrency(data.monthIncome, data.currency)} />
-            <Row label="Spending · month" value={formatCurrency(data.monthSpending, data.currency)} />
-            <Row label="Net worth" value={formatCurrency(data.netWorth, data.currency)} accent />
+            <Row label={t("overview.rowIncome")} value={fc(data.monthIncome)} />
+            <Row label={t("overview.rowSpending")} value={fc(data.monthSpending)} />
+            <Row label={t("overview.rowNetWorth")} value={fc(data.netWorth)} accent />
             <div className="pt-1">
               <div className="mb-1.5 flex justify-between text-xs text-white/45">
-                <span>Savings rate</span>
+                <span>{t("overview.statSavingsRate")}</span>
                 <span>{data.savingsRate}%</span>
               </div>
               <Progress value={data.savingsRate} />
@@ -130,7 +138,7 @@ export function OverviewModule({ data }: { data: OverviewData }) {
         {/* Reminders / calendar */}
         <OverviewCard
           icon={CalendarDays}
-          title="Calendar & reminders"
+          title={t("overview.calendarTitle")}
           href="/dashboard"
           className="lg:col-span-2"
           action={
@@ -141,7 +149,7 @@ export function OverviewModule({ data }: { data: OverviewData }) {
               }}
               className="inline-flex items-center gap-1.5 rounded-full glass px-3 py-1.5 text-xs text-white/70 transition-colors hover:text-white"
             >
-              <Plus className="h-3.5 w-3.5" /> Add
+              <Plus className="h-3.5 w-3.5" /> {t("overview.add")}
             </button>
           }
         >
@@ -154,23 +162,25 @@ export function OverviewModule({ data }: { data: OverviewData }) {
               className="mb-4 grid gap-3 rounded-2xl bg-white/[0.03] p-4 sm:grid-cols-2"
             >
               <div className="sm:col-span-2">
-                <Field label="What & when">
-                  <input name="title" required placeholder="Portfolio review" className={inputClass} />
+                <Field label={t("overview.formWhat")}>
+                  <input name="title" required placeholder={t("overview.formWhatPlaceholder")} className={inputClass} />
                 </Field>
               </div>
-              <Field label="Date">
+              <Field label={t("overview.formDate")}>
                 <input type="date" name="date" defaultValue={today} className={inputClass} />
               </Field>
-              <Field label="Time (optional)">
+              <Field label={t("overview.formTime")}>
                 <input type="time" name="time" className={inputClass} />
               </Field>
               <div className="sm:col-span-2">
-                <button className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-white">Add to calendar</button>
+                <button className="rounded-full bg-accent px-4 py-2 text-sm font-medium text-white">
+                  {t("overview.addToCalendar")}
+                </button>
               </div>
             </form>
           )}
           {data.reminders.length === 0 ? (
-            <Empty text="Nothing scheduled. Add a reminder to stay ahead." />
+            <Empty text={t("overview.emptyReminders")} />
           ) : (
             <div className="divide-y divide-hairline">
               {data.reminders.map((r) => (
@@ -181,7 +191,7 @@ export function OverviewModule({ data }: { data: OverviewData }) {
                   <span className="flex-1 truncate text-sm text-white/80">{r.title}</span>
                   <span className="text-xs text-white/40">{r.when}</span>
                   {r.deletable && (
-                    <form action={() => deleteEvent(r.id)}>
+                    <form action={() => startTransition(() => deleteEvent(r.id))}>
                       <button className="text-white/25 opacity-0 transition-opacity hover:text-red-300 group-hover:opacity-100" aria-label="Delete">
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -194,9 +204,9 @@ export function OverviewModule({ data }: { data: OverviewData }) {
         </OverviewCard>
 
         {/* Personal growth */}
-        <OverviewCard icon={Heart} title="Personal growth" href="/dashboard/profile">
+        <OverviewCard icon={Heart} title={t("overview.growthTitle")} href="/dashboard/profile">
           {data.growth.length === 0 ? (
-            <Empty text="Define your health, learning and growth goals in your profile." />
+            <Empty text={t("overview.emptyGrowth")} />
           ) : (
             <div className="space-y-3">
               {data.growth.map((g) => (
@@ -213,9 +223,9 @@ export function OverviewModule({ data }: { data: OverviewData }) {
         </OverviewCard>
 
         {/* Projects */}
-        <OverviewCard icon={FolderKanban} title="Projects" href="/dashboard/projects" className="lg:col-span-2">
+        <OverviewCard icon={FolderKanban} title={t("overview.projectsTitle")} href="/dashboard/projects" className="lg:col-span-2">
           {data.projects.length === 0 ? (
-            <Empty text="No active projects. Start one to see it here." />
+            <Empty text={t("overview.emptyProjects")} />
           ) : (
             <div className="grid gap-4 sm:grid-cols-2">
               {data.projects.map((p) => (
@@ -227,7 +237,7 @@ export function OverviewModule({ data }: { data: OverviewData }) {
                   <Progress value={p.progress} />
                   <div className="mt-2 flex justify-between text-xs text-white/40">
                     <span>{p.progress}%</span>
-                    {p.deadline && <span>{relativeDays(p.deadline)}</span>}
+                    {p.deadline && <span>{formatDate(p.deadline, undefined, locale)}</span>}
                   </div>
                 </div>
               ))}
@@ -236,11 +246,12 @@ export function OverviewModule({ data }: { data: OverviewData }) {
         </OverviewCard>
 
         {/* Journal */}
-        <OverviewCard icon={BookOpen} title="Journal" href="/dashboard/journal">
+        <OverviewCard icon={BookOpen} title={t("overview.journalTitle")} href="/dashboard/journal">
           {data.latestJournal ? (
             <div>
               <p className="text-xs text-white/40">
-                {formatDate(data.latestJournal.date)} · {data.journalCount} entries
+                {formatDate(data.latestJournal.date, undefined, locale)} · {data.journalCount}{" "}
+                {t("overview.entriesSuffix")}
               </p>
               {data.latestJournal.title && (
                 <p className="mt-1.5 text-sm font-medium">{data.latestJournal.title}</p>
@@ -250,7 +261,7 @@ export function OverviewModule({ data }: { data: OverviewData }) {
               </p>
             </div>
           ) : (
-            <Empty text="Your journey, remembered. Write your first entry." />
+            <Empty text={t("overview.emptyJournal")} />
           )}
         </OverviewCard>
       </div>

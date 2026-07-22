@@ -1,12 +1,16 @@
-/** Formatting helpers shared across the dashboard. */
+/** Formatting helpers shared across the dashboard. Locale-aware. */
+
+import type { Locale } from "@/lib/i18n/translations";
+
+const intlLocale: Record<Locale, string> = { en: "en-US", hu: "hu-HU" };
 
 export function formatCurrency(
   amount: number,
   currency = "USD",
-  opts: { compact?: boolean } = {},
+  opts: { compact?: boolean; locale?: Locale } = {},
 ): string {
   try {
-    return new Intl.NumberFormat("en-US", {
+    return new Intl.NumberFormat(intlLocale[opts.locale ?? "en"], {
       style: "currency",
       currency,
       notation: opts.compact ? "compact" : "standard",
@@ -21,31 +25,54 @@ export function formatCurrency(
 export function formatDate(
   value: string | Date | null | undefined,
   opts: Intl.DateTimeFormatOptions = { month: "short", day: "numeric", year: "numeric" },
+  locale: Locale = "en",
 ): string {
   if (!value) return "—";
   const d = typeof value === "string" ? new Date(value) : value;
   if (Number.isNaN(d.getTime())) return "—";
-  return new Intl.DateTimeFormat("en-US", opts).format(d);
+  return new Intl.DateTimeFormat(intlLocale[locale], opts).format(d);
 }
 
-export function relativeDays(target: string | null | undefined): string {
+const relativeStrings: Record<
+  Locale,
+  { today: string; tomorrow: string; yesterday: string; inDays: (n: number) => string; daysAgo: (n: number) => string }
+> = {
+  en: {
+    today: "Today",
+    tomorrow: "Tomorrow",
+    yesterday: "Yesterday",
+    inDays: (n) => `in ${n} days`,
+    daysAgo: (n) => `${n} days ago`,
+  },
+  hu: {
+    today: "Ma",
+    tomorrow: "Holnap",
+    yesterday: "Tegnap",
+    inDays: (n) => `${n} nap múlva`,
+    daysAgo: (n) => `${n} napja`,
+  },
+};
+
+export function relativeDays(target: string | null | undefined, locale: Locale = "en"): string {
   if (!target) return "";
   const d = new Date(target);
   if (Number.isNaN(d.getTime())) return "";
   const now = new Date();
   const days = Math.round((d.getTime() - now.getTime()) / 86_400_000);
-  if (days === 0) return "Today";
-  if (days === 1) return "Tomorrow";
-  if (days === -1) return "Yesterday";
-  if (days > 0) return `in ${days} days`;
-  return `${Math.abs(days)} days ago`;
+  const s = relativeStrings[locale];
+  if (days === 0) return s.today;
+  if (days === 1) return s.tomorrow;
+  if (days === -1) return s.yesterday;
+  if (days > 0) return s.inDays(days);
+  return s.daysAgo(Math.abs(days));
 }
 
-export function greeting(date = new Date()): string {
+/** Returns the i18n key (`shell.morning` etc.) for the current time of day. */
+export function greetingKey(date = new Date()): string {
   const h = date.getHours();
-  if (h < 12) return "Good morning";
-  if (h < 18) return "Good afternoon";
-  return "Good evening";
+  if (h < 12) return "shell.morning";
+  if (h < 18) return "shell.afternoon";
+  return "shell.evening";
 }
 
 export function initialsFromName(name: string | null | undefined): string {

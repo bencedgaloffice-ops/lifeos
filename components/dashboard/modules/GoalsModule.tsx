@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Target, Plus, Trash2, Minus } from "lucide-react";
 import type { Goal } from "@/lib/types";
 import { formatDate, relativeDays } from "@/lib/format";
+import { useLocale } from "@/lib/i18n/LocaleProvider";
 import {
   ModuleHeader,
   Panel,
@@ -16,11 +17,11 @@ import {
 } from "@/components/dashboard/ui";
 import { createGoal, updateGoalProgress, deleteGoal } from "@/app/dashboard/goals/actions";
 
-const categories = ["Life", "Health", "Career", "Finance", "Learning", "Relationships"];
-
 export function GoalsModule({ goals }: { goals: Goal[] }) {
   const [open, setOpen] = useState(false);
   const [, startTransition] = useTransition();
+  const { t, tList } = useLocale();
+  const categories = tList("goals.categories");
 
   const active = goals.filter((g) => g.status !== "completed");
   const done = goals.filter((g) => g.status === "completed");
@@ -29,14 +30,14 @@ export function GoalsModule({ goals }: { goals: Goal[] }) {
     <div>
       <ModuleHeader
         icon={Target}
-        title="Goals"
-        subtitle="Turn intentions into measurable progress."
+        title={t("goals.title")}
+        subtitle={t("goals.subtitle")}
         action={
           <button
             onClick={() => setOpen((v) => !v)}
             className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-medium text-black transition-transform hover:-translate-y-0.5"
           >
-            <Plus className="h-4 w-4" /> New goal
+            <Plus className="h-4 w-4" /> {t("goals.newGoal")}
           </button>
         }
       />
@@ -51,21 +52,21 @@ export function GoalsModule({ goals }: { goals: Goal[] }) {
             className="grid gap-4 sm:grid-cols-2"
           >
             <div className="sm:col-span-2">
-              <Field label="Goal">
-                <input name="title" required placeholder="Run a marathon" className={inputClass} />
+              <Field label={t("goals.formGoal")}>
+                <input name="title" required placeholder={t("goals.formGoalPlaceholder")} className={inputClass} />
               </Field>
             </div>
             <div className="sm:col-span-2">
-              <Field label="Description">
+              <Field label={t("goals.formDescription")}>
                 <input
                   name="description"
-                  placeholder="Why this matters to you"
+                  placeholder={t("goals.formDescriptionPlaceholder")}
                   className={inputClass}
                 />
               </Field>
             </div>
-            <Field label="Category">
-              <select name="category" className={inputClass} defaultValue="Life">
+            <Field label={t("goals.formCategory")}>
+              <select name="category" className={inputClass} defaultValue={categories[0]}>
                 {categories.map((c) => (
                   <option key={c} value={c} className="bg-base">
                     {c}
@@ -73,11 +74,11 @@ export function GoalsModule({ goals }: { goals: Goal[] }) {
                 ))}
               </select>
             </Field>
-            <Field label="Target date">
+            <Field label={t("goals.formTargetDate")}>
               <input type="date" name="target_date" className={inputClass} />
             </Field>
             <div className="sm:col-span-2">
-              <Field label="Starting progress (%)">
+              <Field label={t("goals.formStartingProgress")}>
                 <input
                   type="number"
                   name="progress_percent"
@@ -93,14 +94,14 @@ export function GoalsModule({ goals }: { goals: Goal[] }) {
                 type="submit"
                 className="rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white transition-transform hover:-translate-y-0.5"
               >
-                Create goal
+                {t("goals.create")}
               </button>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 className="rounded-full glass px-5 py-2.5 text-sm text-white/70"
               >
-                Cancel
+                {t("goals.cancel")}
               </button>
             </div>
           </form>
@@ -108,11 +109,7 @@ export function GoalsModule({ goals }: { goals: Goal[] }) {
       )}
 
       {goals.length === 0 ? (
-        <EmptyState
-          icon={Target}
-          title="No goals yet"
-          hint="Add your first goal and watch your progress come to life."
-        />
+        <EmptyState icon={Target} title={t("goals.noGoals")} hint={t("goals.noGoalsHint")} />
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {[...active, ...done].map((goal, i) => (
@@ -126,6 +123,7 @@ export function GoalsModule({ goals }: { goals: Goal[] }) {
 
 function GoalCard({ goal, index }: { goal: Goal; index: number }) {
   const [pending, startTransition] = useTransition();
+  const { t, locale } = useLocale();
   const step = (delta: number) =>
     startTransition(() => updateGoalProgress(goal.id, goal.progress_percent + delta));
 
@@ -140,7 +138,7 @@ function GoalCard({ goal, index }: { goal: Goal; index: number }) {
           <div className="min-w-0">
             <div className="mb-1.5 flex items-center gap-2">
               {goal.category && <Pill tone="accent">{goal.category}</Pill>}
-              {goal.status === "completed" && <Pill tone="green">Complete</Pill>}
+              {goal.status === "completed" && <Pill tone="green">{t("goals.complete")}</Pill>}
             </div>
             <h3 className="text-lg font-semibold tracking-tight">{goal.title}</h3>
             {goal.description && (
@@ -164,7 +162,7 @@ function GoalCard({ goal, index }: { goal: Goal; index: number }) {
             </span>
             {goal.target_date && (
               <span className="text-xs text-white/40">
-                {formatDate(goal.target_date)} · {relativeDays(goal.target_date)}
+                {formatDate(goal.target_date, undefined, locale)} · {relativeDays(goal.target_date, locale)}
               </span>
             )}
           </div>
@@ -186,7 +184,7 @@ function GoalCard({ goal, index }: { goal: Goal; index: number }) {
             >
               <Plus className="h-3.5 w-3.5" />
             </button>
-            <span className="text-xs text-white/35">Adjust progress</span>
+            <span className="text-xs text-white/35">{t("goals.adjustProgress")}</span>
           </div>
         </div>
       </Panel>

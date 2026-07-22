@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { BookOpen, Plus, Trash2 } from "lucide-react";
 import type { JournalEntry } from "@/lib/types";
 import { formatDate } from "@/lib/format";
+import { useLocale } from "@/lib/i18n/LocaleProvider";
 import {
   ModuleHeader,
   Panel,
@@ -14,25 +15,25 @@ import {
 } from "@/components/dashboard/ui";
 import { createEntry, deleteEntry } from "@/app/dashboard/journal/actions";
 
-const moods = ["✦ Reflective", "☀ Grateful", "⚡ Driven", "🌊 Calm", "🔥 Inspired", "🌧 Heavy"];
-
 export function JournalModule({ entries }: { entries: JournalEntry[] }) {
   const [open, setOpen] = useState(false);
   const [, startTransition] = useTransition();
+  const { t, tList } = useLocale();
+  const moods = tList("journal.moods");
   const today = new Date().toISOString().slice(0, 10);
 
   return (
     <div>
       <ModuleHeader
         icon={BookOpen}
-        title="Journal"
-        subtitle="LifeOS remembers your journey."
+        title={t("journal.title")}
+        subtitle={t("journal.subtitle")}
         action={
           <button
             onClick={() => setOpen((v) => !v)}
             className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-medium text-black transition-transform hover:-translate-y-0.5"
           >
-            <Plus className="h-4 w-4" /> New entry
+            <Plus className="h-4 w-4" /> {t("journal.newEntry")}
           </button>
         }
       />
@@ -46,25 +47,25 @@ export function JournalModule({ entries }: { entries: JournalEntry[] }) {
             }}
             className="grid gap-4 sm:grid-cols-2"
           >
-            <Field label="Title (optional)">
-              <input name="title" placeholder="A quiet morning" className={inputClass} />
+            <Field label={t("journal.formTitle")}>
+              <input name="title" placeholder={t("journal.formTitlePlaceholder")} className={inputClass} />
             </Field>
-            <Field label="Date">
+            <Field label={t("journal.formDate")}>
               <input type="date" name="entry_date" defaultValue={today} className={inputClass} />
             </Field>
             <div className="sm:col-span-2">
-              <Field label="What happened? What did you learn?">
+              <Field label={t("journal.formBody")}>
                 <textarea
                   name="body"
                   required
                   rows={5}
-                  placeholder="Write freely…"
+                  placeholder={t("journal.formBodyPlaceholder")}
                   className={inputClass + " resize-none"}
                 />
               </Field>
             </div>
             <div className="sm:col-span-2">
-              <Field label="Mood">
+              <Field label={t("journal.formMood")}>
                 <select name="mood" className={inputClass} defaultValue={moods[0]}>
                   {moods.map((m) => (
                     <option key={m} value={m} className="bg-base">
@@ -79,14 +80,14 @@ export function JournalModule({ entries }: { entries: JournalEntry[] }) {
                 type="submit"
                 className="rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white transition-transform hover:-translate-y-0.5"
               >
-                Save entry
+                {t("journal.save")}
               </button>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 className="rounded-full glass px-5 py-2.5 text-sm text-white/70"
               >
-                Cancel
+                {t("journal.cancel")}
               </button>
             </div>
           </form>
@@ -96,8 +97,8 @@ export function JournalModule({ entries }: { entries: JournalEntry[] }) {
       {entries.length === 0 ? (
         <EmptyState
           icon={BookOpen}
-          title="Your journal is empty"
-          hint="Record a thought, a memory, or a lesson. Your story starts here."
+          title={t("journal.noEntries")}
+          hint={t("journal.noEntriesHint")}
         />
       ) : (
         <div className="relative space-y-4 pl-4">
@@ -106,7 +107,12 @@ export function JournalModule({ entries }: { entries: JournalEntry[] }) {
             className="absolute left-0 top-2 h-[calc(100%-1rem)] w-px bg-gradient-to-b from-accent/50 via-hairline to-transparent"
           />
           {entries.map((entry, i) => (
-            <Entry key={entry.id} entry={entry} index={i} onDelete={(id) => startTransition(() => deleteEntry(id))} />
+            <Entry
+              key={entry.id}
+              entry={entry}
+              index={i}
+              onDelete={(id) => startTransition(() => deleteEntry(id))}
+            />
           ))}
         </div>
       )}
@@ -123,6 +129,7 @@ function Entry({
   index: number;
   onDelete: (id: string) => void;
 }) {
+  const { locale } = useLocale();
   return (
     <motion.div
       initial={{ opacity: 0, y: 14 }}
@@ -135,7 +142,7 @@ function Entry({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-xs text-white/40">
-              <span>{formatDate(entry.entry_date)}</span>
+              <span>{formatDate(entry.entry_date, undefined, locale)}</span>
               {entry.mood && <span className="text-white/55">· {entry.mood}</span>}
             </div>
             {entry.title && (

@@ -1,11 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { OverviewModule, type OverviewData } from "@/components/dashboard/modules/OverviewModule";
 import { formatDate, relativeDays } from "@/lib/format";
+import { getServerLocale, tServer } from "@/lib/i18n/server";
 
 export const metadata = { title: "Overview" };
 
 export default async function DashboardHome() {
   const supabase = await createClient();
+  const locale = await getServerLocale();
 
   const [
     { data: profile },
@@ -45,7 +47,7 @@ export default async function DashboardHome() {
   // Reminders: upcoming events + upcoming goal/project deadlines
   const reminders: OverviewData["reminders"] = [];
   (events ?? []).forEach((e) =>
-    reminders.push({ id: e.id, title: e.title, when: relativeDays(e.start_at) || formatDate(e.start_at), kind: "event", deletable: true }),
+    reminders.push({ id: e.id, title: e.title, when: relativeDays(e.start_at, locale) || formatDate(e.start_at, undefined, locale), kind: "event", deletable: true }),
   );
   const soon = (d: string | null) => {
     if (!d) return false;
@@ -53,17 +55,17 @@ export default async function DashboardHome() {
     return days >= -1 && days <= 30;
   };
   activeGoals.filter((g) => soon(g.target_date)).slice(0, 3).forEach((g) =>
-    reminders.push({ id: `goal-${g.id}`, title: `Goal: ${g.title}`, when: relativeDays(g.target_date), kind: "reminder", deletable: false }),
+    reminders.push({ id: `goal-${g.id}`, title: `${tServer(locale, "nav.goals.label")}: ${g.title}`, when: relativeDays(g.target_date, locale), kind: "reminder", deletable: false }),
   );
   activeProjects.filter((p) => soon(p.deadline)).slice(0, 3).forEach((p) =>
-    reminders.push({ id: `proj-${p.id}`, title: `Project: ${p.name}`, when: relativeDays(p.deadline), kind: "reminder", deletable: false }),
+    reminders.push({ id: `proj-${p.id}`, title: `${tServer(locale, "nav.projects.label")}: ${p.name}`, when: relativeDays(p.deadline, locale), kind: "reminder", deletable: false }),
   );
 
   const growth: OverviewData["growth"] = [];
-  if (profile?.health_goal) growth.push({ label: "Health", value: profile.health_goal });
-  if (profile?.spiritual_goal) growth.push({ label: "Spiritual", value: profile.spiritual_goal });
-  if (profile?.learning_goal) growth.push({ label: "Learning", value: profile.learning_goal });
-  if (profile?.growth_focus) growth.push({ label: "Focus", value: profile.growth_focus });
+  if (profile?.health_goal) growth.push({ label: tServer(locale, "profile.healthGoal"), value: profile.health_goal });
+  if (profile?.spiritual_goal) growth.push({ label: tServer(locale, "profile.spiritualGoal"), value: profile.spiritual_goal });
+  if (profile?.learning_goal) growth.push({ label: tServer(locale, "profile.learningGoal"), value: profile.learning_goal });
+  if (profile?.growth_focus) growth.push({ label: tServer(locale, "profile.growthFocus"), value: profile.growth_focus });
 
   const latest = (journal ?? [])[0];
 

@@ -5,6 +5,8 @@ import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { EarthCanvas } from "@/components/three/EarthCanvas";
 import { Logo } from "@/components/ui/Logo";
+import { LanguageSwitch } from "@/components/ui/LanguageSwitch";
+import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { easePremium } from "@/lib/motion";
 
 /**
@@ -12,6 +14,8 @@ import { easePremium } from "@/lib/motion";
  * rotating Earth, and a single door into the system.
  */
 export function Landing() {
+  const { t } = useLocale();
+
   return (
     <main className="relative h-[100svh] w-full overflow-hidden bg-base">
       {/* The Earth — centerpiece of the whole experience */}
@@ -42,8 +46,18 @@ export function Landing() {
         </span>
       </motion.div>
 
+      {/* Language switch */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ duration: 1, delay: 0.5 }}
+        className="absolute right-5 top-6 z-10 sm:right-8 sm:top-8"
+      >
+        <LanguageSwitch />
+      </motion.div>
+
       {/* The single door */}
-      <div className="absolute inset-x-0 bottom-[14vh] z-10 flex flex-col items-center gap-6">
+      <div className="absolute inset-x-0 bottom-[16vh] z-10 flex flex-col items-center">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
@@ -51,7 +65,7 @@ export function Landing() {
         >
           <Link
             href="/dashboard"
-            aria-label="Enter LifeOS"
+            aria-label={t("landing.enter")}
             className="group relative inline-flex items-center gap-3 rounded-full px-9 py-4 text-[0.95rem] font-medium text-white transition-all duration-500 ease-premium hover:-translate-y-0.5"
             style={{
               background: "rgba(255,255,255,0.06)",
@@ -70,19 +84,10 @@ export function Landing() {
               aria-hidden
               className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-white/40 to-transparent"
             />
-            <span className="relative z-10">Enter LifeOS</span>
+            <span className="relative z-10">{t("landing.enter")}</span>
             <ArrowRight className="relative z-10 h-4 w-4 transition-transform duration-500 group-hover:translate-x-1" />
           </Link>
         </motion.div>
-
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 1.2, delay: 1.5 }}
-          className="text-xs tracking-[0.25em] text-white/30"
-        >
-          YOUR PERSONAL OPERATING SYSTEM
-        </motion.p>
       </div>
     </main>
   );

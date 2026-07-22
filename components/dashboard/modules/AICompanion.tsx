@@ -7,15 +7,10 @@ import type { AiMemory } from "@/lib/types";
 import { AISphereCanvas } from "@/components/three/AISphereCanvas";
 import { ModuleHeader, Panel, Field, inputClass } from "@/components/dashboard/ui";
 import { askCompanion, saveMemory, deleteMemory } from "@/app/dashboard/ai/actions";
+import { useLocale } from "@/lib/i18n/LocaleProvider";
 
 type Insight = { label: string; value: string };
 type Msg = { role: "user" | "ai"; text: string };
-
-const suggestions = [
-  "How am I doing with my money?",
-  "What should I focus on?",
-  "How are my goals progressing?",
-];
 
 export function AICompanion({
   insights,
@@ -26,6 +21,8 @@ export function AICompanion({
   memories: AiMemory[];
   greeting: string;
 }) {
+  const { t, tList, locale } = useLocale();
+  const suggestions = tList("ai.suggestions");
   const [messages, setMessages] = useState<Msg[]>([{ role: "ai", text: greeting }]);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
@@ -38,10 +35,10 @@ export function AICompanion({
     setInput("");
     setThinking(true);
     try {
-      const reply = await askCompanion(question);
+      const reply = await askCompanion(question, locale);
       setMessages((m) => [...m, { role: "ai", text: reply }]);
     } catch {
-      setMessages((m) => [...m, { role: "ai", text: "I couldn't reach your data just now. Try again in a moment." }]);
+      setMessages((m) => [...m, { role: "ai", text: t("auth.errorGeneric") }]);
     } finally {
       setThinking(false);
       requestAnimationFrame(() => threadRef.current?.scrollTo({ top: threadRef.current.scrollHeight, behavior: "smooth" }));
@@ -52,8 +49,8 @@ export function AICompanion({
     <div>
       <ModuleHeader
         icon={Brain}
-        title="AI Companion"
-        subtitle="Understands your journey. Helps you decide."
+        title={t("ai.title")}
+        subtitle={t("ai.subtitle")}
       />
 
       <div className="grid gap-4 lg:grid-cols-5">
@@ -63,19 +60,15 @@ export function AICompanion({
             <div className="relative mx-auto aspect-square w-full max-w-[240px]">
               <AISphereCanvas />
             </div>
-            <p className="mt-2 text-center text-sm text-white/55">
-              LifeOS learns from everything you put in — and turns it into clarity.
-            </p>
+            <p className="mt-2 text-center text-sm text-white/55">{t("ai.sphereCaption")}</p>
           </Panel>
 
           <Panel>
             <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
-              <Sparkles className="h-4 w-4 text-accent-soft" /> What LifeOS understands
+              <Sparkles className="h-4 w-4 text-accent-soft" /> {t("ai.understands")}
             </h3>
             {insights.length === 0 ? (
-              <p className="text-sm text-white/40">
-                Add goals, finances and journal entries — I&apos;ll start to understand your life.
-              </p>
+              <p className="text-sm text-white/40">{t("ai.noInsights")}</p>
             ) : (
               <div className="space-y-2.5">
                 {insights.map((ins) => (
@@ -116,7 +109,7 @@ export function AICompanion({
               {thinking && (
                 <div className="flex justify-start">
                   <div className="flex items-center gap-2 rounded-2xl rounded-bl-md glass px-4 py-2.5 text-sm text-white/50">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Thinking…
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t("ai.thinking")}
                   </div>
                 </div>
               )}
@@ -144,7 +137,7 @@ export function AICompanion({
               <input
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask about your life…"
+                placeholder={t("ai.askPlaceholder")}
                 className="min-w-0 flex-1 bg-transparent px-3 text-sm text-white placeholder-white/30 outline-none"
               />
               <button
@@ -160,14 +153,14 @@ export function AICompanion({
 
           {/* Teach / memories */}
           <Panel>
-            <h3 className="mb-3 text-sm font-semibold">Teach LifeOS about you</h3>
+            <h3 className="mb-3 text-sm font-semibold">{t("ai.teachTitle")}</h3>
             <form
               action={(fd) => startTransition(() => saveMemory(fd))}
               className="flex items-center gap-2"
             >
               <input
                 name="content"
-                placeholder="e.g. I value time with family over money"
+                placeholder={t("ai.teachPlaceholder")}
                 className={inputClass}
               />
               <button

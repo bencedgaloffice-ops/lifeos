@@ -1,12 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { AICompanion } from "@/components/dashboard/modules/AICompanion";
 import { formatCurrency } from "@/lib/format";
+import { getServerLocale, tServer } from "@/lib/i18n/server";
 import type { AiMemory } from "@/lib/types";
 
 export const metadata = { title: "AI Companion" };
 
 export default async function AIPage() {
   const supabase = await createClient();
+  const locale = await getServerLocale();
+  const tr = (k: string) => tServer(locale, k);
 
   const [{ data: profile }, { data: goals }, { data: tx }, { data: projects }, { data: memories }, { data: journal }] =
     await Promise.all([
@@ -19,7 +22,7 @@ export default async function AIPage() {
     ]);
 
   const currency = profile?.preferred_currency || "USD";
-  const name = profile?.display_name?.split(" ")[0] || "there";
+  const name = profile?.display_name?.split(" ")[0] || (locale === "hu" ? "barátom" : "there");
 
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -33,13 +36,13 @@ export default async function AIPage() {
   const activeProjects = (projects ?? []).filter((p) => p.status !== "completed").length;
 
   const insights: { label: string; value: string }[] = [];
-  if (avgGoal !== null) insights.push({ label: "Goal momentum", value: `${avgGoal}% average` });
-  if (savingsRate !== null) insights.push({ label: "Savings rate", value: `${savingsRate}% this month` });
-  if (profile?.current_savings) insights.push({ label: "Savings", value: formatCurrency(Number(profile.current_savings), currency) });
-  if (activeProjects) insights.push({ label: "Active projects", value: String(activeProjects) });
-  if ((journal ?? []).length) insights.push({ label: "Journal entries", value: String((journal ?? []).length) });
+  if (avgGoal !== null) insights.push({ label: tr("ai.insightGoalMomentum"), value: `${avgGoal}% ${tr("ai.insightAvgSuffix")}` });
+  if (savingsRate !== null) insights.push({ label: tr("ai.insightSavingsRate"), value: `${savingsRate}% ${tr("ai.insightThisMonth")}` });
+  if (profile?.current_savings) insights.push({ label: tr("ai.insightSavings"), value: formatCurrency(Number(profile.current_savings), currency, { locale }) });
+  if (activeProjects) insights.push({ label: tr("ai.insightActiveProjects"), value: String(activeProjects) });
+  if ((journal ?? []).length) insights.push({ label: tr("ai.insightJournalEntries"), value: String((journal ?? []).length) });
 
-  const greeting = `Hi ${name}. I'm your LifeOS companion. I look across your goals, finances, projects and journal to help you make better decisions. Ask me anything about your life.`;
+  const greeting = tr("ai.greeting").replace("{{name}}", name);
 
   return (
     <AICompanion

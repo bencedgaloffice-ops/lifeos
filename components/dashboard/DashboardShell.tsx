@@ -7,7 +7,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, LogOut } from "lucide-react";
 import { Logo } from "@/components/ui/Logo";
 import { dashboardNav } from "@/lib/nav";
-import { greeting, initialsFromName } from "@/lib/format";
+import { greetingKey, initialsFromName } from "@/lib/format";
+import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -19,9 +20,10 @@ type Props = {
 export function DashboardShell({ name, email, children }: Props) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const { t, locale } = useLocale();
 
   const now = new Date();
-  const dateLabel = new Intl.DateTimeFormat("en-US", {
+  const dateLabel = new Intl.DateTimeFormat(locale === "hu" ? "hu-HU" : "en-US", {
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -61,7 +63,7 @@ export function DashboardShell({ name, email, children }: Props) {
                 </button>
                 <div>
                   <p className="text-[0.95rem] font-semibold tracking-tight sm:text-lg">
-                    {greeting(now)}, {name.split(" ")[0]}
+                    {t(greetingKey(now))}, {name.split(" ")[0]}
                   </p>
                   <p className="text-xs text-white/40 sm:text-sm">{dateLabel}</p>
                 </div>
@@ -79,8 +81,8 @@ export function DashboardShell({ name, email, children }: Props) {
                   <button
                     type="submit"
                     className="inline-flex h-10 w-10 items-center justify-center rounded-full glass text-white/60 transition-colors hover:text-white"
-                    aria-label="Sign out"
-                    title="Sign out"
+                    aria-label={t("shell.signOut")}
+                    title={t("shell.signOut")}
                   >
                     <LogOut className="h-4 w-4" />
                   </button>
@@ -137,6 +139,8 @@ function SidebarContent({
   pathname: string;
   onNavigate?: () => void;
 }) {
+  const { t } = useLocale();
+
   return (
     <>
       <Link
@@ -177,17 +181,14 @@ function SidebarContent({
                 )}
                 strokeWidth={1.75}
               />
-              <span className="text-sm font-medium">{item.label}</span>
+              <span className="text-sm font-medium">{t(`nav.${item.key}.label`)}</span>
             </Link>
           );
         })}
       </nav>
 
       <div className="mt-4 rounded-2xl glass p-4">
-        <p className="text-xs leading-relaxed text-white/45">
-          Everything you enter belongs only to you — secured with row-level
-          encryption.
-        </p>
+        <p className="text-xs leading-relaxed text-white/45">{t("shell.privacyNote")}</p>
       </div>
     </>
   );

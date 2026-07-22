@@ -8,6 +8,8 @@ import { ArrowRight, Loader2, Lock, ShieldCheck } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { OWNER_EMAIL } from "@/lib/supabase/config";
 import { Logo } from "@/components/ui/Logo";
+import { LanguageSwitch } from "@/components/ui/LanguageSwitch";
+import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { easePremium } from "@/lib/motion";
 
 /**
@@ -20,13 +22,15 @@ export function AuthForm() {
   const router = useRouter();
   const params = useSearchParams();
   const redirect = params.get("redirect") || "/dashboard";
+  const { t } = useLocale();
 
   const [ready, setReady] = useState(false);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Errors are stored as i18n keys so they re-render in the active language.
+  const [errorKey, setErrorKey] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -46,32 +50,32 @@ export function AuthForm() {
       email: OWNER_EMAIL,
       password: pw,
     });
-    if (error) throw new Error("Incorrect password.");
+    if (error) throw new Error("auth.errorIncorrect");
     router.push(redirect);
     router.refresh();
   }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
+    setErrorKey(null);
     setLoading(true);
     const supabase = createClient();
 
     try {
       if (needsSetup) {
-        if (password.length < 4) throw new Error("Use at least 4 characters.");
-        if (password !== confirm) throw new Error("Passwords don't match.");
+        if (password.length < 4) throw new Error("auth.errorShort");
+        if (password !== confirm) throw new Error("auth.errorMismatch");
         const { data, error } = await supabase.rpc("lifeos_initialize", {
           new_password: password,
         });
-        if (error) throw error;
-        if (!data) throw new Error("Already set up — refresh and sign in.");
+        if (error) throw new Error("auth.errorGeneric");
+        if (!data) throw new Error("auth.errorAlready");
         await signIn(password);
       } else {
         await signIn(password);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      setErrorKey(err instanceof Error ? err.message : "auth.errorGeneric");
       setLoading(false);
     }
   }
@@ -83,6 +87,11 @@ export function AuthForm() {
         className="pointer-events-none absolute left-1/2 top-1/2 h-[70vh] w-[70vh] -translate-x-1/2 -translate-y-1/2 rounded-full opacity-40 blur-3xl"
         style={{ background: "radial-gradient(circle, rgba(59,130,246,0.22), transparent 60%)" }}
       />
+
+      <div className="absolute right-5 top-6 z-10 sm:right-8 sm:top-8">
+        <LanguageSwitch />
+      </div>
+
       <motion.div
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
@@ -103,12 +112,10 @@ export function AuthForm() {
             {needsSetup ? <ShieldCheck className="h-5 w-5" /> : <Lock className="h-5 w-5" />}
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            {needsSetup ? "Set your password" : "Welcome back"}
+            {needsSetup ? t("auth.setupTitle") : t("auth.welcomeTitle")}
           </h1>
           <p className="mt-2 text-sm text-white/45">
-            {needsSetup
-              ? "Choose the password that unlocks your LifeOS."
-              : "Enter your password to open your system."}
+            {needsSetup ? t("auth.setupSubtitle") : t("auth.welcomeSubtitle")}
           </p>
         </div>
 
@@ -122,7 +129,7 @@ export function AuthForm() {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Password"
+              placeholder={t("auth.password")}
               autoComplete={needsSetup ? "new-password" : "current-password"}
               autoFocus
               required
@@ -133,16 +140,16 @@ export function AuthForm() {
                 type="password"
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
-                placeholder="Confirm password"
+                placeholder={t("auth.confirmPassword")}
                 autoComplete="new-password"
                 required
                 className="w-full rounded-xl border border-hairline bg-white/[0.03] px-4 py-3 text-[0.95rem] text-white placeholder-white/25 outline-none transition-colors focus:border-accent/60 focus:bg-white/[0.05]"
               />
             )}
 
-            {error && (
+            {errorKey && (
               <p className="rounded-xl border border-red-500/25 bg-red-500/10 px-4 py-2.5 text-sm text-red-200">
-                {error}
+                {t(errorKey)}
               </p>
             )}
 
@@ -155,7 +162,7 @@ export function AuthForm() {
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <>
-                  {needsSetup ? "Create & enter" : "Enter LifeOS"}
+                  {needsSetup ? t("auth.createEnter") : t("auth.enter")}
                   <ArrowRight className="h-4 w-4 transition-transform duration-500 group-hover:translate-x-1" />
                 </>
               )}
@@ -164,9 +171,7 @@ export function AuthForm() {
         )}
 
         <p className="mt-7 text-center text-xs text-white/35">
-          {needsSetup
-            ? "You can change this anytime in Settings."
-            : "Private to you · encrypted at rest."}
+          {needsSetup ? t("auth.footnoteSetup") : t("auth.footnotePrivate")}
         </p>
       </motion.div>
     </div>
