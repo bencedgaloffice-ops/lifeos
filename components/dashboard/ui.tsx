@@ -163,3 +163,64 @@ export function Field({
 
 export const inputClass =
   "w-full rounded-xl border border-hairline bg-white/[0.03] px-4 py-2.5 text-[0.95rem] text-white placeholder-white/25 outline-none transition-colors focus:border-accent/60 focus:bg-white/[0.05]";
+
+/** Small circular progress ring — used by the Life Score overview. */
+export function ScoreRing({
+  value,
+  label,
+  size = 84,
+  strokeWidth = 6,
+}: {
+  value: number | null;
+  label: string;
+  size?: number;
+  strokeWidth?: number;
+}) {
+  const clamped = value === null ? 0 : Math.max(0, Math.min(100, value));
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const offset = circumference * (1 - clamped / 100);
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg width={size} height={size} className="-rotate-90">
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="rgba(255,255,255,0.08)"
+            strokeWidth={strokeWidth}
+          />
+          <motion.circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="url(#score-ring-gradient)"
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeDasharray={circumference}
+            initial={{ strokeDashoffset: circumference }}
+            whileInView={{ strokeDashoffset: value === null ? circumference : offset }}
+            viewport={{ once: true }}
+            transition={{ duration: 1.1, ease: [0.16, 1, 0.3, 1] }}
+          />
+          <defs>
+            <linearGradient id="score-ring-gradient" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#3B82F6" />
+              <stop offset="100%" stopColor="#60A5FA" />
+            </linearGradient>
+          </defs>
+        </svg>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-lg font-semibold tabular-nums tracking-tight">
+            {value === null ? "—" : Math.round(clamped)}
+          </span>
+        </div>
+      </div>
+      <span className="text-xs font-medium text-white/55">{label}</span>
+    </div>
+  );
+}

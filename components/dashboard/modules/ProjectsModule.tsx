@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { FolderKanban, Plus, Trash2, Minus } from "lucide-react";
 import type { Project } from "@/lib/types";
 import { formatDate, relativeDays } from "@/lib/format";
+import { useLocale } from "@/lib/i18n/LocaleProvider";
 import {
   ModuleHeader,
   Panel,
@@ -23,19 +24,20 @@ import {
 export function ProjectsModule({ projects }: { projects: Project[] }) {
   const [open, setOpen] = useState(false);
   const [, startTransition] = useTransition();
+  const { t } = useLocale();
 
   return (
     <div>
       <ModuleHeader
         icon={FolderKanban}
-        title="Projects"
-        subtitle="Move the work of your life forward."
+        title={t("projects.title")}
+        subtitle={t("projects.subtitle")}
         action={
           <button
             onClick={() => setOpen((v) => !v)}
             className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2.5 text-sm font-medium text-black transition-transform hover:-translate-y-0.5"
           >
-            <Plus className="h-4 w-4" /> New project
+            <Plus className="h-4 w-4" /> {t("projects.newProject")}
           </button>
         }
       />
@@ -50,23 +52,23 @@ export function ProjectsModule({ projects }: { projects: Project[] }) {
             className="grid gap-4 sm:grid-cols-2"
           >
             <div className="sm:col-span-2">
-              <Field label="Project name">
-                <input name="name" required placeholder="LifeOS Development" className={inputClass} />
+              <Field label={t("projects.formName")}>
+                <input name="name" required placeholder={t("projects.formNamePlaceholder")} className={inputClass} />
               </Field>
             </div>
             <div className="sm:col-span-2">
-              <Field label="Description">
+              <Field label={t("projects.formDescription")}>
                 <input
                   name="description"
-                  placeholder="What this project is about"
+                  placeholder={t("projects.formDescriptionPlaceholder")}
                   className={inputClass}
                 />
               </Field>
             </div>
-            <Field label="Deadline">
+            <Field label={t("projects.formDeadline")}>
               <input type="date" name="deadline" className={inputClass} />
             </Field>
-            <Field label="Progress (%)">
+            <Field label={t("projects.formProgress")}>
               <input
                 type="number"
                 name="progress_percent"
@@ -81,14 +83,14 @@ export function ProjectsModule({ projects }: { projects: Project[] }) {
                 type="submit"
                 className="rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white transition-transform hover:-translate-y-0.5"
               >
-                Create project
+                {t("projects.create")}
               </button>
               <button
                 type="button"
                 onClick={() => setOpen(false)}
                 className="rounded-full glass px-5 py-2.5 text-sm text-white/70"
               >
-                Cancel
+                {t("projects.cancel")}
               </button>
             </div>
           </form>
@@ -98,8 +100,8 @@ export function ProjectsModule({ projects }: { projects: Project[] }) {
       {projects.length === 0 ? (
         <EmptyState
           icon={FolderKanban}
-          title="No projects yet"
-          hint="Create a project like “Farm Project” or “Career Growth” to track it here."
+          title={t("projects.noProjects")}
+          hint={t("projects.noProjectsHint")}
         />
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
@@ -114,6 +116,7 @@ export function ProjectsModule({ projects }: { projects: Project[] }) {
 
 function ProjectCard({ project, index }: { project: Project; index: number }) {
   const [pending, startTransition] = useTransition();
+  const { t, locale } = useLocale();
   const step = (delta: number) =>
     startTransition(() => updateProjectProgress(project.id, project.progress_percent + delta));
 
@@ -133,11 +136,11 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
           <div className="min-w-0">
             <div className="mb-1.5 flex items-center gap-2">
               {project.status === "completed" ? (
-                <Pill tone="green">Complete</Pill>
+                <Pill tone="green">{t("projects.complete")}</Pill>
               ) : overdue ? (
-                <Pill tone="amber">Overdue</Pill>
+                <Pill tone="amber">{t("projects.overdue")}</Pill>
               ) : (
-                <Pill tone="accent">Active</Pill>
+                <Pill tone="accent">{t("projects.active")}</Pill>
               )}
             </div>
             <h3 className="text-lg font-semibold tracking-tight">{project.name}</h3>
@@ -162,7 +165,7 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
             </span>
             {project.deadline && (
               <span className="text-xs text-white/40">
-                {formatDate(project.deadline)} · {relativeDays(project.deadline)}
+                {formatDate(project.deadline, undefined, locale)} · {relativeDays(project.deadline, locale)}
               </span>
             )}
           </div>
@@ -184,7 +187,7 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
             >
               <Plus className="h-3.5 w-3.5" />
             </button>
-            <span className="text-xs text-white/35">Adjust progress</span>
+            <span className="text-xs text-white/35">{t("projects.adjustProgress")}</span>
           </div>
         </div>
       </Panel>

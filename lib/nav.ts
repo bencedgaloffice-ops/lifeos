@@ -7,23 +7,31 @@ import {
   BookOpen,
   Brain,
   Settings,
+  ShieldCheck,
+  Landmark,
+  ChefHat,
+  Salad,
   type LucideIcon,
 } from "lucide-react";
 
 export type NavItem = {
-  label: string;
+  /** i18n key under `nav.` — label is `nav.<key>.label`, description `nav.<key>.description` */
+  key: string;
   href: string;
   icon: LucideIcon;
-  description: string;
 };
 
 export const dashboardNav: NavItem[] = [
-  { label: "Overview", href: "/dashboard", icon: LayoutGrid, description: "Your life at a glance" },
-  { label: "My Profile", href: "/dashboard/profile", icon: UserCircle, description: "Who you are & where you're going" },
-  { label: "Finance", href: "/dashboard/finance", icon: Wallet, description: "Wealth & cash flow" },
-  { label: "Goals", href: "/dashboard/goals", icon: Target, description: "What you're building toward" },
-  { label: "Projects", href: "/dashboard/projects", icon: FolderKanban, description: "The work of your life" },
-  { label: "Journal", href: "/dashboard/journal", icon: BookOpen, description: "Your journey, remembered" },
-  { label: "AI Companion", href: "/dashboard/ai", icon: Brain, description: "Understands your life" },
-  { label: "Settings", href: "/dashboard/settings", icon: Settings, description: "Password & preferences" },
+  { key: "overview", href: "/dashboard", icon: LayoutGrid },
+  { key: "protection", href: "/dashboard/protection", icon: ShieldCheck },
+  { key: "finance", href: "/dashboard/finance", icon: Wallet },
+  { key: "legacy", href: "/dashboard/legacy", icon: Landmark },
+  { key: "goals", href: "/dashboard/goals", icon: Target },
+  { key: "projects", href: "/dashboard/projects", icon: FolderKanban },
+  { key: "kitchen", href: "/dashboard/kitchen", icon: ChefHat },
+  { key: "nutrition", href: "/dashboard/nutrition", icon: Salad },
+  { key: "journal", href: "/dashboard/journal", icon: BookOpen },
+  { key: "profile", href: "/dashboard/profile", icon: UserCircle },
+  { key: "ai", href: "/dashboard/ai", icon: Brain },
+  { key: "settings", href: "/dashboard/settings", icon: Settings },
 ];

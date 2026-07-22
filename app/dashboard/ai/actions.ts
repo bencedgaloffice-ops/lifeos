@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/format";
+import type { Locale } from "@/lib/i18n/translations";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -32,16 +33,105 @@ export async function deleteMemory(id: string) {
   revalidatePath("/dashboard/ai");
 }
 
+/** Response templates for the rule-based companion, per language. */
+const R = {
+  en: {
+    fallbackName: "there",
+    moneyNone: (n: string) =>
+      `You haven't logged any income yet this month, ${n}. Add a couple of transactions in Finance and I'll tell you exactly where your money is going and how much you're keeping.`,
+    moneyStrong: "That's a strong, wealth-building pace.",
+    moneyOk: "You're in the black — there's room to push this higher.",
+    moneyOver: "You're spending more than you earn this month; worth a look.",
+    moneyGoal: (g: string) => ` Your stated goal — “${g}” — is the north star to optimize toward.`,
+    moneySummary: (inc: string, out: string, rate: number, verdict: string, goal: string) =>
+      `This month you brought in ${inc} and spent ${out}, a ${rate}% savings rate. ${verdict}${goal}`,
+    goalsNone: (n: string) =>
+      `You have no active goals yet, ${n}. Add one or two in the Goals module and I'll help you keep momentum.`,
+    goalsSummary: (avg: number, count: number, top: string, topPct: number) =>
+      `You're averaging ${avg}% across ${count} active goal${count > 1 ? "s" : ""}. “${top}” is your furthest along at ${topPct}%. Small, consistent steps compound — pick one to move 10% this week.`,
+    projectsNone: (n: string) =>
+      `No active projects right now, ${n}. When you add one, I'll track its progress and flag deadlines before they sneak up.`,
+    projectsSummary: (count: number) =>
+      `You have ${count} active project${count > 1 ? "s" : ""}. Focus tends to beat breadth — protect deep-work time for the one that matters most this month.`,
+    whoami: (name: string) =>
+      `You're ${name}. As you fill in your profile, finances, goals and journal, I get a clearer picture of your whole life — and my guidance gets sharper.`,
+    bitGoals: (avg: number) => `your goals sit at ${avg}% on average`,
+    bitSavings: (rate: number) => `you're saving ${rate}% of your income this month`,
+    bitCash: (amt: string) => `you've got ${amt} in savings`,
+    fallback: (n: string, summary: string) =>
+      `I'm here to help you think clearly about your life, ${n}.${summary} Ask me about your money, your goals, or your projects — I reason over everything you've put into LifeOS.`,
+    rightNow: (bits: string) => ` Right now, ${bits}.`,
+    protectionNone: (n: string) =>
+      `No documents or responsibilities tracked yet, ${n}. Add them in Protection and I'll flag anything expiring or overdue.`,
+    protectionSummary: (expiring: number, overdue: number) =>
+      `You have ${expiring} document${expiring === 1 ? "" : "s"} expiring soon and ${overdue} overdue responsibilit${overdue === 1 ? "y" : "ies"}. Worth a look in Protection.`,
+    protectionClear: "Nothing expiring soon and no overdue responsibilities — you're covered.",
+    legacyNone: (n: string) =>
+      `Your vision board is empty, ${n}. Add a dream or milestone in Legacy — it's where the story you're building lives.`,
+    legacySummary: (dreams: number, milestones: number) =>
+      `You're holding onto ${dreams} dream${dreams === 1 ? "" : "s"} and ${milestones} milestone${milestones === 1 ? "" : "s"} in your Legacy. That's the shape of the life you're building.`,
+    kitchenEmpty: (n: string) =>
+      `Your kitchen is empty right now, ${n}. Add a few items in Kitchen and I can suggest meals from what you have.`,
+    kitchenSummary: (count: number, topSuggestion: string | null) =>
+      topSuggestion
+        ? `You have ${count} item${count === 1 ? "" : "s"} in your kitchen. Based on what's there, you could make ${topSuggestion} — check Kitchen for the full recipe.`
+        : `You have ${count} item${count === 1 ? "" : "s"} in your kitchen, but not quite enough for a suggested meal yet — add a few more staples.`,
+  },
+  hu: {
+    fallbackName: "barátom",
+    moneyNone: (n: string) =>
+      `Ebben a hónapban még nem rögzítettél bevételt, ${n}. Adj hozzá néhány tranzakciót a Pénzügyekben, és pontosan megmutatom, hová megy a pénzed és mennyit tartasz meg.`,
+    moneyStrong: "Ez erős, vagyonépítő tempó.",
+    moneyOk: "Pluszban vagy — de van tér feljebb tolni.",
+    moneyOver: "Ebben a hónapban többet költesz, mint amennyit keresel; érdemes ránézni.",
+    moneyGoal: (g: string) => ` A kitűzött célod — „${g}” — az iránytű, ami felé optimalizálni érdemes.`,
+    moneySummary: (inc: string, out: string, rate: number, verdict: string, goal: string) =>
+      `Ebben a hónapban ${inc} bevételed és ${out} kiadásod volt, ez ${rate}%-os megtakarítási ráta. ${verdict}${goal}`,
+    goalsNone: (n: string) =>
+      `Még nincs aktív célod, ${n}. Adj hozzá egyet-kettőt a Célok modulban, és segítek lendületben maradni.`,
+    goalsSummary: (avg: number, count: number, top: string, topPct: number) =>
+      `Átlagosan ${avg}%-on állsz ${count} aktív célban. A „${top}” halad a legjobban, ${topPct}%-on. A kis, következetes lépések összeadódnak — válassz egyet, amit 10%-kal előre viszel ezen a héten.`,
+    projectsNone: (n: string) =>
+      `Jelenleg nincs aktív projekted, ${n}. Ha hozzáadsz egyet, követem a haladását és időben szólok a határidőkről.`,
+    projectsSummary: (count: number) =>
+      `${count} aktív projekted van. A fókusz többet ér, mint a szélesség — védd meg a mélymunka-idődet a hónap legfontosabb projektjére.`,
+    whoami: (name: string) =>
+      `Te ${name} vagy. Ahogy kitöltöd a profilod, pénzügyeidet, céljaidat és naplódat, egyre tisztábban látom az egész életedet — és egyre pontosabb tanácsot tudok adni.`,
+    bitGoals: (avg: number) => `a céljaid átlagosan ${avg}%-on állnak`,
+    bitSavings: (rate: number) => `a bevételed ${rate}%-át takarítod meg ebben a hónapban`,
+    bitCash: (amt: string) => `${amt} megtakarításod van`,
+    fallback: (n: string, summary: string) =>
+      `Azért vagyok itt, hogy segítsek tisztán látni az életedet, ${n}.${summary} Kérdezz a pénzedről, a céljaidról vagy a projektjeidről — mindent átlátok, amit a LifeOS-ba tettél.`,
+    rightNow: (bits: string) => ` Jelenleg ${bits}.`,
+    protectionNone: (n: string) =>
+      `Még nincs nyilvántartott dokumentumod vagy kötelezettséged, ${n}. Add hozzá őket a Védelemben, és szólok, ha valami lejár vagy késik.`,
+    protectionSummary: (expiring: number, overdue: number) =>
+      `${expiring} dokumentumod jár le hamarosan, és ${overdue} kötelezettséged késik. Érdemes megnézni a Védelem oldalt.`,
+    protectionClear: "Semmi nem jár le hamarosan, és nincs késő kötelezettséged — minden rendben.",
+    legacyNone: (n: string) =>
+      `A vízió-táblád üres, ${n}. Adj hozzá egy álmot vagy mérföldkövet az Örökségben — ott él a történet, amit építesz.`,
+    legacySummary: (dreams: number, milestones: number) =>
+      `${dreams} álmot és ${milestones} mérföldkövet őrzöl az Örökségedben. Ez annak az életnek a formája, amit építesz.`,
+    kitchenEmpty: (n: string) =>
+      `A konyhád most üres, ${n}. Adj hozzá néhány tételt a Konyhában, és tudok ételt javasolni abból, ami megvan.`,
+    kitchenSummary: (count: number, topSuggestion: string | null) =>
+      topSuggestion
+        ? `${count} tételed van a konyhában. Ami megvan, abból elkészíthetnéd ezt: ${topSuggestion} — a teljes receptért nézd meg a Konyhát.`
+        : `${count} tételed van a konyhában, de még nem elég egy ételjavaslathoz — adj hozzá pár alapanyagot.`,
+  },
+} as const;
+
 /**
  * A grounded, rule-based companion. It reasons over the user's real LifeOS
  * data to answer — no fabricated external knowledge. This is the foundation
- * the deeper AI will build on.
+ * the deeper AI will build on. Answers in the user's chosen language.
  */
-export async function askCompanion(question: string): Promise<string> {
+export async function askCompanion(question: string, locale: Locale = "en"): Promise<string> {
   const { supabase, user } = await requireUser();
   const q = question.toLowerCase();
+  const L = R[locale] ?? R.en;
 
-  const [{ data: profile }, { data: goals }, { data: tx }, { data: projects }] =
+  const [{ data: profile }, { data: goals }, { data: tx }, { data: projects }, { data: documents }, { data: responsibilities }, { data: dreams }, { data: milestones }, { data: kitchenItems }] =
     await Promise.all([
       supabase
         .from("profiles")
@@ -51,10 +141,16 @@ export async function askCompanion(question: string): Promise<string> {
       supabase.from("goals").select("title, progress_percent, target_date, status"),
       supabase.from("transactions").select("amount, direction, occurred_at"),
       supabase.from("projects").select("name, progress_percent, deadline, status"),
+      supabase.from("documents").select("expires_at"),
+      supabase.from("responsibilities").select("due_date, completed"),
+      supabase.from("dreams").select("id"),
+      supabase.from("milestones").select("id"),
+      supabase.from("kitchen_items").select("name"),
     ]);
 
   const currency = profile?.preferred_currency || "USD";
-  const name = profile?.display_name?.split(" ")[0] || "there";
+  const name = profile?.display_name?.split(" ")[0] || L.fallbackName;
+  const fc = (n: number) => formatCurrency(n, currency, { locale });
 
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -68,34 +164,60 @@ export async function askCompanion(question: string): Promise<string> {
     ? Math.round(activeGoals.reduce((s, g) => s + g.progress_percent, 0) / activeGoals.length)
     : null;
 
-  if (/(save|saving|money|spend|budget|financ|wealth|rich)/.test(q)) {
-    if (savingsRate === null)
-      return `You haven't logged any income yet this month, ${name}. Add a couple of transactions in Finance and I'll tell you exactly where your money is going and how much you're keeping.`;
-    const verdict = savingsRate >= 20 ? "That's a strong, wealth-building pace." : savingsRate >= 0 ? "You're in the black — there's room to push this higher." : "You're spending more than you earn this month; worth a look.";
-    const goalLine = profile?.financial_goal ? ` Your stated goal — “${profile.financial_goal}” — is the north star to optimize toward.` : "";
-    return `This month you brought in ${formatCurrency(income, currency)} and spent ${formatCurrency(spending, currency)}, a ${savingsRate}% savings rate. ${verdict}${goalLine}`;
+  // Match both English and Hungarian phrasings.
+  if (/(save|saving|money|spend|budget|financ|wealth|rich|pénz|megtakarít|költ|anyagi|vagyon)/.test(q)) {
+    if (savingsRate === null) return L.moneyNone(name);
+    const verdict = savingsRate >= 20 ? L.moneyStrong : savingsRate >= 0 ? L.moneyOk : L.moneyOver;
+    const goalLine = profile?.financial_goal ? L.moneyGoal(profile.financial_goal) : "";
+    return L.moneySummary(fc(income), fc(spending), savingsRate, verdict, goalLine);
   }
 
-  if (/(goal|progress|achieve|dream)/.test(q)) {
-    if (!activeGoals.length) return `You have no active goals yet, ${name}. Add one or two in the Goals module and I'll help you keep momentum.`;
+  if (/(goal|progress|achieve|cél|halad|elér)/.test(q)) {
+    if (!activeGoals.length) return L.goalsNone(name);
     const top = [...activeGoals].sort((a, b) => b.progress_percent - a.progress_percent)[0];
-    return `You're averaging ${avgGoal}% across ${activeGoals.length} active goal${activeGoals.length > 1 ? "s" : ""}. “${top.title}” is your furthest along at ${top.progress_percent}%. Small, consistent steps compound — pick one to move 10% this week.`;
+    return L.goalsSummary(avgGoal ?? 0, activeGoals.length, top.title, top.progress_percent);
   }
 
-  if (/(project|work|build|deadline)/.test(q)) {
+  if (/(project|work|build|deadline|projekt|munka|határidő|épít)/.test(q)) {
     const active = (projects ?? []).filter((p) => p.status !== "completed");
-    if (!active.length) return `No active projects right now, ${name}. When you add one, I'll track its progress and flag deadlines before they sneak up.`;
-    return `You have ${active.length} active project${active.length > 1 ? "s" : ""}. Focus tends to beat breadth — protect deep-work time for the one that matters most this month.`;
+    if (!active.length) return L.projectsNone(name);
+    return L.projectsSummary(active.length);
   }
 
-  if (/(who am i|about me|profile|myself)/.test(q)) {
-    return `You're ${profile?.display_name || name}. As you fill in your profile, finances, goals and journal, I get a clearer picture of your whole life — and my guidance gets sharper.`;
+  if (/(document|responsibilit|expir|secure|protect|dokumentum|kötelezettség|lejár|védelem)/.test(q)) {
+    const docs = documents ?? [];
+    const resps = responsibilities ?? [];
+    if (!docs.length && !resps.length) return L.protectionNone(name);
+    const now2 = Date.now();
+    const expiring = docs.filter((d) => d.expires_at && new Date(d.expires_at).getTime() - now2 < 30 * 86_400_000).length;
+    const overdue = resps.filter((r) => !r.completed && r.due_date && new Date(r.due_date).getTime() < now2).length;
+    if (!expiring && !overdue) return L.protectionClear;
+    return L.protectionSummary(expiring, overdue);
+  }
+
+  if (/(dream|milestone|legacy|álom|mérföldkő|örökség)/.test(q)) {
+    const dreamCount = (dreams ?? []).length;
+    const milestoneCount = (milestones ?? []).length;
+    if (!dreamCount && !milestoneCount) return L.legacyNone(name);
+    return L.legacySummary(dreamCount, milestoneCount);
+  }
+
+  if (/(eat|meal|fridge|kitchen|cook|recipe|enni|étel|hűtő|konyha|főz|recept)/.test(q)) {
+    const items = kitchenItems ?? [];
+    if (!items.length) return L.kitchenEmpty(name);
+    const { suggestMeals } = await import("@/app/dashboard/kitchen/suggestions");
+    const suggestions = suggestMeals(items.map((i) => i.name), 1);
+    return L.kitchenSummary(items.length, suggestions[0]?.name ?? null);
+  }
+
+  if (/(who am i|about me|profile|myself|ki vagyok|magamról|profilom)/.test(q)) {
+    return L.whoami(profile?.display_name || name);
   }
 
   const bits: string[] = [];
-  if (avgGoal !== null) bits.push(`your goals sit at ${avgGoal}% on average`);
-  if (savingsRate !== null) bits.push(`you're saving ${savingsRate}% of your income this month`);
-  if (profile?.current_savings) bits.push(`you've got ${formatCurrency(Number(profile.current_savings), currency)} in savings`);
-  const summary = bits.length ? ` Right now, ${bits.join(", ")}.` : "";
-  return `I'm here to help you think clearly about your life, ${name}.${summary} Ask me about your money, your goals, or your projects — I reason over everything you've put into LifeOS.`;
+  if (avgGoal !== null) bits.push(L.bitGoals(avgGoal));
+  if (savingsRate !== null) bits.push(L.bitSavings(savingsRate));
+  if (profile?.current_savings) bits.push(L.bitCash(fc(Number(profile.current_savings))));
+  const summary = bits.length ? L.rightNow(bits.join(", ")) : "";
+  return L.fallback(name, summary);
 }

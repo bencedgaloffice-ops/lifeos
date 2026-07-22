@@ -26,6 +26,13 @@ export type Profile = {
   spiritual_goal: string | null;
   learning_goal: string | null;
   growth_focus: string | null;
+  relationships_note: string | null;
+  height_cm: number | null;
+  weight_kg: number | null;
+  target_weight_kg: number | null;
+  fitness_goal: string | null;
+  calorie_target: number | null;
+  protein_target_g: number | null;
   onboarded: boolean;
   updated_at: string;
 };
@@ -104,5 +111,109 @@ export type AiMemory = {
   memory_type: string | null;
   content: string;
   importance: number | null;
+  created_at: string;
+};
+
+export type Document = {
+  id: string;
+  user_id: string;
+  title: string;
+  file_path: string;
+  category: string | null;
+  expires_at: string | null;
+  reminder_days_before: number | null;
+  uploaded_at: string;
+};
+
+export type Responsibility = {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string | null;
+  category: string | null;
+  due_date: string | null;
+  recurrence: string | null;
+  completed: boolean;
+  created_at: string;
+};
+
+export type SecurityNote = {
+  id: string;
+  user_id: string;
+  label: string;
+  value: string;
+  created_at: string;
+};
+
+export type Dream = {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string | null;
+  image_url: string | null;
+  order_index: number;
+  created_at: string;
+};
+
+export type Milestone = {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string | null;
+  date: string;
+  category: string | null;
+  created_at: string;
+};
+
+export type Asset = {
+  id: string;
+  user_id: string;
+  name: string;
+  category: "property" | "vehicle" | "business" | "other";
+  estimated_value: number;
+  notes: string | null;
+  created_at: string;
+};
+
+export type KitchenItem = {
+  id: string;
+  user_id: string;
+  name: string;
+  quantity: string | null;
+  expires_at: string | null;
+  location: "fridge" | "pantry" | "freezer";
+  category: string | null;
+  created_at: string;
+};
+
+export type ShoppingListItem = {
+  id: string;
+  user_id: string;
+  name: string;
+  category: string | null;
+  quantity: string | null;
+  checked: boolean;
+  created_at: string;
+};
+
+export type NutritionEntry = {
+  id: string;
+  user_id: string;
+  logged_at: string;
+  meal: "breakfast" | "lunch" | "dinner" | "snack";
+  description: string | null;
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  water_ml: number | null;
+  created_at: string;
+};
+
+export type WeightLogEntry = {
+  id: string;
+  user_id: string;
+  logged_date: string;
+  weight_kg: number;
   created_at: string;
 };

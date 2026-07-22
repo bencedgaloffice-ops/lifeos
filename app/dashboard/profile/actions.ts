@@ -55,6 +55,7 @@ export async function saveProfile(formData: FormData) {
     spiritual_goal: str(formData, "spiritual_goal"),
     learning_goal: str(formData, "learning_goal"),
     growth_focus: str(formData, "growth_focus"),
+    relationships_note: str(formData, "relationships_note"),
     onboarded: true,
   });
 

@@ -1,11 +1,13 @@
 import { createClient } from "@/lib/supabase/server";
 import { OverviewModule, type OverviewData } from "@/components/dashboard/modules/OverviewModule";
 import { formatDate, relativeDays } from "@/lib/format";
+import { getServerLocale, tServer } from "@/lib/i18n/server";
 
 export const metadata = { title: "Overview" };
 
 export default async function DashboardHome() {
   const supabase = await createClient();
+  const locale = await getServerLocale();
 
   const [
     { data: profile },
@@ -25,6 +27,12 @@ export default async function DashboardHome() {
     supabase.from("investment_holdings").select("current_value, quantity, avg_cost"),
   ]);
 
+  const [{ data: accounts }, { data: assets }, { data: nutritionRecent }] = await Promise.all([
+    supabase.from("accounts").select("current_balance"),
+    supabase.from("assets").select("estimated_value"),
+    supabase.from("nutrition_entries").select("logged_at").gte("logged_at", new Date(Date.now() - 14 * 86_400_000).toISOString()),
+  ]);
+
   const currency = profile?.preferred_currency || "USD";
   const num = (v: number | null | undefined) => Number(v ?? 0);
 
@@ -36,7 +44,9 @@ export default async function DashboardHome() {
   const savingsRate = monthIncome > 0 ? Math.round(((monthIncome - monthSpending) / monthIncome) * 100) : 0;
 
   const portfolioValue = (holdings ?? []).reduce((s, h) => s + num(h.current_value ?? num(h.quantity) * num(h.avg_cost)), 0);
-  const netWorth = num(profile?.current_savings) + portfolioValue;
+  const accountsTotal = (accounts ?? []).reduce((s, a) => s + num(a.current_balance), 0);
+  const assetsTotal = (assets ?? []).reduce((s, a) => s + num(a.estimated_value), 0);
+  const netWorth = num(profile?.current_savings) + portfolioValue + accountsTotal + assetsTotal;
 
   const activeGoals = (goals ?? []).filter((g) => g.status !== "completed");
   const goalsAvg = activeGoals.length ? Math.round(activeGoals.reduce((s, g) => s + g.progress_percent, 0) / activeGoals.length) : null;
@@ -45,7 +55,7 @@ export default async function DashboardHome() {
   // Reminders: upcoming events + upcoming goal/project deadlines
   const reminders: OverviewData["reminders"] = [];
   (events ?? []).forEach((e) =>
-    reminders.push({ id: e.id, title: e.title, when: relativeDays(e.start_at) || formatDate(e.start_at), kind: "event", deletable: true }),
+    reminders.push({ id: e.id, title: e.title, when: relativeDays(e.start_at, locale) || formatDate(e.start_at, undefined, locale), kind: "event", deletable: true }),
   );
   const soon = (d: string | null) => {
     if (!d) return false;
@@ -53,19 +63,35 @@ export default async function DashboardHome() {
     return days >= -1 && days <= 30;
   };
   activeGoals.filter((g) => soon(g.target_date)).slice(0, 3).forEach((g) =>
-    reminders.push({ id: `goal-${g.id}`, title: `Goal: ${g.title}`, when: relativeDays(g.target_date), kind: "reminder", deletable: false }),
+    reminders.push({ id: `goal-${g.id}`, title: `${tServer(locale, "nav.goals.label")}: ${g.title}`, when: relativeDays(g.target_date, locale), kind: "reminder", deletable: false }),
   );
   activeProjects.filter((p) => soon(p.deadline)).slice(0, 3).forEach((p) =>
-    reminders.push({ id: `proj-${p.id}`, title: `Project: ${p.name}`, when: relativeDays(p.deadline), kind: "reminder", deletable: false }),
+    reminders.push({ id: `proj-${p.id}`, title: `${tServer(locale, "nav.projects.label")}: ${p.name}`, when: relativeDays(p.deadline, locale), kind: "reminder", deletable: false }),
   );
 
   const growth: OverviewData["growth"] = [];
-  if (profile?.health_goal) growth.push({ label: "Health", value: profile.health_goal });
-  if (profile?.spiritual_goal) growth.push({ label: "Spiritual", value: profile.spiritual_goal });
-  if (profile?.learning_goal) growth.push({ label: "Learning", value: profile.learning_goal });
-  if (profile?.growth_focus) growth.push({ label: "Focus", value: profile.growth_focus });
+  if (profile?.health_goal) growth.push({ label: tServer(locale, "profile.healthGoal"), value: profile.health_goal });
+  if (profile?.spiritual_goal) growth.push({ label: tServer(locale, "profile.spiritualGoal"), value: profile.spiritual_goal });
+  if (profile?.learning_goal) growth.push({ label: tServer(locale, "profile.learningGoal"), value: profile.learning_goal });
+  if (profile?.growth_focus) growth.push({ label: tServer(locale, "profile.growthFocus"), value: profile.growth_focus });
 
   const latest = (journal ?? [])[0];
+
+  const projectsAvg = activeProjects.length
+    ? Math.round(activeProjects.reduce((s, p) => s + p.progress_percent, 0) / activeProjects.length)
+    : null;
+  const consistencyDays = new Set(
+    (nutritionRecent ?? []).map((e) => new Date(e.logged_at).toISOString().slice(0, 10)),
+  ).size;
+  const hasNutritionData = (nutritionRecent ?? []).length > 0 || Boolean(profile?.calorie_target);
+
+  const lifeScore: OverviewData["lifeScore"] = {
+    health: hasNutritionData ? Math.round((consistencyDays / 14) * 100) : null,
+    money: Math.round(Math.max(0, Math.min(100, 50 + savingsRate))),
+    growth: goalsAvg,
+    productivity: projectsAvg,
+    relationshipsNote: profile?.relationships_note ?? null,
+  };
 
   const data: OverviewData = {
     name: profile?.display_name || "Explorer",
@@ -85,6 +111,7 @@ export default async function DashboardHome() {
     reminders: reminders.slice(0, 6),
     growth,
     latestJournal: latest ? { title: latest.title, body: latest.body, date: latest.entry_date } : null,
+    lifeScore,
   };
 
   return <OverviewModule data={data} />;
