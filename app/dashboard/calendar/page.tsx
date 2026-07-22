@@ -1,11 +1,26 @@
 import { createClient } from "@/lib/supabase/server";
 import { CalendarModule } from "@/components/dashboard/modules/CalendarModule";
 import { mergeCalendarItems } from "@/lib/calendar/merge";
+import { getConnection } from "@/lib/google/client";
+import { pullFromGoogle } from "@/lib/google/sync";
 
 export const metadata = { title: "Calendar" };
 
+const STALE_AFTER_MS = 5 * 60_000;
+
 export default async function CalendarPage() {
   const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    const connection = await getConnection(user.id);
+    const stale = !connection?.last_synced_at || Date.now() - new Date(connection.last_synced_at).getTime() > STALE_AFTER_MS;
+    if (connection?.sync_enabled && stale) {
+      await pullFromGoogle(user.id);
+    }
+  }
 
   const now = new Date();
   const rangeStart = new Date(now.getFullYear() - 1, 0, 1);

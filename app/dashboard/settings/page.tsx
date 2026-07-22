@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { SettingsModule } from "@/components/dashboard/modules/SettingsModule";
+import { getConnection, isGoogleConfigured } from "@/lib/google/client";
 
 export const metadata = { title: "Settings" };
 
@@ -10,5 +11,20 @@ export default async function SettingsPage() {
     .select("calendar_feed_token")
     .maybeSingle();
 
-  return <SettingsModule feedToken={data?.calendar_feed_token ?? null} />;
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const connection = user ? await getConnection(user.id) : null;
+
+  return (
+    <SettingsModule
+      feedToken={data?.calendar_feed_token ?? null}
+      googleConfigured={isGoogleConfigured()}
+      googleConnection={
+        connection
+          ? { syncEnabled: connection.sync_enabled, lastSyncedAt: connection.last_synced_at }
+          : null
+      }
+    />
+  );
 }

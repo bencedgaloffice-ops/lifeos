@@ -61,6 +61,7 @@ function linkedItems(
       lifeAreaId: row.life_area_id ?? null,
       reminderMinutesBefore: null,
       subtype: null,
+      fromGoogle: false,
     });
   }
   return items;
@@ -106,6 +107,7 @@ export function mergeCalendarItems(input: {
         lifeAreaId: event.life_area_id,
         reminderMinutesBefore: event.reminder_minutes_before,
         subtype: event.subtype,
+        fromGoogle: event.source === "google",
       });
     });
   }
@@ -135,6 +137,7 @@ export function mergeCalendarItems(input: {
       lifeAreaId: icsbArea?.id ?? null,
       reminderMinutesBefore: null,
       subtype: shift.shift_type,
+      fromGoogle: false,
     });
   }
 

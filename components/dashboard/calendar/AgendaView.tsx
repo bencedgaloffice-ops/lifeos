@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import type { CalendarItem } from "@/lib/types";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
-import { Panel, Segmented, EmptyState } from "@/components/dashboard/ui";
+import { Panel, Segmented, EmptyState, GoogleSyncDot } from "@/components/dashboard/ui";
 import { resolveIcon } from "@/lib/icon-registry";
 import { formatTime } from "@/components/dashboard/calendar/utils";
 import { CalendarDays } from "lucide-react";
@@ -95,7 +95,10 @@ export function AgendaView({
                       >
                         <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
                       </div>
-                      <span className="min-w-0 flex-1 truncate text-sm text-white/80">{it.title}</span>
+                      <span className="flex min-w-0 flex-1 items-center gap-1.5 truncate text-sm text-white/80">
+                        {it.title}
+                        {it.fromGoogle && <GoogleSyncDot />}
+                      </span>
                       <span className="shrink-0 text-xs text-white/40">{it.allDay ? "—" : formatTime(it.start)}</span>
                     </button>
                   );

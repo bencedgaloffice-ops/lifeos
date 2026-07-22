@@ -7,6 +7,7 @@ import type { CalendarItem } from "@/lib/types";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { resolveIcon } from "@/lib/icon-registry";
 import { cn } from "@/lib/utils";
+import { GoogleSyncDot } from "@/components/dashboard/ui";
 import { monthMatrix, itemsOnDay, isSameDay, dayKey } from "@/components/dashboard/calendar/utils";
 import { rescheduleLinkedItem, updateEventDate } from "@/app/dashboard/calendar/actions";
 
@@ -118,6 +119,7 @@ export function MonthView({
                     >
                       <Icon className="h-3 w-3 shrink-0" strokeWidth={2} />
                       <span className="truncate text-white/85">{it.title}</span>
+                      {it.fromGoogle && <GoogleSyncDot className="ml-auto" />}
                     </motion.button>
                   );
                 })}

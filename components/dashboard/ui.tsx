@@ -228,6 +228,17 @@ export function ScoreRing({
   );
 }
 
+/** Small dot marking a calendar item as synced from Google Calendar. */
+export function GoogleSyncDot({ className }: { className?: string }) {
+  return (
+    <span
+      title="Google Calendar"
+      className={cn("inline-block h-1.5 w-1.5 shrink-0 rounded-full", className)}
+      style={{ backgroundColor: "#4285F4" }}
+    />
+  );
+}
+
 /** Pill-group view switcher — the active option slides via layout animation. */
 export function Segmented<T extends string>({
   value,

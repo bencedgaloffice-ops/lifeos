@@ -6,6 +6,7 @@ import type { CalendarItem } from "@/lib/types";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { resolveIcon } from "@/lib/icon-registry";
 import { cn } from "@/lib/utils";
+import { GoogleSyncDot } from "@/components/dashboard/ui";
 import { weekDays, isSameDay, dayKey } from "@/components/dashboard/calendar/utils";
 import { rescheduleLinkedItem, updateEventDate } from "@/app/dashboard/calendar/actions";
 
@@ -182,6 +183,7 @@ export function WeekView({
                     <span className="flex items-center gap-1 truncate text-white/90">
                       <Icon className="h-2.5 w-2.5 shrink-0" />
                       {it.title}
+                      {it.fromGoogle && <GoogleSyncDot />}
                     </span>
                   </motion.button>
                 );

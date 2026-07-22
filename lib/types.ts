@@ -112,6 +112,21 @@ export type CalendarEvent = {
   subtype: string | null;
   recurrence_rule: string | null;
   parent_event_id: string | null;
+  google_event_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type GoogleCalendarConnection = {
+  id: string;
+  user_id: string;
+  access_token: string;
+  refresh_token: string;
+  token_expires_at: string;
+  google_calendar_id: string;
+  sync_token: string | null;
+  sync_enabled: boolean;
+  last_synced_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -196,6 +211,7 @@ export type CalendarItem = {
   lifeAreaId: string | null;
   reminderMinutesBefore: number | null;
   subtype: string | null;
+  fromGoogle: boolean;
 };
 
 export type AiMemory = {

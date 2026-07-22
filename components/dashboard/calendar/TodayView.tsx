@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import { Cloud, Plus } from "lucide-react";
 import type { CalendarItem, HabitEntry } from "@/lib/types";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
-import { Panel, inputClass } from "@/components/dashboard/ui";
+import { Panel, inputClass, GoogleSyncDot } from "@/components/dashboard/ui";
 import { resolveIcon } from "@/lib/icon-registry";
 import { formatTime, itemsOnDay } from "@/components/dashboard/calendar/utils";
 import { upsertHabitEntry } from "@/app/dashboard/calendar/actions";
@@ -164,7 +164,10 @@ function ScheduleRow({ item, onOpen }: { item: CalendarItem; onOpen: () => void 
         <Icon className="h-4 w-4" strokeWidth={1.75} />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-white/85">{item.title}</p>
+        <p className="flex items-center gap-1.5 truncate text-sm font-medium text-white/85">
+          {item.title}
+          {item.fromGoogle && <GoogleSyncDot />}
+        </p>
         <p className="text-xs text-white/40">{item.allDay ? "—" : formatTime(item.start)}</p>
       </div>
     </button>

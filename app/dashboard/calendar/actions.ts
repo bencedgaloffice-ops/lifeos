@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { serializeRRule, type RecurrenceRule } from "@/lib/calendar/recurrence";
+import { pushEventToGoogle } from "@/lib/google/sync";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -80,7 +81,8 @@ export async function upsertCalendarEvent(formData: FormData) {
   const occurrenceStart = str(formData, "occurrence_start");
 
   if (!id) {
-    await supabase.from("calendar_events").insert(row);
+    const { data: created } = await supabase.from("calendar_events").insert(row).select().single();
+    if (created) await pushEventToGoogle(user.id, created, "upsert");
   } else if (scope === "future" && occurrenceStart) {
     // Truncate the original series the day before this occurrence, then
     // insert a new series starting here with the edited values.
@@ -93,18 +95,30 @@ export async function upsertCalendarEvent(formData: FormData) {
     if (original?.recurrence_rule) {
       const untilStr = cutoff.toISOString().slice(0, 10).replace(/-/g, "");
       const truncated = original.recurrence_rule.replace(/;?UNTIL=[0-9TZ]+/i, "") + `;UNTIL=${untilStr}`;
-      await supabase.from("calendar_events").update({ recurrence_rule: truncated }).eq("id", id);
+      const { data: truncatedRow } = await supabase
+        .from("calendar_events")
+        .update({ recurrence_rule: truncated })
+        .eq("id", id)
+        .select()
+        .single();
+      if (truncatedRow) await pushEventToGoogle(user.id, truncatedRow, "upsert");
     }
-    await supabase.from("calendar_events").insert({ ...row, parent_event_id: id });
+    const { data: created } = await supabase
+      .from("calendar_events")
+      .insert({ ...row, parent_event_id: id })
+      .select()
+      .single();
+    if (created) await pushEventToGoogle(user.id, created, "upsert");
   } else {
-    await supabase.from("calendar_events").update(row).eq("id", id);
+    const { data: updated } = await supabase.from("calendar_events").update(row).eq("id", id).select().single();
+    if (updated) await pushEventToGoogle(user.id, updated, "upsert");
   }
 
   refresh();
 }
 
 export async function deleteCalendarEvent(id: string, scope: "series" | "future" = "series", occurrenceStart?: string) {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
 
   if (scope === "future" && occurrenceStart) {
     const { data: event } = await supabase
@@ -116,13 +130,20 @@ export async function deleteCalendarEvent(id: string, scope: "series" | "future"
       const cutoff = new Date(new Date(occurrenceStart).getTime() - 86_400_000);
       const untilStr = cutoff.toISOString().slice(0, 10).replace(/-/g, "");
       const truncated = event.recurrence_rule.replace(/;?UNTIL=[0-9TZ]+/i, "") + `;UNTIL=${untilStr}`;
-      await supabase.from("calendar_events").update({ recurrence_rule: truncated }).eq("id", id);
+      const { data: truncatedRow } = await supabase
+        .from("calendar_events")
+        .update({ recurrence_rule: truncated })
+        .eq("id", id)
+        .select()
+        .single();
+      if (truncatedRow) await pushEventToGoogle(user.id, truncatedRow, "upsert");
       refresh();
       return;
     }
   }
 
-  await supabase.from("calendar_events").delete().eq("id", id);
+  const { data: deleted } = await supabase.from("calendar_events").delete().eq("id", id).select().single();
+  if (deleted) await pushEventToGoogle(user.id, deleted, "delete");
   refresh();
 }
 
@@ -133,7 +154,7 @@ export async function deleteCalendarEvent(id: string, scope: "series" | "future"
  * "this occurrence only" / "this and future" semantics on a recurring
  * event, open it and use the modal's explicit save. */
 export async function updateEventDate(id: string, occurrenceMoment: string, newMoment: string) {
-  const { supabase } = await requireUser();
+  const { supabase, user } = await requireUser();
   const { data: event } = await supabase
     .from("calendar_events")
     .select("start_at, end_at")
@@ -146,10 +167,13 @@ export async function updateEventDate(id: string, occurrenceMoment: string, newM
   const newStart = new Date(new Date(event.start_at).getTime() + deltaMs);
   const newEnd = new Date(new Date(event.end_at).getTime() + deltaMs);
 
-  await supabase
+  const { data: updated } = await supabase
     .from("calendar_events")
     .update({ start_at: newStart.toISOString(), end_at: newEnd.toISOString() })
-    .eq("id", id);
+    .eq("id", id)
+    .select()
+    .single();
+  if (updated) await pushEventToGoogle(user.id, updated, "upsert");
   refresh();
 }
 
