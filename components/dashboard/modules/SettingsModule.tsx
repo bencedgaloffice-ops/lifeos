@@ -26,10 +26,12 @@ export function SettingsModule({
   feedToken,
   googleConfigured,
   googleConnection,
+  googleImported,
 }: {
   feedToken: string | null;
   googleConfigured: boolean;
   googleConnection: { syncEnabled: boolean; lastSyncedAt: string | null } | null;
+  googleImported: { count: number; latestEventDate: string | null };
 }) {
   const { t, tList, locale, setLocale } = useLocale();
   const searchParams = useSearchParams();
@@ -191,9 +193,28 @@ export function SettingsModule({
           )}
         </Panel>
 
-        {/* Google Calendar two-way sync */}
+        {/* Google Calendar — what's actually imported today */}
         <Panel>
-          <CardHead icon={Link2} title={t("settings.google.title")} hint={t("settings.google.hint")} />
+          <CardHead icon={CalendarDays} title={t("settings.google.importedTitle")} hint={t("settings.google.hint")} />
+
+          {googleImported.count === 0 ? (
+            <p className="text-sm text-white/45">{t("settings.google.importedNone")}</p>
+          ) : (
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-white/80">{t("settings.google.importedCount", { n: googleImported.count })}</span>
+              {googleImported.latestEventDate && (
+                <span className="text-white/40">
+                  {t("settings.google.latestEvent")}: {new Date(googleImported.latestEventDate).toLocaleDateString(locale === "hu" ? "hu-HU" : "en-US")}
+                </span>
+              )}
+            </div>
+          )}
+          <p className="mt-3 text-xs leading-relaxed text-white/35">{t("settings.google.importedHint")}</p>
+        </Panel>
+
+        {/* Google Calendar — optional full two-way OAuth upgrade */}
+        <Panel>
+          <CardHead icon={Link2} title={t("settings.google.twoWayTitle")} hint={t("settings.google.twoWayHint")} />
 
           {googleStatus && (
             <p
