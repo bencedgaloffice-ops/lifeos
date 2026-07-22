@@ -134,6 +134,17 @@ export function ProfileModule({ profile }: { profile: Profile | null }) {
             <Field label={t("profile.growthFocus")}>
               <input name="growth_focus" defaultValue={v("growth_focus")} placeholder={ph("growthFocus")} className={inputClass} />
             </Field>
+            <div className="sm:col-span-2">
+              <Field label={t("lifeScore.relationships")}>
+                <textarea
+                  name="relationships_note"
+                  defaultValue={v("relationships_note")}
+                  rows={2}
+                  placeholder={t("lifeScore.relationshipsPlaceholder")}
+                  className={inputClass + " resize-none"}
+                />
+              </Field>
+            </div>
           </div>
         </Section>
 

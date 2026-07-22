@@ -15,6 +15,10 @@ import {
   CreditCard,
   Banknote,
   RefreshCcw,
+  Home,
+  Car,
+  Building2,
+  Box,
   type LucideIcon,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -38,6 +42,8 @@ import {
   deleteRecurring,
   addInvestment,
   deleteInvestment,
+  createAsset,
+  deleteAsset,
 } from "@/app/dashboard/finance/actions";
 
 type Props = {
@@ -53,11 +59,19 @@ type Props = {
   categoryData: { name: string; value: number }[];
   series: { label: string; income: number; expense: number }[];
   accounts: { id: string; name: string; type: string; balance: number }[];
+  assets: { id: string; name: string; category: "property" | "vehicle" | "business" | "other"; value: number }[];
   budgets: { id: string; name: string; limit: number; spent: number }[];
   recurring: { id: string; name: string; amount: number; type: "in" | "out"; frequency: string; nextDate: string }[];
   trend: { date: string; value: number }[];
   recent: { id: string; amount: number; direction: "in" | "out"; label: string; occurred_at: string }[];
   holdings: { id: string; symbol: string; value: number }[];
+};
+
+const assetIcons: Record<string, LucideIcon> = {
+  property: Home,
+  vehicle: Car,
+  business: Building2,
+  other: Box,
 };
 
 const accountIcons: Record<string, LucideIcon> = {
@@ -71,7 +85,7 @@ const accountIcons: Record<string, LucideIcon> = {
 export function FinanceModule(props: Props) {
   const { currency } = props;
   const { t, locale } = useLocale();
-  const [openForm, setOpenForm] = useState<null | "tx" | "account" | "budget" | "recurring">(null);
+  const [openForm, setOpenForm] = useState<null | "tx" | "account" | "asset" | "budget" | "recurring">(null);
   const [, startTransition] = useTransition();
   const today = new Date().toISOString().slice(0, 10);
 
@@ -246,6 +260,79 @@ export function FinanceModule(props: Props) {
             <p className="py-10 text-center text-sm text-white/40">{t("finance.noTrendYet")}</p>
           ) : (
             <TrendChart trend={props.trend} />
+          )}
+        </Panel>
+      </div>
+
+      {/* ==== Assets ==== */}
+      <div className="mt-4">
+        <Panel>
+          <SectionHead
+            title={t("finance.assetsTitle")}
+            action={
+              <SmallAdd
+                label={t("finance.addAsset")}
+                onClick={() => setOpenForm(openForm === "asset" ? null : "asset")}
+              />
+            }
+          />
+          {openForm === "asset" && (
+            <form
+              action={(fd) => {
+                startTransition(() => createAsset(fd));
+                setOpenForm(null);
+              }}
+              className="mb-4 grid gap-3 rounded-2xl bg-white/[0.03] p-4 sm:grid-cols-3"
+            >
+              <Field label={t("finance.formAssetName")}>
+                <input name="name" required placeholder={t("finance.formAssetNamePlaceholder")} className={inputClass} />
+              </Field>
+              <Field label={t("finance.formAssetCategory")}>
+                <select name="category" className={inputClass} defaultValue="property">
+                  <option value="property" className="bg-base">{t("finance.assetProperty")}</option>
+                  <option value="vehicle" className="bg-base">{t("finance.assetVehicle")}</option>
+                  <option value="business" className="bg-base">{t("finance.assetBusiness")}</option>
+                  <option value="other" className="bg-base">{t("finance.assetOther")}</option>
+                </select>
+              </Field>
+              <Field label={`${t("finance.formEstimatedValue")} (${currency})`}>
+                <input type="number" name="estimated_value" step="0.01" min="0" required placeholder="0" className={inputClass} />
+              </Field>
+              <FormButtons
+                className="sm:col-span-3"
+                onCancel={() => setOpenForm(null)}
+                save={t("finance.save")}
+                cancel={t("finance.cancel")}
+              />
+            </form>
+          )}
+          {props.assets.length === 0 ? (
+            <EmptyState icon={Home} title={t("finance.noAssets")} hint={t("finance.noAssetsHint")} />
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {props.assets.map((a) => {
+                const Icon = assetIcons[a.category] ?? Box;
+                return (
+                  <div
+                    key={a.id}
+                    className="group relative overflow-hidden rounded-2xl border border-hairline bg-gradient-to-br from-white/[0.05] to-white/[0.015] p-4 transition-transform duration-300 hover:-translate-y-0.5"
+                  >
+                    <div className="flex items-start justify-between">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/12 text-accent-soft">
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <form action={() => startTransition(() => deleteAsset(a.id))}>
+                        <button className="text-white/20 opacity-0 transition-opacity hover:text-red-300 group-hover:opacity-100" aria-label="Delete">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </form>
+                    </div>
+                    <p className="mt-3 truncate text-sm text-white/60">{a.name}</p>
+                    <p className="tabular-nums text-lg font-semibold tracking-tight">{fc(a.value)}</p>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </Panel>
       </div>

@@ -17,7 +17,7 @@ import {
   TrendingUp,
   Heart,
 } from "lucide-react";
-import { Panel, StatCard, Progress, Pill, Field, inputClass } from "@/components/dashboard/ui";
+import { Panel, StatCard, Progress, Pill, Field, inputClass, ScoreRing } from "@/components/dashboard/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { createEvent, deleteEvent } from "@/app/dashboard/actions";
@@ -40,6 +40,13 @@ export type OverviewData = {
   reminders: { id: string; title: string; when: string; kind: string; deletable: boolean }[];
   growth: { label: string; value: string }[];
   latestJournal: { title: string | null; body: string | null; date: string } | null;
+  lifeScore: {
+    health: number | null;
+    money: number;
+    growth: number | null;
+    productivity: number | null;
+    relationshipsNote: string | null;
+  };
 };
 
 export function OverviewModule({ data }: { data: OverviewData }) {
@@ -83,6 +90,30 @@ export function OverviewModule({ data }: { data: OverviewData }) {
           <p className="mt-1.5 text-sm text-white/45">{t("overview.missionFallback")}</p>
         )}
       </div>
+
+      {/* Life Score */}
+      <Panel>
+        <h3 className="mb-5 text-sm font-semibold">{t("lifeScore.title")}</h3>
+        <div className="flex flex-wrap items-start justify-between gap-6">
+          <div className="flex flex-wrap gap-6">
+            <ScoreRing value={data.lifeScore.health} label={t("lifeScore.health")} />
+            <ScoreRing value={data.lifeScore.money} label={t("lifeScore.money")} />
+            <ScoreRing value={data.lifeScore.growth} label={t("lifeScore.growth")} />
+            <ScoreRing value={data.lifeScore.productivity} label={t("lifeScore.productivity")} />
+          </div>
+          <div className="max-w-xs">
+            <p className="text-xs font-medium uppercase tracking-wider text-white/40">{t("lifeScore.relationships")}</p>
+            {data.lifeScore.relationshipsNote ? (
+              <p className="mt-1.5 text-sm leading-relaxed text-white/70">{data.lifeScore.relationshipsNote}</p>
+            ) : (
+              <p className="mt-1.5 text-sm leading-relaxed text-white/40">{t("lifeScore.relationshipsHint")}</p>
+            )}
+          </div>
+        </div>
+        {data.lifeScore.health === null && (
+          <p className="mt-4 text-xs text-white/35">{t("lifeScore.noHealthData")}</p>
+        )}
+      </Panel>
 
       {/* Stats */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

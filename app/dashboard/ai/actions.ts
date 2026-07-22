@@ -61,6 +61,21 @@ const R = {
     fallback: (n: string, summary: string) =>
       `I'm here to help you think clearly about your life, ${n}.${summary} Ask me about your money, your goals, or your projects — I reason over everything you've put into LifeOS.`,
     rightNow: (bits: string) => ` Right now, ${bits}.`,
+    protectionNone: (n: string) =>
+      `No documents or responsibilities tracked yet, ${n}. Add them in Protection and I'll flag anything expiring or overdue.`,
+    protectionSummary: (expiring: number, overdue: number) =>
+      `You have ${expiring} document${expiring === 1 ? "" : "s"} expiring soon and ${overdue} overdue responsibilit${overdue === 1 ? "y" : "ies"}. Worth a look in Protection.`,
+    protectionClear: "Nothing expiring soon and no overdue responsibilities — you're covered.",
+    legacyNone: (n: string) =>
+      `Your vision board is empty, ${n}. Add a dream or milestone in Legacy — it's where the story you're building lives.`,
+    legacySummary: (dreams: number, milestones: number) =>
+      `You're holding onto ${dreams} dream${dreams === 1 ? "" : "s"} and ${milestones} milestone${milestones === 1 ? "" : "s"} in your Legacy. That's the shape of the life you're building.`,
+    kitchenEmpty: (n: string) =>
+      `Your kitchen is empty right now, ${n}. Add a few items in Kitchen and I can suggest meals from what you have.`,
+    kitchenSummary: (count: number, topSuggestion: string | null) =>
+      topSuggestion
+        ? `You have ${count} item${count === 1 ? "" : "s"} in your kitchen. Based on what's there, you could make ${topSuggestion} — check Kitchen for the full recipe.`
+        : `You have ${count} item${count === 1 ? "" : "s"} in your kitchen, but not quite enough for a suggested meal yet — add a few more staples.`,
   },
   hu: {
     fallbackName: "barátom",
@@ -88,6 +103,21 @@ const R = {
     fallback: (n: string, summary: string) =>
       `Azért vagyok itt, hogy segítsek tisztán látni az életedet, ${n}.${summary} Kérdezz a pénzedről, a céljaidról vagy a projektjeidről — mindent átlátok, amit a LifeOS-ba tettél.`,
     rightNow: (bits: string) => ` Jelenleg ${bits}.`,
+    protectionNone: (n: string) =>
+      `Még nincs nyilvántartott dokumentumod vagy kötelezettséged, ${n}. Add hozzá őket a Védelemben, és szólok, ha valami lejár vagy késik.`,
+    protectionSummary: (expiring: number, overdue: number) =>
+      `${expiring} dokumentumod jár le hamarosan, és ${overdue} kötelezettséged késik. Érdemes megnézni a Védelem oldalt.`,
+    protectionClear: "Semmi nem jár le hamarosan, és nincs késő kötelezettséged — minden rendben.",
+    legacyNone: (n: string) =>
+      `A vízió-táblád üres, ${n}. Adj hozzá egy álmot vagy mérföldkövet az Örökségben — ott él a történet, amit építesz.`,
+    legacySummary: (dreams: number, milestones: number) =>
+      `${dreams} álmot és ${milestones} mérföldkövet őrzöl az Örökségedben. Ez annak az életnek a formája, amit építesz.`,
+    kitchenEmpty: (n: string) =>
+      `A konyhád most üres, ${n}. Adj hozzá néhány tételt a Konyhában, és tudok ételt javasolni abból, ami megvan.`,
+    kitchenSummary: (count: number, topSuggestion: string | null) =>
+      topSuggestion
+        ? `${count} tételed van a konyhában. Ami megvan, abból elkészíthetnéd ezt: ${topSuggestion} — a teljes receptért nézd meg a Konyhát.`
+        : `${count} tételed van a konyhában, de még nem elég egy ételjavaslathoz — adj hozzá pár alapanyagot.`,
   },
 } as const;
 
@@ -101,7 +131,7 @@ export async function askCompanion(question: string, locale: Locale = "en"): Pro
   const q = question.toLowerCase();
   const L = R[locale] ?? R.en;
 
-  const [{ data: profile }, { data: goals }, { data: tx }, { data: projects }] =
+  const [{ data: profile }, { data: goals }, { data: tx }, { data: projects }, { data: documents }, { data: responsibilities }, { data: dreams }, { data: milestones }, { data: kitchenItems }] =
     await Promise.all([
       supabase
         .from("profiles")
@@ -111,6 +141,11 @@ export async function askCompanion(question: string, locale: Locale = "en"): Pro
       supabase.from("goals").select("title, progress_percent, target_date, status"),
       supabase.from("transactions").select("amount, direction, occurred_at"),
       supabase.from("projects").select("name, progress_percent, deadline, status"),
+      supabase.from("documents").select("expires_at"),
+      supabase.from("responsibilities").select("due_date, completed"),
+      supabase.from("dreams").select("id"),
+      supabase.from("milestones").select("id"),
+      supabase.from("kitchen_items").select("name"),
     ]);
 
   const currency = profile?.preferred_currency || "USD";
@@ -137,7 +172,7 @@ export async function askCompanion(question: string, locale: Locale = "en"): Pro
     return L.moneySummary(fc(income), fc(spending), savingsRate, verdict, goalLine);
   }
 
-  if (/(goal|progress|achieve|dream|cél|halad|álom|elér)/.test(q)) {
+  if (/(goal|progress|achieve|cél|halad|elér)/.test(q)) {
     if (!activeGoals.length) return L.goalsNone(name);
     const top = [...activeGoals].sort((a, b) => b.progress_percent - a.progress_percent)[0];
     return L.goalsSummary(avgGoal ?? 0, activeGoals.length, top.title, top.progress_percent);
@@ -147,6 +182,32 @@ export async function askCompanion(question: string, locale: Locale = "en"): Pro
     const active = (projects ?? []).filter((p) => p.status !== "completed");
     if (!active.length) return L.projectsNone(name);
     return L.projectsSummary(active.length);
+  }
+
+  if (/(document|responsibilit|expir|secure|protect|dokumentum|kötelezettség|lejár|védelem)/.test(q)) {
+    const docs = documents ?? [];
+    const resps = responsibilities ?? [];
+    if (!docs.length && !resps.length) return L.protectionNone(name);
+    const now2 = Date.now();
+    const expiring = docs.filter((d) => d.expires_at && new Date(d.expires_at).getTime() - now2 < 30 * 86_400_000).length;
+    const overdue = resps.filter((r) => !r.completed && r.due_date && new Date(r.due_date).getTime() < now2).length;
+    if (!expiring && !overdue) return L.protectionClear;
+    return L.protectionSummary(expiring, overdue);
+  }
+
+  if (/(dream|milestone|legacy|álom|mérföldkő|örökség)/.test(q)) {
+    const dreamCount = (dreams ?? []).length;
+    const milestoneCount = (milestones ?? []).length;
+    if (!dreamCount && !milestoneCount) return L.legacyNone(name);
+    return L.legacySummary(dreamCount, milestoneCount);
+  }
+
+  if (/(eat|meal|fridge|kitchen|cook|recipe|enni|étel|hűtő|konyha|főz|recept)/.test(q)) {
+    const items = kitchenItems ?? [];
+    if (!items.length) return L.kitchenEmpty(name);
+    const { suggestMeals } = await import("@/app/dashboard/kitchen/suggestions");
+    const suggestions = suggestMeals(items.map((i) => i.name), 1);
+    return L.kitchenSummary(items.length, suggestions[0]?.name ?? null);
   }
 
   if (/(who am i|about me|profile|myself|ki vagyok|magamról|profilom)/.test(q)) {

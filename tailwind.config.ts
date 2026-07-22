@@ -19,9 +19,10 @@ const config: Config = {
           soft: "#60A5FA",
           deep: "#1D4ED8",
         },
-        glass: "rgba(255,255,255,0.06)",
-        "glass-strong": "rgba(255,255,255,0.09)",
+        glass: "rgba(255,255,255,0.08)",
+        "glass-strong": "rgba(255,255,255,0.11)",
         hairline: "rgba(255,255,255,0.12)",
+        secondary: "#9CA3AF",
       },
       fontFamily: {
         sans: ["var(--font-inter)", "system-ui", "sans-serif"],

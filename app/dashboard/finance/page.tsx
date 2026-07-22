@@ -26,6 +26,7 @@ export default async function FinancePage() {
     { data: budgets },
     { data: recurring },
     { data: snapshots },
+    { data: assets },
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -52,6 +53,7 @@ export default async function FinancePage() {
       .select("snapshot_date, net_worth")
       .order("snapshot_date", { ascending: true })
       .limit(90),
+    supabase.from("assets").select("id, name, category, estimated_value").order("created_at", { ascending: true }),
   ]);
 
   const currency = profile?.preferred_currency || "USD";
@@ -106,7 +108,8 @@ export default async function FinancePage() {
     0,
   );
   const accountsTotal = (accounts ?? []).reduce((s, a) => s + num(a.current_balance), 0);
-  const netWorth = num(profile?.current_savings) + portfolioValue + accountsTotal;
+  const assetsTotal = (assets ?? []).reduce((s, a) => s + num(a.estimated_value), 0);
+  const netWorth = num(profile?.current_savings) + portfolioValue + accountsTotal + assetsTotal;
 
   return (
     <FinanceModule
@@ -126,6 +129,12 @@ export default async function FinancePage() {
         name: a.name,
         type: a.type ?? "checking",
         balance: num(a.current_balance),
+      }))}
+      assets={(assets ?? []).map((a) => ({
+        id: a.id,
+        name: a.name,
+        category: a.category as "property" | "vehicle" | "business" | "other",
+        value: num(a.estimated_value),
       }))}
       budgets={(budgets ?? []).map((b) => ({
         id: b.id,

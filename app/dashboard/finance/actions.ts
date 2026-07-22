@@ -75,10 +75,11 @@ async function snapshotNetWorth(
   supabase: Awaited<ReturnType<typeof createClient>>,
   userId: string,
 ) {
-  const [{ data: accounts }, { data: holdings }, { data: profile }] = await Promise.all([
+  const [{ data: accounts }, { data: holdings }, { data: profile }, { data: ownedAssets }] = await Promise.all([
     supabase.from("accounts").select("current_balance, type").eq("user_id", userId),
     supabase.from("investment_holdings").select("current_value, quantity, avg_cost"),
     supabase.from("profiles").select("current_savings").eq("id", userId).maybeSingle(),
+    supabase.from("assets").select("estimated_value").eq("user_id", userId),
   ]);
 
   const num = (v: number | null | undefined) => Number(v ?? 0);
@@ -91,6 +92,9 @@ async function snapshotNetWorth(
   });
   (holdings ?? []).forEach((h) => {
     assets += num(h.current_value ?? num(h.quantity) * num(h.avg_cost));
+  });
+  (ownedAssets ?? []).forEach((a) => {
+    assets += num(a.estimated_value);
   });
 
   const today = new Date().toISOString().slice(0, 10);
@@ -330,6 +334,36 @@ export async function addInvestment(formData: FormData) {
 export async function deleteInvestment(id: string) {
   const { supabase, user } = await requireUser();
   await supabase.from("investment_holdings").delete().eq("id", id);
+  await snapshotNetWorth(supabase, user.id);
+  refresh();
+}
+
+/* ---------------- Assets (property, vehicles, businesses) ---------------- */
+
+export async function createAsset(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const name = String(formData.get("name") ?? "").trim();
+  const value = Math.abs(Number(formData.get("estimated_value") ?? 0));
+  if (!name) return;
+
+  const category = String(formData.get("category") ?? "other");
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+
+  await supabase.from("assets").insert({
+    user_id: user.id,
+    name,
+    category,
+    estimated_value: value,
+    notes,
+  });
+
+  await snapshotNetWorth(supabase, user.id);
+  refresh();
+}
+
+export async function deleteAsset(id: string) {
+  const { supabase, user } = await requireUser();
+  await supabase.from("assets").delete().eq("id", id);
   await snapshotNetWorth(supabase, user.id);
   refresh();
 }

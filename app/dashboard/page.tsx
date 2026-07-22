@@ -27,6 +27,12 @@ export default async function DashboardHome() {
     supabase.from("investment_holdings").select("current_value, quantity, avg_cost"),
   ]);
 
+  const [{ data: accounts }, { data: assets }, { data: nutritionRecent }] = await Promise.all([
+    supabase.from("accounts").select("current_balance"),
+    supabase.from("assets").select("estimated_value"),
+    supabase.from("nutrition_entries").select("logged_at").gte("logged_at", new Date(Date.now() - 14 * 86_400_000).toISOString()),
+  ]);
+
   const currency = profile?.preferred_currency || "USD";
   const num = (v: number | null | undefined) => Number(v ?? 0);
 
@@ -38,7 +44,9 @@ export default async function DashboardHome() {
   const savingsRate = monthIncome > 0 ? Math.round(((monthIncome - monthSpending) / monthIncome) * 100) : 0;
 
   const portfolioValue = (holdings ?? []).reduce((s, h) => s + num(h.current_value ?? num(h.quantity) * num(h.avg_cost)), 0);
-  const netWorth = num(profile?.current_savings) + portfolioValue;
+  const accountsTotal = (accounts ?? []).reduce((s, a) => s + num(a.current_balance), 0);
+  const assetsTotal = (assets ?? []).reduce((s, a) => s + num(a.estimated_value), 0);
+  const netWorth = num(profile?.current_savings) + portfolioValue + accountsTotal + assetsTotal;
 
   const activeGoals = (goals ?? []).filter((g) => g.status !== "completed");
   const goalsAvg = activeGoals.length ? Math.round(activeGoals.reduce((s, g) => s + g.progress_percent, 0) / activeGoals.length) : null;
@@ -69,6 +77,22 @@ export default async function DashboardHome() {
 
   const latest = (journal ?? [])[0];
 
+  const projectsAvg = activeProjects.length
+    ? Math.round(activeProjects.reduce((s, p) => s + p.progress_percent, 0) / activeProjects.length)
+    : null;
+  const consistencyDays = new Set(
+    (nutritionRecent ?? []).map((e) => new Date(e.logged_at).toISOString().slice(0, 10)),
+  ).size;
+  const hasNutritionData = (nutritionRecent ?? []).length > 0 || Boolean(profile?.calorie_target);
+
+  const lifeScore: OverviewData["lifeScore"] = {
+    health: hasNutritionData ? Math.round((consistencyDays / 14) * 100) : null,
+    money: Math.round(Math.max(0, Math.min(100, 50 + savingsRate))),
+    growth: goalsAvg,
+    productivity: projectsAvg,
+    relationshipsNote: profile?.relationships_note ?? null,
+  };
+
   const data: OverviewData = {
     name: profile?.display_name || "Explorer",
     currency,
@@ -87,6 +111,7 @@ export default async function DashboardHome() {
     reminders: reminders.slice(0, 6),
     growth,
     latestJournal: latest ? { title: latest.title, body: latest.body, date: latest.entry_date } : null,
+    lifeScore,
   };
 
   return <OverviewModule data={data} />;
