@@ -139,6 +139,14 @@
     -webkit-backdrop-filter: blur(28px) saturate(150%);
   }
 
+  /* Deeper, cooler glass for module "environment" shells (ModuleShell). */
+  .glass-deep {
+    background: rgba(18, 25, 35, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(24px) saturate(140%);
+    -webkit-backdrop-filter: blur(24px) saturate(140%);
+  }
+
   /* --- Hairline divider --- */
   .hairline {
     height: 1px;

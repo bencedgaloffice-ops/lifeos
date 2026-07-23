@@ -10,8 +10,8 @@ const config: Config = {
     extend: {
       colors: {
         base: {
-          DEFAULT: "#050505",
-          900: "#0a0a0b",
+          DEFAULT: "#05070A",
+          900: "#0B1018",
           800: "#101012",
         },
         accent: {
@@ -32,6 +32,7 @@ const config: Config = {
         },
         glass: "rgba(255,255,255,0.08)",
         "glass-strong": "rgba(255,255,255,0.11)",
+        "glass-deep": "rgba(18,25,35,0.75)",
         hairline: "rgba(255,255,255,0.12)",
         secondary: "#9CA3AF",
       },
@@ -39,6 +40,8 @@ const config: Config = {
         sans: ["var(--font-inter)", "system-ui", "sans-serif"],
         // Display face for headings / the command-center identity.
         display: ["var(--font-display)", "var(--font-inter)", "system-ui", "sans-serif"],
+        // Numeric/readout face — currency, stats, dates, technical figures.
+        mono: ["var(--font-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
       },
       letterSpacing: {
         tightest: "-0.045em",

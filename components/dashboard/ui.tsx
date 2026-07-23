@@ -6,28 +6,37 @@ import type { LucideIcon } from "lucide-react";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ICON_REGISTRY, PICKABLE_ICON_NAMES, CATEGORY_COLOR_SWATCHES, resolveIcon } from "@/lib/icon-registry";
+import { moduleTheme, moduleGlow, type ModuleKey } from "@/lib/module-theme";
 
-/** Glass panel used across all modules. */
+/** Glass panel used across all modules. Pass a module `accent` to tint the
+ * top hairline and glow with that module's identity color instead of blue. */
 export function Panel({
   className,
   children,
   glow = false,
+  accent,
 }: {
   className?: string;
   children: React.ReactNode;
   glow?: boolean;
+  accent?: ModuleKey;
 }) {
+  const theme = moduleTheme(accent);
   return (
     <div
       className={cn(
         "relative overflow-hidden rounded-3xl glass p-6 shadow-glass",
-        glow && "shadow-glow-sm",
+        glow && !theme && "shadow-glow-sm",
         className,
       )}
+      style={glow && theme ? { boxShadow: `${moduleGlow(accent)}, 0 1px 0 0 rgba(255,255,255,0.04) inset, 0 20px 60px -20px rgba(0,0,0,0.7)` } : undefined}
     >
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px"
+        style={{
+          background: `linear-gradient(90deg, transparent, ${theme ? `${theme.color}55` : "rgba(255,255,255,0.2)"}, transparent)`,
+        }}
       />
       {children}
     </div>
@@ -39,17 +48,26 @@ export function ModuleHeader({
   title,
   subtitle,
   action,
+  accent,
 }: {
   icon: LucideIcon;
   title: string;
   subtitle?: string;
   action?: React.ReactNode;
+  accent?: ModuleKey;
 }) {
+  const theme = moduleTheme(accent);
   return (
     <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
       <div className="flex items-center gap-3.5">
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl glass-strong text-accent-soft shadow-glow-sm">
-          <Icon className="h-5 w-5" strokeWidth={1.75} />
+        <div
+          className="flex h-12 w-12 items-center justify-center rounded-2xl glass-strong"
+          style={{
+            color: theme?.soft,
+            boxShadow: theme ? moduleGlow(accent) : undefined,
+          }}
+        >
+          <Icon className={cn("h-5 w-5", !theme && "text-accent-soft")} strokeWidth={1.75} />
         </div>
         <div>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-[1.75rem]">{title}</h1>
@@ -66,25 +84,92 @@ export function StatCard({
   value,
   hint,
   accent = false,
+  moduleAccent,
 }: {
   label: string;
   value: string;
   hint?: React.ReactNode;
+  /** Highlights the value in the default blue accent. Ignored if moduleAccent is set. */
   accent?: boolean;
+  /** Tints the value in a specific module's identity color instead of blue. */
+  moduleAccent?: ModuleKey;
 }) {
+  const theme = moduleTheme(moduleAccent);
   return (
     <Panel className="p-5">
       <p className="text-xs uppercase tracking-wider text-white/40">{label}</p>
       <p
         className={cn(
           "mt-2 text-2xl font-semibold tracking-tight sm:text-[1.75rem]",
-          accent && "text-accent-soft",
+          !theme && accent && "text-accent-soft",
         )}
+        style={theme ? { color: theme.soft } : undefined}
       >
         {value}
       </p>
       {hint && <div className="mt-1 text-xs text-white/45">{hint}</div>}
     </Panel>
+  );
+}
+
+/** Tabular-figure numeric readout (JetBrains Mono) — use for every currency
+ * amount, stat, date/time readout, and percentage across the app so figures
+ * align and read as precise, technical data rather than body text. */
+export function Numeral({
+  children,
+  className,
+  size = "inherit",
+}: {
+  children: React.ReactNode;
+  className?: string;
+  size?: "inherit" | "sm" | "lg";
+}) {
+  return (
+    <span
+      className={cn(
+        "font-mono tabular-nums",
+        size === "sm" && "text-xs",
+        size === "lg" && "text-2xl sm:text-[1.75rem]",
+        className,
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+/** Thin wrapper around ModuleHeader that also washes the section in the
+ * module's identity color — the "entering a different room" ambient tint.
+ * Adopt this one module at a time; modules that don't use it keep the
+ * current neutral blue look unchanged. */
+export function ModuleShell({
+  accent,
+  icon,
+  title,
+  subtitle,
+  action,
+  children,
+}: {
+  accent: ModuleKey;
+  icon: LucideIcon;
+  title: string;
+  subtitle?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const theme = moduleTheme(accent)!;
+  return (
+    <div className="relative">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -inset-x-6 -top-10 -z-10 h-72 opacity-40 blur-3xl"
+        style={{
+          background: `radial-gradient(ellipse 60% 60% at 30% 0%, ${theme.color}33, transparent 70%)`,
+        }}
+      />
+      <ModuleHeader icon={icon} title={title} subtitle={subtitle} action={action} accent={accent} />
+      {children}
+    </div>
   );
 }
 
