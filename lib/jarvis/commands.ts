@@ -31,6 +31,7 @@ export const NAV_TARGETS: NavTarget[] = [
   { route: "/dashboard/journal", label: "Journal", aliases: ["journal", "diary", "napló"] },
   { route: "/dashboard/profile", label: "Profile", aliases: ["profile", "profil"] },
   { route: "/dashboard/ai", label: "AI Companion", aliases: ["companion", "assistant page", "ai page"] },
+  { route: "/dashboard/business/garage", label: "My Garage", aliases: ["garage", "my garage", "vehicles", "cars", "garázs", "autók"] },
 ];
 
 function normalize(s: string): string {
@@ -118,6 +119,13 @@ export function parseCommand(raw: string): JarvisCommand {
   // Bare "add milk" / "buy eggs" → shopping list (the most common intent).
   if ((m = text.match(/^(?:add|buy)\s+(.+)$/))) {
     return cmd({ kind: "write", level: 2, label: `Add ${m[1]} to shopping list`, intent: "shopping.add", args: { name: m[1] } });
+  }
+
+  /* ---- My Garage: vehicle analysis (L1, grounded in garage data) ----
+     Checked before the generic web/read fallbacks so "analyze this BMW X5"
+     routes to the garage heuristic instead of a web search or a shrug. */
+  if ((m = text.match(/^(?:analyze|analyse|evaluate|assess)\s+(?:this\s+|the\s+)?(.+)$/))) {
+    return cmd({ kind: "read", level: 1, label: `Analyze ${m[1]}`, intent: "garage.analyze", args: { query: m[1] } });
   }
 
   /* ---- Developer (L3) ---- */

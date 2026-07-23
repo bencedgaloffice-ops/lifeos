@@ -41,6 +41,7 @@ export type Profile = {
 export type Goal = {
   id: string;
   user_id: string;
+  life_area_id: string | null;
   title: string;
   description: string | null;
   target_date: string | null;
@@ -53,6 +54,7 @@ export type Goal = {
 export type Account = {
   id: string;
   user_id: string;
+  organization_id: string | null;
   name: string;
   type: string | null;
   currency: string;
@@ -65,6 +67,8 @@ export type Transaction = {
   user_id: string;
   account_id: string;
   category_id: string | null;
+  life_area_id: string | null;
+  organization_id: string | null;
   amount: number;
   currency: string;
   direction: "in" | "out";
@@ -76,6 +80,8 @@ export type Transaction = {
 export type Project = {
   id: string;
   user_id: string;
+  organization_id: string | null;
+  life_area_id: string | null;
   name: string;
   description: string | null;
   status: string;
@@ -99,6 +105,7 @@ export type CalendarEvent = {
   id: string;
   user_id: string;
   life_area_id: string | null;
+  organization_id: string | null;
   title: string;
   description: string | null;
   start_at: string;
@@ -157,6 +164,7 @@ export type Shift = {
 export type Apiary = {
   id: string;
   user_id: string;
+  organization_id: string | null;
   name: string;
   location_text: string | null;
   hive_count: number | null;
@@ -168,10 +176,253 @@ export type HoneyHarvestLog = {
   id: string;
   user_id: string;
   apiary_id: string | null;
+  hive_id: string | null;
+  honey_type: string | null;
   harvest_date: string;
   quantity_kg: number;
   notes: string | null;
   created_at: string;
+};
+
+/* ---------------- Business Hub ---------------- */
+
+export type Organization = {
+  id: string;
+  user_id: string;
+  name: string;
+  type: "employment" | "own_business" | "grant_project" | "future_venture" | null;
+  description: string | null;
+  logo: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OrgLicense = {
+  id: string;
+  user_id: string;
+  organization_id: string;
+  name: string;
+  license_number: string | null;
+  issuing_body: string | null;
+  issued_date: string | null;
+  expires_at: string | null;
+  status: "active" | "pending_renewal" | "expired";
+  notes: string | null;
+  created_at: string;
+};
+
+export type Hive = {
+  id: string;
+  user_id: string;
+  apiary_id: string;
+  label: string;
+  colony_status: "thriving" | "stable" | "weak" | "dead" | "split";
+  queen_marked: boolean;
+  queen_color: string | null;
+  queen_installed_date: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type HiveInspection = {
+  id: string;
+  user_id: string;
+  hive_id: string;
+  inspection_date: string;
+  findings: string | null;
+  actions_taken: string | null;
+  varroa_load: "none" | "low" | "moderate" | "high";
+  disease_flag: boolean;
+  feeding_needed: boolean;
+  temperament: "calm" | "moderate" | "aggressive" | null;
+  created_at: string;
+};
+
+export type Product = {
+  id: string;
+  user_id: string;
+  organization_id: string;
+  name: string;
+  category: "honey" | "wax" | "other";
+  unit: string;
+  price: number;
+  stock_qty: number;
+  created_at: string;
+};
+
+export type Customer = {
+  id: string;
+  user_id: string;
+  organization_id: string;
+  name: string;
+  contact_info: string | null;
+  notes: string | null;
+  created_at: string;
+};
+
+export type Order = {
+  id: string;
+  user_id: string;
+  organization_id: string;
+  customer_id: string | null;
+  order_date: string;
+  status: "pending" | "fulfilled" | "cancelled";
+  total_amount: number;
+  created_at: string;
+};
+
+export type OrderItem = {
+  id: string;
+  order_id: string;
+  product_id: string;
+  quantity: number;
+  unit_price: number;
+};
+
+export type GrantApplication = {
+  id: string;
+  user_id: string;
+  organization_id: string;
+  program_name: string;
+  status: "draft" | "submitted" | "under_review" | "approved" | "rejected";
+  submitted_date: string | null;
+  decision_date: string | null;
+  amount_requested: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type GrantCorrespondence = {
+  id: string;
+  user_id: string;
+  grant_application_id: string;
+  contact_name: string | null;
+  direction: "incoming" | "outgoing";
+  subject: string | null;
+  body: string | null;
+  occurred_at: string;
+};
+
+export type MasterplanPhase = {
+  id: string;
+  user_id: string;
+  organization_id: string;
+  phase_number: number;
+  title: string;
+  description: string | null;
+  status: "not_started" | "in_progress" | "done";
+  target_date: string | null;
+  created_at: string;
+};
+
+/* ---------------- Life modules ---------------- */
+
+export type LegacyIdentity = {
+  id: string;
+  user_id: string;
+  emblem_name: string | null;
+  emblem_meaning: string | null;
+  emblem_image_url: string | null;
+  scripture_reference: string | null;
+  scripture_text: string | null;
+  scripture_language: "en" | "hu";
+  family_story: string | null;
+  updated_at: string;
+};
+
+export type FamilyMember = {
+  id: string;
+  user_id: string;
+  name: string;
+  relation: string | null;
+  birth_year: number | null;
+  death_year: number | null;
+  story: string | null;
+  photo_url: string | null;
+  order_index: number;
+  created_at: string;
+};
+
+export type Relationship = {
+  id: string;
+  user_id: string;
+  partner_name: string | null;
+  relationship_start_date: string | null;
+  engagement_date: string | null;
+  wedding_date: string | null;
+  notes: string | null;
+  updated_at: string;
+};
+
+export type WeddingTask = {
+  id: string;
+  user_id: string;
+  relationship_id: string;
+  title: string;
+  category: string | null;
+  due_date: string | null;
+  status: "todo" | "in_progress" | "done";
+  notes: string | null;
+  created_at: string;
+};
+
+export type Habit = {
+  id: string;
+  user_id: string;
+  name: string;
+  cadence: "daily" | "weekly" | "custom";
+  target_per_period: number;
+  icon: string | null;
+  color: string | null;
+  active: boolean;
+  created_at: string;
+};
+
+export type HabitLog = {
+  id: string;
+  user_id: string;
+  habit_id: string;
+  log_date: string;
+  completed: boolean;
+  notes: string | null;
+  created_at: string;
+};
+
+export type LifeMapLocation = {
+  id: string;
+  user_id: string;
+  name: string;
+  category: "home" | "agriculture" | "work" | "travel" | "other";
+  description: string | null;
+  position_x: number;
+  position_y: number;
+  life_area_id: string | null;
+  organization_id: string | null;
+  image_url: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type VisionCard = {
+  id: string;
+  user_id: string;
+  goal_id: string | null;
+  organization_id: string | null;
+  title: string;
+  image_url: string | null;
+  target_date: string | null;
+  category: "personal" | "business";
+  progress_override: number | null;
+  notes: string | null;
+  position_x: number;
+  position_y: number;
+  width: number;
+  height: number;
+  z_index: number;
+  created_at: string;
+  updated_at: string;
 };
 
 export type HabitEntry = {
@@ -210,6 +461,7 @@ export type CalendarItem = {
   recurrenceRule: string | null;
   isRecurringInstance: boolean;
   lifeAreaId: string | null;
+  organizationId: string | null;
   reminderMinutesBefore: number | null;
   subtype: string | null;
   fromGoogle: boolean;
@@ -227,11 +479,15 @@ export type AiMemory = {
 export type Document = {
   id: string;
   user_id: string;
+  life_area_id: string | null;
   title: string;
   file_path: string;
   category: string | null;
   expires_at: string | null;
   reminder_days_before: number | null;
+  organization_id: string | null;
+  garage_vehicle_id: string | null;
+  tags: string[];
   uploaded_at: string;
 };
 
@@ -326,4 +582,69 @@ export type WeightLogEntry = {
   logged_date: string;
   weight_kg: number;
   created_at: string;
+};
+
+export type GarageVehicle = {
+  id: string;
+  user_id: string;
+  brand: string;
+  model: string;
+  year: number | null;
+  mileage: number | null;
+  value: number | null;
+  purchase_price: number | null;
+  image_url: string | null;
+  notes: string | null;
+  links: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type GarageServiceRecord = {
+  id: string;
+  user_id: string;
+  vehicle_id: string;
+  service_date: string;
+  description: string;
+  cost: number | null;
+  mileage_at_service: number | null;
+  created_at: string;
+};
+
+export type GarageDreamVehicle = {
+  id: string;
+  user_id: string;
+  brand: string;
+  model: string;
+  year: number | null;
+  image_url: string | null;
+  estimated_price: number | null;
+  priority_rating: number;
+  purchase_goal: string | null;
+  target_date: string | null;
+  notes: string | null;
+  created_at: string;
+};
+
+export type GarageDealStage = "found" | "inspection" | "purchase" | "transport" | "registration" | "ready_for_sale" | "sold";
+
+export type GarageImportDeal = {
+  id: string;
+  user_id: string;
+  organization_id: string | null;
+  brand: string;
+  model: string;
+  year: number | null;
+  image_url: string | null;
+  stage: GarageDealStage;
+  purchase_price: number;
+  transport_cost: number;
+  registration_cost: number;
+  repair_cost: number;
+  expected_selling_price: number;
+  actual_selling_price: number | null;
+  notes: string | null;
+  links: string[];
+  created_at: string;
+  updated_at: string;
 };

@@ -19,6 +19,27 @@ function refresh() {
 
 /* ---------------- Documents ---------------- */
 
+/** Real full-text search over documents.search_vector (title/category/tags,
+ * weighted, GIN-indexed) rather than a client-side substring match. */
+export async function searchDocuments(query: string) {
+  const { supabase } = await requireUser();
+  const clean = query.trim();
+  if (!clean) {
+    const { data } = await supabase
+      .from("documents")
+      .select("*")
+      .order("expires_at", { ascending: true, nullsFirst: false });
+    return data ?? [];
+  }
+
+  const { data } = await supabase
+    .from("documents")
+    .select("*")
+    .textSearch("search_vector", clean, { type: "websearch", config: "simple" })
+    .order("expires_at", { ascending: true, nullsFirst: false });
+  return data ?? [];
+}
+
 export async function createDocument(formData: FormData) {
   const { supabase, user } = await requireUser();
   const title = String(formData.get("title") ?? "").trim();
@@ -26,6 +47,11 @@ export async function createDocument(formData: FormData) {
 
   const category = String(formData.get("category") ?? "").trim() || null;
   const expiresAt = String(formData.get("expires_at") ?? "") || null;
+  const organizationId = String(formData.get("organization_id") ?? "") || null;
+  const tags = String(formData.get("tags") ?? "")
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
 
   await supabase.from("documents").insert({
     user_id: user.id,
@@ -33,6 +59,8 @@ export async function createDocument(formData: FormData) {
     file_path: "",
     category,
     expires_at: expiresAt,
+    organization_id: organizationId,
+    tags,
   });
   refresh();
 }

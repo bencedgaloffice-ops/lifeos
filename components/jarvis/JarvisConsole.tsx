@@ -10,6 +10,7 @@ import {
 import { useJarvis } from "@/lib/jarvis/useJarvis";
 import { PERMISSION_LABELS, type JarvisStatus } from "@/lib/jarvis/types";
 import { JarvisOrbCanvas } from "./JarvisOrbCanvas";
+import { Numeral } from "@/components/dashboard/ui";
 import { cn } from "@/lib/utils";
 
 const STATUS_LABEL: Record<JarvisStatus, string> = {
@@ -60,7 +61,8 @@ export function JarvisConsole() {
             <CircleDot className="h-5 w-5" strokeWidth={1.75} />
           </div>
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-[1.75rem]">Jarvis</h1>
+            <p className="text-[0.65rem] font-medium uppercase tracking-[0.22em] text-[#ff8b93]/80">AI Core</p>
+            <h1 className="font-display text-2xl font-semibold tracking-tight sm:text-[1.75rem]">Jarvis</h1>
             <p className="mt-0.5 text-sm text-white/45">Your LifeOS intelligence — voice, command &amp; control.</p>
           </div>
         </div>
@@ -204,7 +206,7 @@ export function JarvisConsole() {
         </div>
         <div className="rounded-3xl border border-[#ff2d3f]/15 p-6" style={{ background: "rgba(255,45,63,0.03)" }}>
           <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-white/80"><ShieldCheck className="h-4 w-4 text-[#ff8b93]" /> Access</h3>
-          <p className="text-2xl font-semibold text-white">Level {j.level}</p>
+          <Numeral className="text-2xl font-semibold text-white">Level {j.level}</Numeral>
           <p className="text-sm text-white/50">{PERMISSION_LABELS[j.level]}</p>
           <div className="mt-3 space-y-1.5 text-xs text-white/45">
             <p>L1 · Ask questions, read, navigate</p>

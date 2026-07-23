@@ -40,7 +40,7 @@ export function NutritionModule({ profile, todayEntries, weightLog, consistencyD
 
   return (
     <div>
-      <ModuleHeader icon={Salad} title={t("nutrition.title")} subtitle={t("nutrition.subtitle")} />
+      <ModuleHeader icon={Salad} title={t("nutrition.title")} subtitle={t("nutrition.subtitle")} accent="nutrition" />
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* Today's totals + meal log */}

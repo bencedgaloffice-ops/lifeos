@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   Wallet,
@@ -30,6 +31,7 @@ import {
   EmptyState,
   Field,
   inputClass,
+  Numeral,
 } from "@/components/dashboard/ui";
 import {
   createTransaction,
@@ -50,6 +52,7 @@ type Props = {
   currency: string;
   holderName: string | null;
   netWorth: number;
+  businessNet: number;
   accountsTotal: number;
   monthIncome: number;
   monthSpending: number;
@@ -97,6 +100,7 @@ export function FinanceModule(props: Props) {
         icon={Wallet}
         title={t("finance.title")}
         subtitle={t("finance.subtitle")}
+        accent="finance"
         action={
           <button
             onClick={() => setOpenForm(openForm === "tx" ? null : "tx")}
@@ -161,7 +165,7 @@ export function FinanceModule(props: Props) {
           noCard={t("finance.noCard")}
         />
         <div className="grid gap-4 sm:grid-cols-2 lg:col-span-3">
-          <StatCard label={t("finance.statNetWorth")} value={fc(props.netWorth)} accent />
+          <StatCard label={t("finance.statNetWorth")} value={fc(props.netWorth)} moduleAccent="finance" />
           <StatCard
             label={t("finance.statSavingsRate")}
             value={`${props.savingsRate}%`}
@@ -175,6 +179,14 @@ export function FinanceModule(props: Props) {
           />
           <StatCard label={t("finance.statIncome")} value={fc(props.monthIncome)} />
           <StatCard label={t("finance.statSpending")} value={fc(props.monthSpending)} />
+          <Link href="/dashboard/business" className="transition-transform hover:-translate-y-0.5">
+            <StatCard
+              label={t("finance.statBusinessNet")}
+              value={fc(props.businessNet)}
+              moduleAccent="business"
+              hint={t("finance.statBusinessNetHint")}
+            />
+          </Link>
         </div>
       </div>
 
@@ -233,7 +245,7 @@ export function FinanceModule(props: Props) {
                     className="group relative overflow-hidden rounded-2xl border border-hairline bg-gradient-to-br from-white/[0.05] to-white/[0.015] p-4 transition-transform duration-300 hover:-translate-y-0.5"
                   >
                     <div className="flex items-start justify-between">
-                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/12 text-accent-soft">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gold/12 text-gold-soft">
                         <Icon className="h-4 w-4" />
                       </span>
                       <form action={() => startTransition(() => deleteAccount(a.id))}>
@@ -243,7 +255,7 @@ export function FinanceModule(props: Props) {
                       </form>
                     </div>
                     <p className="mt-3 truncate text-sm text-white/60">{a.name}</p>
-                    <p className={`tabular-nums text-lg font-semibold tracking-tight ${a.balance < 0 ? "text-red-300" : ""}`}>
+                    <p className={`font-mono text-lg font-semibold tabular-nums tracking-tight ${a.balance < 0 ? "text-red-300" : ""}`}>
                       {fc(a.balance)}
                     </p>
                   </div>
@@ -318,7 +330,7 @@ export function FinanceModule(props: Props) {
                     className="group relative overflow-hidden rounded-2xl border border-hairline bg-gradient-to-br from-white/[0.05] to-white/[0.015] p-4 transition-transform duration-300 hover:-translate-y-0.5"
                   >
                     <div className="flex items-start justify-between">
-                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent/12 text-accent-soft">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gold/12 text-gold-soft">
                         <Icon className="h-4 w-4" />
                       </span>
                       <form action={() => startTransition(() => deleteAsset(a.id))}>
@@ -328,7 +340,7 @@ export function FinanceModule(props: Props) {
                       </form>
                     </div>
                     <p className="mt-3 truncate text-sm text-white/60">{a.name}</p>
-                    <p className="tabular-nums text-lg font-semibold tracking-tight">{fc(a.value)}</p>
+                    <p className="font-mono text-lg font-semibold tabular-nums tracking-tight">{fc(a.value)}</p>
                   </div>
                 );
               })}
@@ -343,7 +355,7 @@ export function FinanceModule(props: Props) {
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-sm font-semibold">{t("finance.cashFlowTitle")}</h3>
             <div className="flex items-center gap-3 text-xs text-white/50">
-              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-accent" /> {t("finance.income")}</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-gold" /> {t("finance.income")}</span>
               <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-white/30" /> {t("finance.expense")}</span>
             </div>
           </div>
@@ -362,10 +374,10 @@ export function FinanceModule(props: Props) {
                   <div key={c.name}>
                     <div className="mb-1 flex items-center justify-between text-sm">
                       <span className="truncate text-white/70">{c.name}</span>
-                      <span className="tabular-nums text-white/50">{fc(c.value)}</span>
+                      <Numeral className="text-white/50">{fc(c.value)}</Numeral>
                     </div>
                     <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/8">
-                      <div className="h-full rounded-full bg-gradient-to-r from-accent to-accent-soft" style={{ width: `${(c.value / max) * 100}%` }} />
+                      <div className="h-full rounded-full bg-gradient-to-r from-gold-deep to-gold-soft" style={{ width: `${(c.value / max) * 100}%` }} />
                     </div>
                   </div>
                 );
@@ -421,7 +433,7 @@ export function FinanceModule(props: Props) {
                     <div className="mb-1.5 flex items-center justify-between text-sm">
                       <span className="text-white/75">{b.name}</span>
                       <span className="flex items-center gap-2">
-                        <span className={`tabular-nums ${over ? "text-red-300" : "text-white/50"}`}>
+                        <span className={`font-mono tabular-nums ${over ? "text-red-300" : "text-white/50"}`}>
                           {fc(b.spent)} / {fc(b.limit)}
                         </span>
                         <form action={() => startTransition(() => deleteBudget(b.id))}>
@@ -507,7 +519,7 @@ export function FinanceModule(props: Props) {
             <div className="divide-y divide-hairline">
               {props.recurring.map((r) => (
                 <div key={r.id} className="group flex items-center gap-3 py-2.5">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/6 text-accent-soft">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/6 text-gold-soft">
                     <RefreshCcw className="h-3.5 w-3.5" />
                   </span>
                   <div className="min-w-0 flex-1">
@@ -516,7 +528,7 @@ export function FinanceModule(props: Props) {
                       {t(`finance.freq${r.frequency.charAt(0).toUpperCase()}${r.frequency.slice(1)}`)} · {formatDate(r.nextDate, undefined, locale)}
                     </p>
                   </div>
-                  <span className={`tabular-nums text-sm font-medium ${r.type === "in" ? "text-emerald-300" : "text-white/80"}`}>
+                  <span className={`font-mono tabular-nums text-sm font-medium ${r.type === "in" ? "text-emerald-300" : "text-white/80"}`}>
                     {r.type === "in" ? "+" : "−"}{fc(r.amount)}
                   </span>
                   <form action={() => startTransition(() => deleteRecurring(r.id))}>
@@ -533,7 +545,7 @@ export function FinanceModule(props: Props) {
 
       {props.financialGoal && (
         <Panel className="mt-4 flex items-center gap-3">
-          <Target className="h-4 w-4 shrink-0 text-accent-soft" />
+          <Target className="h-4 w-4 shrink-0 text-gold-soft" />
           <p className="text-sm text-white/70">
             <span className="text-white/40">{t("finance.financialGoalPrefix")}</span>
             {props.financialGoal}
@@ -562,7 +574,7 @@ export function FinanceModule(props: Props) {
                     <p className="truncate text-sm font-medium">{tx.label}</p>
                     <p className="text-xs text-white/40">{formatDate(tx.occurred_at, undefined, locale)}</p>
                   </div>
-                  <span className={`tabular-nums text-sm font-medium ${tx.direction === "in" ? "text-emerald-300" : "text-white/80"}`}>
+                  <span className={`font-mono tabular-nums text-sm font-medium ${tx.direction === "in" ? "text-emerald-300" : "text-white/80"}`}>
                     {tx.direction === "in" ? "+" : "−"}{fc(tx.amount)}
                   </span>
                   <form action={() => startTransition(() => deleteTransaction(tx.id))}>
@@ -579,12 +591,12 @@ export function FinanceModule(props: Props) {
         <Panel className="lg:col-span-2">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="text-sm font-semibold">{t("finance.investmentsTitle")}</h3>
-            <span className="tabular-nums text-sm text-accent-soft">{fc(props.portfolioValue)}</span>
+            <span className="font-mono tabular-nums text-sm text-gold-soft">{fc(props.portfolioValue)}</span>
           </div>
           <form action={(fd) => startTransition(() => addInvestment(fd))} className="mb-4 flex gap-2">
             <input name="symbol" required placeholder={t("finance.formSymbol")} className={inputClass} />
             <input name="value" type="number" step="0.01" min="0" required placeholder={t("finance.formValue")} className={inputClass + " max-w-[7rem]"} />
-            <button className="inline-flex h-[42px] shrink-0 items-center justify-center rounded-xl bg-accent px-3 text-white transition-transform hover:-translate-y-0.5" aria-label="Add investment">
+            <button className="inline-flex h-[42px] shrink-0 items-center justify-center rounded-xl bg-gold px-3 text-black transition-transform hover:-translate-y-0.5" aria-label="Add investment">
               <Plus className="h-4 w-4" />
             </button>
           </form>
@@ -594,11 +606,11 @@ export function FinanceModule(props: Props) {
             <div className="divide-y divide-hairline">
               {props.holdings.map((h) => (
                 <div key={h.id} className="group flex items-center gap-3 py-2.5">
-                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/6 text-accent-soft">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/6 text-gold-soft">
                     <TrendingUp className="h-4 w-4" />
                   </span>
                   <span className="flex-1 truncate text-sm font-medium">{h.symbol}</span>
-                  <span className="tabular-nums text-sm text-white/70">{fc(h.value)}</span>
+                  <span className="font-mono tabular-nums text-sm text-white/70">{fc(h.value)}</span>
                   <form action={() => startTransition(() => deleteInvestment(h.id))}>
                     <button className="text-white/25 opacity-0 transition-opacity hover:text-red-300 group-hover:opacity-100" aria-label="Delete">
                       <Trash2 className="h-3.5 w-3.5" />
@@ -636,11 +648,11 @@ function BalanceCard({
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-      className={`relative overflow-hidden rounded-3xl p-6 shadow-glow-sm ${className}`}
+      className={`relative overflow-hidden rounded-3xl p-6 shadow-glow-gold ${className}`}
       style={{
         background:
-          "linear-gradient(135deg, #0c1425 0%, #101a30 45%, #0a1120 100%)",
-        border: "1px solid rgba(96,165,250,0.25)",
+          "linear-gradient(135deg, #1a1408 0%, #241d0f 45%, #14100a 100%)",
+        border: "1px solid rgba(231,178,76,0.25)",
       }}
     >
       {/* sheen + texture */}
@@ -649,7 +661,7 @@ function BalanceCard({
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(120% 90% at 85% 0%, rgba(59,130,246,0.28), transparent 55%), radial-gradient(80% 60% at 10% 100%, rgba(59,130,246,0.12), transparent 60%)",
+            "radial-gradient(120% 90% at 85% 0%, rgba(231,178,76,0.28), transparent 55%), radial-gradient(80% 60% at 10% 100%, rgba(231,178,76,0.12), transparent 60%)",
         }}
       />
       <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/35 to-transparent" />
@@ -658,12 +670,12 @@ function BalanceCard({
         <div className="flex items-start justify-between">
           <p className="text-xs uppercase tracking-[0.18em] text-white/50">{label}</p>
           <span className="flex items-center gap-1.5">
-            <span className="h-6 w-6 rounded-full bg-accent/70" />
+            <span className="h-6 w-6 rounded-full bg-gold/70" />
             <span className="-ml-3 h-6 w-6 rounded-full bg-white/25 backdrop-blur" />
           </span>
         </div>
         <div>
-          <p className="tabular-nums text-3xl font-semibold tracking-tight sm:text-4xl">{amount}</p>
+          <Numeral className="block text-3xl font-semibold tracking-tight sm:text-4xl">{amount}</Numeral>
           {accounts === 0 && <p className="mt-1 text-xs text-white/40">{noCard}</p>}
         </div>
         <div className="flex items-end justify-between">
@@ -708,7 +720,7 @@ function FormButtons({
 }) {
   return (
     <div className={`flex gap-3 ${className}`}>
-      <button type="submit" className="rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white transition-transform hover:-translate-y-0.5">
+      <button type="submit" className="rounded-full bg-gold px-5 py-2.5 text-sm font-medium text-black transition-transform hover:-translate-y-0.5">
         {save}
       </button>
       <button type="button" onClick={onCancel} className="rounded-full glass px-5 py-2.5 text-sm text-white/70">
@@ -733,15 +745,15 @@ function TrendChart({ trend }: { trend: { date: string; value: number }[] }) {
     <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className="h-36 w-full">
       <defs>
         <linearGradient id="nw-area" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.3" />
-          <stop offset="100%" stopColor="#3B82F6" stopOpacity="0" />
+          <stop offset="0%" stopColor="#E7B24C" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="#E7B24C" stopOpacity="0" />
         </linearGradient>
       </defs>
       <polygon points={`0,${h} ${line} ${w},${h}`} fill="url(#nw-area)" />
       <polyline
         points={line}
         fill="none"
-        stroke="#60A5FA"
+        stroke="#F5D58A"
         strokeWidth="1.5"
         strokeLinejoin="round"
         strokeLinecap="round"
@@ -769,7 +781,7 @@ function CashFlowChart({
               whileInView={{ height: `${(s.income / max) * 100}%` }}
               viewport={{ once: true }}
               transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-              className="w-full max-w-[14px] rounded-t-md bg-gradient-to-t from-accent/60 to-accent-soft"
+              className="w-full max-w-[14px] rounded-t-md bg-gradient-to-t from-gold-deep/70 to-gold-soft"
               title={fc(s.income)}
             />
             <motion.div

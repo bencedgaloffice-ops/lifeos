@@ -1,13 +1,25 @@
 import { createClient } from "@/lib/supabase/server";
-import { OverviewModule, type OverviewData } from "@/components/dashboard/modules/OverviewModule";
+import { HomeModule } from "@/components/dashboard/modules/HomeModule";
+import type { OverviewData } from "@/components/dashboard/modules/OverviewModule";
 import { formatDate, relativeDays } from "@/lib/format";
-import { getServerLocale, tServer } from "@/lib/i18n/server";
+import { getServerLocale } from "@/lib/i18n/server";
+import {
+  ACHIEVEMENTS,
+  buildMissions,
+  computeLifeProgress,
+  evaluateAchievements,
+  type LifeSnapshot,
+} from "@/lib/gamification";
+import type { LifeMapLocation, LifeArea, Organization, Goal as FullGoal, Document, Transaction } from "@/lib/types";
 
-export const metadata = { title: "Overview" };
+export const metadata = { title: "LifeOS" };
 
 export default async function DashboardHome() {
   const supabase = await createClient();
   const locale = await getServerLocale();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const [
     { data: profile },
@@ -27,10 +39,50 @@ export default async function DashboardHome() {
     supabase.from("investment_holdings").select("current_value, quantity, avg_cost"),
   ]);
 
-  const [{ data: accounts }, { data: assets }, { data: nutritionRecent }] = await Promise.all([
-    supabase.from("accounts").select("current_balance"),
-    supabase.from("assets").select("estimated_value"),
+  // Extra signals for net worth, area tiles, and the achievement catalog.
+  const [
+    { data: accounts },
+    { data: assets },
+    { data: nutritionRecent },
+    { count: shiftsCount },
+    { count: apiaryCount },
+    { count: honeyCount },
+    { count: dreamsCount },
+    { count: milestonesCount },
+    { count: kitchenCount },
+    { count: shoppingCount },
+    { count: mapLocationsCount },
+    { data: achievementRows },
+  ] = await Promise.all([
+    supabase.from("accounts").select("current_balance").is("organization_id", null),
+    supabase.from("assets").select("estimated_value, category"),
     supabase.from("nutrition_entries").select("logged_at").gte("logged_at", new Date(Date.now() - 14 * 86_400_000).toISOString()),
+    supabase.from("shifts").select("id", { count: "exact", head: true }),
+    supabase.from("apiaries").select("id", { count: "exact", head: true }),
+    supabase.from("honey_harvest_log").select("id", { count: "exact", head: true }),
+    supabase.from("vision_cards").select("id", { count: "exact", head: true }),
+    supabase.from("milestones").select("id", { count: "exact", head: true }),
+    supabase.from("kitchen_items").select("id", { count: "exact", head: true }),
+    supabase.from("shopping_list_items").select("id", { count: "exact", head: true }).eq("checked", false),
+    supabase.from("life_map_locations").select("id", { count: "exact", head: true }),
+    supabase.from("achievements").select("key, unlocked_at"),
+  ]);
+
+  // The home screen's Map tab needs the same data /dashboard/map does.
+  const [
+    { data: mapLocations },
+    { data: mapLifeAreas },
+    { data: mapOrganizations },
+    { data: mapGoals },
+    { data: mapDocuments },
+    { data: mapTransactions },
+  ] = await Promise.all([
+    supabase.from("life_map_locations").select("*").order("created_at", { ascending: true }),
+    supabase.from("life_areas").select("*").order("name"),
+    supabase.from("organizations").select("*").order("created_at", { ascending: true }),
+    supabase.from("goals").select("*").neq("status", "dropped").order("created_at", { ascending: false }),
+    supabase.from("documents").select("*").order("uploaded_at", { ascending: false }),
+    supabase.from("transactions").select("*").order("occurred_at", { ascending: false }).limit(200),
   ]);
 
   const currency = profile?.preferred_currency || "USD";
@@ -48,45 +100,71 @@ export default async function DashboardHome() {
   const assetsTotal = (assets ?? []).reduce((s, a) => s + num(a.estimated_value), 0);
   const netWorth = num(profile?.current_savings) + portfolioValue + accountsTotal + assetsTotal;
 
-  const activeGoals = (goals ?? []).filter((g) => g.status !== "completed");
+  const allGoals = goals ?? [];
+  const activeGoals = allGoals.filter((g) => g.status !== "completed");
+  const completedGoals = allGoals.filter((g) => g.status === "completed");
   const goalsAvg = activeGoals.length ? Math.round(activeGoals.reduce((s, g) => s + g.progress_percent, 0) / activeGoals.length) : null;
-  const activeProjects = (projects ?? []).filter((p) => p.status !== "completed");
 
-  // Today summary — a thin pointer into the full Calendar module, which owns
-  // the merged view (calendar_events + goals/projects/documents/etc).
+  const allProjects = projects ?? [];
+  const activeProjects = allProjects.filter((p) => p.status !== "completed");
+  const completedProjects = allProjects.filter((p) => p.status === "completed");
+  const projectsAvg = activeProjects.length ? Math.round(activeProjects.reduce((s, p) => s + p.progress_percent, 0) / activeProjects.length) : null;
+
+  const consistencyDays = new Set((nutritionRecent ?? []).map((e) => new Date(e.logged_at).toISOString().slice(0, 10))).size;
+  const hasNutritionData = (nutritionRecent ?? []).length > 0 || Boolean(profile?.calorie_target);
+
+  // ---- Gamification: build the snapshot, evaluate achievements, level up ----
+  const baseSnapshot: LifeSnapshot = {
+    goalsTotal: allGoals.length,
+    goalsCompleted: completedGoals.length,
+    goalsAvgProgress: goalsAvg ?? 0,
+    projectsTotal: allProjects.length,
+    projectsCompleted: completedProjects.length,
+    projectsAvgProgress: projectsAvg ?? 0,
+    journalCount: (journal ?? []).length,
+    savingsRate,
+    netWorth,
+    consistencyDays,
+    assetsPropertyCount: (assets ?? []).filter((a) => a.category === "property").length,
+    shiftsCount: shiftsCount ?? 0,
+    apiaryCount: apiaryCount ?? 0,
+    honeyHarvestCount: honeyCount ?? 0,
+    dreamsCount: dreamsCount ?? 0,
+    milestonesCount: milestonesCount ?? 0,
+    mapLocationsCount: mapLocationsCount ?? 0,
+    achievementsUnlocked: 0,
+  };
+  const unlockedKeys = evaluateAchievements(baseSnapshot);
+  const snapshot: LifeSnapshot = { ...baseSnapshot, achievementsUnlocked: unlockedKeys.length };
+  const progress = computeLifeProgress(snapshot);
+
+  // Persist any newly-earned achievements so their unlock date sticks.
+  const existing = new Map((achievementRows ?? []).map((r) => [r.key, r.unlocked_at]));
+  const newlyUnlocked = unlockedKeys.filter((k) => !existing.has(k));
+  if (user && newlyUnlocked.length) {
+    await supabase
+      .from("achievements")
+      .upsert(newlyUnlocked.map((key) => ({ user_id: user.id, key })), { onConflict: "user_id,key", ignoreDuplicates: true });
+    for (const k of newlyUnlocked) existing.set(k, new Date().toISOString());
+  }
+
+  const achievements = ACHIEVEMENTS.map((a) => ({
+    ...a,
+    test: undefined as unknown as never, // don't ship the predicate to the client
+    unlocked: unlockedKeys.includes(a.key),
+    unlockedAt: existing.get(a.key) ?? null,
+  }));
+
+  const missions = buildMissions(
+    activeGoals.map((g) => ({ id: g.id, title: g.title, progress: g.progress_percent, category: g.category, status: g.status })),
+    activeProjects.map((p) => ({ id: p.id, name: p.name, progress: p.progress_percent, deadline: p.deadline, status: p.status })),
+  );
+
+  // Today summary — a thin pointer into the full Calendar module.
   const todayEnd = new Date(now);
   todayEnd.setHours(23, 59, 59, 999);
   const todaysEvents = (events ?? []).filter((e) => new Date(e.start_at) <= todayEnd && new Date(e.start_at) >= new Date(now.toDateString()));
   const nextEvent = (events ?? [])[0] ?? null;
-  const todayCalendar: OverviewData["todayCalendar"] = {
-    count: todaysEvents.length,
-    nextTitle: nextEvent?.title ?? null,
-    nextWhen: nextEvent ? relativeDays(nextEvent.start_at, locale) || formatDate(nextEvent.start_at, undefined, locale) : null,
-  };
-
-  const growth: OverviewData["growth"] = [];
-  if (profile?.health_goal) growth.push({ label: tServer(locale, "profile.healthGoal"), value: profile.health_goal });
-  if (profile?.spiritual_goal) growth.push({ label: tServer(locale, "profile.spiritualGoal"), value: profile.spiritual_goal });
-  if (profile?.learning_goal) growth.push({ label: tServer(locale, "profile.learningGoal"), value: profile.learning_goal });
-  if (profile?.growth_focus) growth.push({ label: tServer(locale, "profile.growthFocus"), value: profile.growth_focus });
-
-  const latest = (journal ?? [])[0];
-
-  const projectsAvg = activeProjects.length
-    ? Math.round(activeProjects.reduce((s, p) => s + p.progress_percent, 0) / activeProjects.length)
-    : null;
-  const consistencyDays = new Set(
-    (nutritionRecent ?? []).map((e) => new Date(e.logged_at).toISOString().slice(0, 10)),
-  ).size;
-  const hasNutritionData = (nutritionRecent ?? []).length > 0 || Boolean(profile?.calorie_target);
-
-  const lifeScore: OverviewData["lifeScore"] = {
-    health: hasNutritionData ? Math.round((consistencyDays / 14) * 100) : null,
-    money: Math.round(Math.max(0, Math.min(100, 50 + savingsRate))),
-    growth: goalsAvg,
-    productivity: projectsAvg,
-    relationshipsNote: profile?.relationships_note ?? null,
-  };
 
   const data: OverviewData = {
     name: profile?.display_name || "Explorer",
@@ -101,13 +179,45 @@ export default async function DashboardHome() {
     activeGoals: activeGoals.length,
     activeProjects: activeProjects.length,
     journalCount: (journal ?? []).length,
-    goals: activeGoals.slice(0, 4).map((g) => ({ id: g.id, title: g.title, progress: g.progress_percent, category: g.category })),
-    projects: activeProjects.slice(0, 4).map((p) => ({ id: p.id, name: p.name, progress: p.progress_percent, deadline: p.deadline })),
-    todayCalendar,
-    growth,
-    latestJournal: latest ? { title: latest.title, body: latest.body, date: latest.entry_date } : null,
-    lifeScore,
+    todayCalendar: {
+      count: todaysEvents.length,
+      nextTitle: nextEvent?.title ?? null,
+      nextWhen: nextEvent ? relativeDays(nextEvent.start_at, locale) || formatDate(nextEvent.start_at, undefined, locale) : null,
+    },
+    latestJournal: (() => {
+      const latest = (journal ?? [])[0];
+      return latest ? { title: latest.title, body: latest.body, date: latest.entry_date } : null;
+    })(),
+    lifeScore: {
+      health: hasNutritionData ? Math.round((consistencyDays / 14) * 100) : null,
+      money: Math.round(Math.max(0, Math.min(100, 50 + savingsRate))),
+      growth: goalsAvg,
+      productivity: projectsAvg,
+      relationshipsNote: profile?.relationships_note ?? null,
+    },
+    progress,
+    missions,
+    achievements,
+    tiles: {
+      shifts: shiftsCount ?? 0,
+      kitchenItems: kitchenCount ?? 0,
+      shoppingItems: shoppingCount ?? 0,
+      consistencyDays,
+      calorieTarget: profile?.calorie_target ?? null,
+      dreams: dreamsCount ?? 0,
+      milestones: milestonesCount ?? 0,
+    },
   };
 
-  return <OverviewModule data={data} />;
+  return (
+    <HomeModule
+      overview={data}
+      mapLocations={(mapLocations as LifeMapLocation[]) ?? []}
+      mapLifeAreas={(mapLifeAreas as LifeArea[]) ?? []}
+      mapOrganizations={(mapOrganizations as Organization[]) ?? []}
+      mapGoals={(mapGoals as FullGoal[]) ?? []}
+      mapDocuments={(mapDocuments as Document[]) ?? []}
+      mapTransactions={(mapTransactions as Transaction[]) ?? []}
+    />
+  );
 }

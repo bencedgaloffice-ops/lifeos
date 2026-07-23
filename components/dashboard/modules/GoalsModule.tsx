@@ -32,6 +32,7 @@ export function GoalsModule({ goals }: { goals: Goal[] }) {
         icon={Target}
         title={t("goals.title")}
         subtitle={t("goals.subtitle")}
+        accent="goals"
         action={
           <button
             onClick={() => setOpen((v) => !v)}

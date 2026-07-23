@@ -14,6 +14,7 @@ import {
   RefreshCcw,
   Link2,
   Unlink,
+  Sparkles,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
@@ -27,11 +28,13 @@ export function SettingsModule({
   googleConfigured,
   googleConnection,
   googleImported,
+  jarvisIntelligenceConfigured,
 }: {
   feedToken: string | null;
   googleConfigured: boolean;
   googleConnection: { syncEnabled: boolean; lastSyncedAt: string | null } | null;
   googleImported: { count: number; latestEventDate: string | null };
+  jarvisIntelligenceConfigured: boolean;
 }) {
   const { t, tList, locale, setLocale } = useLocale();
   const searchParams = useSearchParams();
@@ -113,7 +116,7 @@ export function SettingsModule({
 
   return (
     <div>
-      <ModuleHeader icon={Settings} title={t("settings.title")} subtitle={t("settings.subtitle")} />
+      <ModuleHeader icon={Settings} title={t("settings.title")} subtitle={t("settings.subtitle")} accent="settings" />
 
       <div className="grid max-w-2xl gap-4">
         {/* Language */}
@@ -281,6 +284,22 @@ export function SettingsModule({
                   {t("settings.google.disconnect")}
                 </button>
               </div>
+            </div>
+          )}
+        </Panel>
+
+        {/* Jarvis real intelligence — Claude fallback for open-ended questions */}
+        <Panel accent="jarvis">
+          <CardHead icon={Sparkles} title={t("settings.jarvisAi.title")} hint={t("settings.jarvisAi.hint")} />
+          {jarvisIntelligenceConfigured ? (
+            <span className="inline-flex items-center gap-1.5 text-sm text-emerald-300">
+              <Check className="h-3.5 w-3.5" />
+              {t("settings.jarvisAi.active")}
+            </span>
+          ) : (
+            <div className="space-y-2">
+              <span className="inline-flex items-center gap-1.5 text-sm text-white/50">{t("settings.jarvisAi.inactive")}</span>
+              <p className="text-xs leading-relaxed text-white/35">{t("settings.jarvisAi.setupHint")}</p>
             </div>
           )}
         </Panel>

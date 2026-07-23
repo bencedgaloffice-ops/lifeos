@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { SettingsModule } from "@/components/dashboard/modules/SettingsModule";
 import { getConnection, isGoogleConfigured } from "@/lib/google/client";
+import { isAnthropicConfigured } from "@/lib/jarvis/llm";
 
 export const metadata = { title: "Settings" };
 
@@ -41,6 +42,7 @@ export default async function SettingsPage() {
         count: (eventCount ?? 0) + (shiftCount ?? 0),
         latestEventDate: latestImported?.start_at ?? null,
       }}
+      jarvisIntelligenceConfigured={isAnthropicConfigured()}
     />
   );
 }

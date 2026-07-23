@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { getConnection, getValidAccessToken } from "@/lib/google/client";
 import { listEvents, insertEvent, updateEvent, deleteEvent, type GoogleEvent } from "@/lib/google/calendar";
@@ -20,7 +21,7 @@ function toGoogleEvent(row: Pick<CalendarEvent, "title" | "description" | "locat
   return body;
 }
 
-function fromGoogleEvent(item: GoogleEvent): Omit<CalendarEvent, "id" | "user_id" | "created_at" | "updated_at" | "google_event_id" | "life_area_id" | "priority" | "reminder_minutes_before" | "subtype" | "parent_event_id" | "category"> {
+function fromGoogleEvent(item: GoogleEvent): Omit<CalendarEvent, "id" | "user_id" | "created_at" | "updated_at" | "google_event_id" | "life_area_id" | "organization_id" | "priority" | "reminder_minutes_before" | "subtype" | "parent_event_id" | "category"> {
   const allDay = Boolean(item.start?.date);
   const start_at = item.start?.dateTime ?? (item.start?.date ? `${item.start.date}T00:00:00Z` : new Date().toISOString());
   const end_at = item.end?.dateTime ?? (item.end?.date ? `${item.end.date}T00:00:00Z` : new Date(Date.now() + 3_600_000).toISOString());
@@ -41,15 +42,20 @@ function fromGoogleEvent(item: GoogleEvent): Omit<CalendarEvent, "id" | "user_id
 /** Pulls remote changes since the last sync via Google's incremental
  * syncToken (deletions arrive as status:"cancelled" items — no full-list
  * diffing needed). Falls back to a fresh ±2 year window if the token has
- * expired on Google's side. No-ops silently if nothing is connected. */
-export async function pullFromGoogle(userId: string): Promise<void> {
-  const connection = await getConnection(userId);
+ * expired on Google's side. No-ops silently if nothing is connected.
+ *
+ * Accepts an optional pre-built client so the sync cron job (no request,
+ * no session) can pass a service-role client in place of the normal
+ * cookie-bound one — every other caller (page loads, actions) omits it
+ * and gets the exact behavior this always had. */
+export async function pullFromGoogle(userId: string, client?: SupabaseClient): Promise<void> {
+  const connection = await getConnection(userId, client);
   if (!connection || !connection.sync_enabled) return;
 
-  const accessToken = await getValidAccessToken(userId);
+  const accessToken = await getValidAccessToken(userId, client);
   if (!accessToken) return;
 
-  const supabase = await createClient();
+  const supabase = client ?? (await createClient());
 
   try {
     let result = await listEvents(accessToken, connection.google_calendar_id, connection.sync_token);
@@ -95,14 +101,15 @@ export async function pushEventToGoogle(
   userId: string,
   event: Pick<CalendarEvent, "id" | "title" | "description" | "location" | "start_at" | "end_at" | "all_day" | "recurrence_rule" | "google_event_id">,
   op: "upsert" | "delete",
+  client?: SupabaseClient,
 ): Promise<void> {
-  const connection = await getConnection(userId);
+  const connection = await getConnection(userId, client);
   if (!connection || !connection.sync_enabled) return;
 
-  const accessToken = await getValidAccessToken(userId);
+  const accessToken = await getValidAccessToken(userId, client);
   if (!accessToken) return;
 
-  const supabase = await createClient();
+  const supabase = client ?? (await createClient());
 
   try {
     if (op === "delete") {

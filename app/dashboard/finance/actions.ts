@@ -76,7 +76,7 @@ async function snapshotNetWorth(
   userId: string,
 ) {
   const [{ data: accounts }, { data: holdings }, { data: profile }, { data: ownedAssets }] = await Promise.all([
-    supabase.from("accounts").select("current_balance, type").eq("user_id", userId),
+    supabase.from("accounts").select("current_balance, type").eq("user_id", userId).is("organization_id", null),
     supabase.from("investment_holdings").select("current_value, quantity, avg_cost"),
     supabase.from("profiles").select("current_savings").eq("id", userId).maybeSingle(),
     supabase.from("assets").select("estimated_value").eq("user_id", userId),

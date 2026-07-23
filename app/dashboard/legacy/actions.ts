@@ -17,34 +17,47 @@ function refresh() {
   revalidatePath("/dashboard");
 }
 
-/* ---------------- Dreams ---------------- */
+/* ---------------- Legacy identity: emblem & scripture ---------------- */
 
-export async function createDream(formData: FormData) {
+export async function updateLegacyIdentity(formData: FormData) {
   const { supabase, user } = await requireUser();
-  const title = String(formData.get("title") ?? "").trim();
-  if (!title) return;
-  const description = String(formData.get("description") ?? "").trim() || null;
 
-  const { data: existing } = await supabase
-    .from("dreams")
-    .select("order_index")
-    .eq("user_id", user.id)
-    .order("order_index", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  await supabase.from("legacy_identity").upsert(
+    {
+      user_id: user.id,
+      emblem_name: String(formData.get("emblem_name") ?? "").trim() || null,
+      emblem_meaning: String(formData.get("emblem_meaning") ?? "").trim() || null,
+      scripture_reference: String(formData.get("scripture_reference") ?? "").trim() || null,
+      scripture_text: String(formData.get("scripture_text") ?? "").trim() || null,
+      family_story: String(formData.get("family_story") ?? "").trim() || null,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  );
+  refresh();
+}
 
-  await supabase.from("dreams").insert({
+/* ---------------- Family members ---------------- */
+
+export async function createFamilyMember(formData: FormData) {
+  const { supabase, user } = await requireUser();
+  const name = String(formData.get("name") ?? "").trim();
+  if (!name) return;
+
+  await supabase.from("family_members").insert({
     user_id: user.id,
-    title,
-    description,
-    order_index: (existing?.order_index ?? -1) + 1,
+    name,
+    relation: String(formData.get("relation") ?? "").trim() || null,
+    birth_year: Number(formData.get("birth_year") ?? 0) || null,
+    death_year: Number(formData.get("death_year") ?? 0) || null,
+    story: String(formData.get("story") ?? "").trim() || null,
   });
   refresh();
 }
 
-export async function deleteDream(id: string) {
+export async function deleteFamilyMember(id: string) {
   const { supabase } = await requireUser();
-  await supabase.from("dreams").delete().eq("id", id);
+  await supabase.from("family_members").delete().eq("id", id);
   refresh();
 }
 
