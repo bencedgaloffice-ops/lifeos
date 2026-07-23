@@ -1,14 +1,22 @@
 /**
  * Speech recognition for Jarvis — wake-word detection *and* command capture,
  * both from the browser's built-in Web Speech API (no API key, no model
- * download). The same engine runs in two modes:
+ * download). The engine runs in two stages:
  *
  *   • "wake"    — continuously scanning for a wake phrase ("hello jarvis").
- *   • "command" — capturing the next utterance as an instruction.
+ *   • "command" — capturing the next utterance as an instruction, for a
+ *                 bounded ~12s window.
  *
- * If a wake phrase and a command arrive in one breath ("hello jarvis, what's my
- * schedule") the trailing command is extracted immediately. A cloud provider
- * (Whisper) could replace the command-capture leg later behind the same API.
+ * Reliability note: Chrome's SpeechRecognition ends the session (`onend`)
+ * shortly after each final result — including right after the wake phrase. The
+ * old design reused one long-lived session across both stages, so the command
+ * stage often attached to an already-dead recogniser and never re-opened the
+ * mic. This version instead **starts a fresh recognition session per stage**
+ * (and transparently resurrects one that ends early while a stage is still
+ * active), so "Hello Jarvis" → command listening works every time.
+ *
+ * A cloud recogniser (Whisper) could replace the command-capture leg later
+ * behind this same API without changing any callers.
  */
 
 /* Minimal ambient typings — the Web Speech API isn't in the standard TS DOM
@@ -56,12 +64,17 @@ function normalize(s: string): string {
 
 type Mode = "off" | "wake" | "command";
 
+/** How long the mic stays open for a command before giving up. */
+const COMMAND_WINDOW_MS = 12000;
+
 export type RecognitionCallbacks = {
   onWake: (trailingCommand: string | null) => void;
   onCommand: (text: string) => void;
   onInterim: (text: string) => void;
   onError: (error: string) => void;
   onListeningChange: (listening: boolean) => void;
+  /** Optional structured logging for the [JARVIS] developer console trace. */
+  onLog?: (message: string) => void;
 };
 
 export class RecognitionEngine {
@@ -70,11 +83,17 @@ export class RecognitionEngine {
   private wakeWords: string[] = ["hello jarvis"];
   private lang = "en-GB";
   private commandTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Guards against onend→restart storms. */
+  private restarting = false;
 
   constructor(private cb: RecognitionCallbacks) {}
 
   get supported(): boolean {
     return recognitionSupported();
+  }
+
+  private log(msg: string) {
+    this.cb.onLog?.(msg);
   }
 
   setWakeWords(words: string[]) {
@@ -86,34 +105,48 @@ export class RecognitionEngine {
     if (this.rec) this.rec.lang = lang;
   }
 
-  /** Begin passive wake-word listening. */
+  /** Begin passive wake-word listening (fresh session). */
   startWake() {
     this.mode = "wake";
-    this.ensure();
+    this.clearTimer();
+    this.restart();
   }
 
-  /** Jump straight into capturing one command (used by the manual mic button). */
+  /** Open the mic to capture one command (fresh session, bounded window). */
   startCommand() {
     this.mode = "command";
     this.armCommandTimeout();
-    this.ensure();
+    this.restart();
   }
 
   stop() {
     this.mode = "off";
     this.clearTimer();
-    if (this.rec) {
+    this.teardown();
+    this.cb.onListeningChange(false);
+  }
+
+  /** Tear down the current recogniser without triggering an auto-restart. */
+  private teardown() {
+    const rec = this.rec;
+    this.rec = null;
+    if (rec) {
+      rec.onend = null;
+      rec.onresult = null;
+      rec.onerror = null;
       try {
-        this.rec.abort();
+        rec.abort();
       } catch {
         /* ignore */
       }
     }
-    this.cb.onListeningChange(false);
   }
 
-  private ensure() {
-    if (this.rec) return;
+  /** Abort any existing session and start a brand-new one for the current mode. */
+  private restart() {
+    if (this.mode === "off") return;
+    this.teardown();
+
     const Ctor = getCtor();
     if (!Ctor) {
       this.cb.onError("unsupported");
@@ -128,17 +161,20 @@ export class RecognitionEngine {
     rec.onresult = (e) => this.handleResult(e);
     rec.onerror = (e) => {
       // "no-speech" / "aborted" are routine; surface only real failures.
-      if (e.error !== "no-speech" && e.error !== "aborted") this.cb.onError(e.error);
+      if (e.error !== "no-speech" && e.error !== "aborted") {
+        this.log(`Recognition error: ${e.error}`);
+        this.cb.onError(e.error);
+      }
     };
     rec.onend = () => {
-      // The browser stops recognition periodically; transparently resume
-      // whenever we're still meant to be listening.
-      if (this.mode !== "off") {
-        try {
-          rec.start();
-        } catch {
-          /* already starting */
-        }
+      // The browser ends sessions after each result / pause. While a stage is
+      // still active, resurrect a fresh session so listening never silently dies.
+      if (this.mode !== "off" && this.rec === rec) {
+        this.restarting = true;
+        setTimeout(() => {
+          this.restarting = false;
+          if (this.mode !== "off") this.restart();
+        }, 120);
       } else {
         this.cb.onListeningChange(false);
       }
@@ -149,7 +185,8 @@ export class RecognitionEngine {
       rec.start();
       this.cb.onListeningChange(true);
     } catch {
-      /* start() throws if called while already running — safe to ignore */
+      // start() throws if the previous session hasn't fully released; retry shortly.
+      if (!this.restarting) setTimeout(() => this.mode !== "off" && this.restart(), 200);
     }
   }
 
@@ -168,8 +205,10 @@ export class RecognitionEngine {
       if (final.trim()) {
         this.clearTimer();
         this.mode = "off";
+        this.teardown();
         this.cb.onCommand(final.trim());
       } else if (interim) {
+        // Speech is flowing — extend the window a little.
         this.armCommandTimeout();
       }
       return;
@@ -180,10 +219,11 @@ export class RecognitionEngine {
       if (!haystack) return;
       const hit = this.wakeWords.find((w) => haystack.includes(w));
       if (hit) {
-        // Everything the user said after the wake phrase is a candidate command.
         const idx = haystack.indexOf(hit) + hit.length;
         const trailing = haystack.slice(idx).trim();
         this.mode = "off";
+        this.teardown();
+        this.log(`Wake word matched: "${hit}"`);
         this.cb.onWake(trailing.length > 1 ? trailing : null);
       }
     }
@@ -191,13 +231,14 @@ export class RecognitionEngine {
 
   private armCommandTimeout() {
     this.clearTimer();
-    // If the user goes quiet after speaking, close the command out.
     this.commandTimer = setTimeout(() => {
       if (this.mode === "command") {
         this.mode = "off";
+        this.teardown();
+        this.log("Command window timed out (no speech)");
         this.cb.onCommand("");
       }
-    }, 6000);
+    }, COMMAND_WINDOW_MS);
   }
 
   private clearTimer() {

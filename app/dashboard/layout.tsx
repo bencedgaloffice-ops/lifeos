@@ -38,7 +38,7 @@ export default async function DashboardLayout({
   // The companion provider wraps the whole dashboard so the floating widget
   // and the dedicated Jarvis page share one live session.
   return (
-    <JarvisRoot variant="dashboard">
+    <JarvisRoot variant="dashboard" userName={name}>
       <DashboardShell name={name} email={user.email ?? ""}>
         {children}
       </DashboardShell>

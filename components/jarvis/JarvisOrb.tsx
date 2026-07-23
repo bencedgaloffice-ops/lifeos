@@ -120,6 +120,11 @@ const coreFragment = /* glsl */ `
     col += hot * max(vRipple, 0.0) * (0.4 + uPulse) * 0.8;
     col += uAccent * uPulse * 0.6;
 
+    // Thinking (state ~3): a bright scan band sweeping across the core.
+    float think = clamp(1.0 - abs(uState - 3.0), 0.0, 1.0);
+    float scan = smoothstep(0.05, 0.0, abs(vNormal.y - sin(uTime * 1.6) * 0.85));
+    col += hot * scan * think * 0.7;
+
     // Denied: hard warning strobe.
     col = mix(col, vec3(1.0, 0.1, 0.12), step(4.5, uState) * (0.5 + 0.5 * sin(uTime * 20.0)));
 

@@ -21,13 +21,15 @@ import { JarvisSettingsPanel } from "./JarvisSettingsPanel";
  */
 export function JarvisRoot({
   variant = "dashboard",
+  userName,
   children,
 }: {
   variant?: "dashboard" | "landing";
+  userName?: string;
   children?: React.ReactNode;
 }) {
   return (
-    <JarvisProvider>
+    <JarvisProvider userName={userName}>
       {children}
       <ActivationDim />
       <JarvisWidget variant={variant} />
