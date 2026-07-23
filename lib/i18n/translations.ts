@@ -713,6 +713,10 @@ const en = {
     modeCanvas: "Canvas",
     canvasHint: "Drag cards to arrange them freely. Hold Ctrl/⌘ and scroll (or pinch) to zoom.",
   },
+  home: {
+    tabMap: "Map",
+    tabStats: "Stats",
+  },
   map: {
     title: "Life Map",
     subtitle: "The geography of your life — home, work, land, and the places that matter.",
@@ -1797,6 +1801,10 @@ const hu: typeof en = {
     modeBoard: "Tábla",
     modeCanvas: "Vászon",
     canvasHint: "Húzd a kártyákat szabadon. Tartsd lenyomva a Ctrl/⌘-t és görgess (vagy csippents) a nagyításhoz.",
+  },
+  home: {
+    tabMap: "Térkép",
+    tabStats: "Statisztika",
   },
   map: {
     title: "Élettérkép",

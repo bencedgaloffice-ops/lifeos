@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Map, Plus, Trash2, Pencil, X, Target, FileStack, Wallet } from "lucide-react";
 import type { LifeMapLocation, LifeArea, Organization, Goal, Document, Transaction } from "@/lib/types";
@@ -17,6 +18,11 @@ type Props = {
   goals: Goal[];
   documents: Document[];
   transactions: Transaction[];
+  /** Renders every sidebar module as a clickable portal orbiting Hungary —
+   * used on the home screen's Map tab, off on the plain /dashboard/map page. */
+  showNavPins?: boolean;
+  /** Hides this module's own header/legend — the home screen supplies its own. */
+  compact?: boolean;
 };
 
 const CATEGORY_COLOR: Record<string, string> = {
@@ -27,8 +33,9 @@ const CATEGORY_COLOR: Record<string, string> = {
   other: "#67E8F9",
 };
 
-export function LifeMapModule({ locations, lifeAreas, organizations, goals, documents, transactions }: Props) {
+export function LifeMapModule({ locations, lifeAreas, organizations, goals, documents, transactions, showNavPins = false, compact = false }: Props) {
   const { t, locale } = useLocale();
+  const router = useRouter();
   const [, startTransition] = useTransition();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -66,20 +73,32 @@ export function LifeMapModule({ locations, lifeAreas, organizations, goals, docu
 
   return (
     <div>
-      <ModuleHeader
-        icon={Map}
-        title={t("map.title")}
-        subtitle={t("map.subtitle")}
-        accent="map"
-        action={
+      {!compact && (
+        <ModuleHeader
+          icon={Map}
+          title={t("map.title")}
+          subtitle={t("map.subtitle")}
+          accent="map"
+          action={
+            <button
+              onClick={() => setOpen((v) => !v)}
+              className="inline-flex items-center gap-1.5 rounded-full glass px-3 py-1.5 text-xs text-white/70 transition-colors hover:text-white"
+            >
+              <Plus className="h-3.5 w-3.5" /> {t("map.addLocation")}
+            </button>
+          }
+        />
+      )}
+      {compact && (
+        <div className="mb-4 flex justify-end">
           <button
             onClick={() => setOpen((v) => !v)}
             className="inline-flex items-center gap-1.5 rounded-full glass px-3 py-1.5 text-xs text-white/70 transition-colors hover:text-white"
           >
             <Plus className="h-3.5 w-3.5" /> {t("map.addLocation")}
           </button>
-        }
-      />
+        </div>
+      )}
 
       {open && (
         <Panel className="mb-5">
@@ -132,19 +151,21 @@ export function LifeMapModule({ locations, lifeAreas, organizations, goals, docu
       )}
 
       {/* Category legend */}
-      <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-white/50">
-        {Object.entries(CATEGORY_COLOR).map(([key, color]) => (
-          <span key={key} className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-            {t(`map.category${key.charAt(0).toUpperCase()}${key.slice(1)}`)}
-          </span>
-        ))}
-      </div>
+      {!compact && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-white/50">
+          {Object.entries(CATEGORY_COLOR).map(([key, color]) => (
+            <span key={key} className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+              {t(`map.category${key.charAt(0).toUpperCase()}${key.slice(1)}`)}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-5">
         <div className={selected ? "lg:col-span-3" : "lg:col-span-5"}>
-          <div className="relative h-[65vh] w-full overflow-hidden rounded-3xl border border-hairline">
-            {locations.length === 0 ? (
+          <div className={`relative w-full overflow-hidden rounded-3xl border border-hairline ${compact ? "h-[72vh]" : "h-[65vh]"}`}>
+            {locations.length === 0 && !showNavPins ? (
               <div className="flex h-full items-center justify-center text-sm text-white/40">{t("map.empty")}</div>
             ) : (
               <LifeMapCanvas
@@ -152,6 +173,8 @@ export function LifeMapModule({ locations, lifeAreas, organizations, goals, docu
                 selectedId={selectedId}
                 onSelect={(id) => setSelectedId(id || null)}
                 progress={progressByLocation}
+                navPins={showNavPins}
+                onNavigate={(href) => router.push(href)}
               />
             )}
           </div>

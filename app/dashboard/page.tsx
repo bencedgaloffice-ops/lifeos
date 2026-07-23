@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
-import { OverviewModule, type OverviewData } from "@/components/dashboard/modules/OverviewModule";
+import { HomeModule } from "@/components/dashboard/modules/HomeModule";
+import type { OverviewData } from "@/components/dashboard/modules/OverviewModule";
 import { formatDate, relativeDays } from "@/lib/format";
 import { getServerLocale } from "@/lib/i18n/server";
 import {
@@ -9,8 +10,9 @@ import {
   evaluateAchievements,
   type LifeSnapshot,
 } from "@/lib/gamification";
+import type { LifeMapLocation, LifeArea, Organization, Goal as FullGoal, Document, Transaction } from "@/lib/types";
 
-export const metadata = { title: "Mission Control" };
+export const metadata = { title: "LifeOS" };
 
 export default async function DashboardHome() {
   const supabase = await createClient();
@@ -64,6 +66,23 @@ export default async function DashboardHome() {
     supabase.from("shopping_list_items").select("id", { count: "exact", head: true }).eq("checked", false),
     supabase.from("life_map_locations").select("id", { count: "exact", head: true }),
     supabase.from("achievements").select("key, unlocked_at"),
+  ]);
+
+  // The home screen's Map tab needs the same data /dashboard/map does.
+  const [
+    { data: mapLocations },
+    { data: mapLifeAreas },
+    { data: mapOrganizations },
+    { data: mapGoals },
+    { data: mapDocuments },
+    { data: mapTransactions },
+  ] = await Promise.all([
+    supabase.from("life_map_locations").select("*").order("created_at", { ascending: true }),
+    supabase.from("life_areas").select("*").order("name"),
+    supabase.from("organizations").select("*").order("created_at", { ascending: true }),
+    supabase.from("goals").select("*").neq("status", "dropped").order("created_at", { ascending: false }),
+    supabase.from("documents").select("*").order("uploaded_at", { ascending: false }),
+    supabase.from("transactions").select("*").order("occurred_at", { ascending: false }).limit(200),
   ]);
 
   const currency = profile?.preferred_currency || "USD";
@@ -190,5 +209,15 @@ export default async function DashboardHome() {
     },
   };
 
-  return <OverviewModule data={data} />;
+  return (
+    <HomeModule
+      overview={data}
+      mapLocations={(mapLocations as LifeMapLocation[]) ?? []}
+      mapLifeAreas={(mapLifeAreas as LifeArea[]) ?? []}
+      mapOrganizations={(mapOrganizations as Organization[]) ?? []}
+      mapGoals={(mapGoals as FullGoal[]) ?? []}
+      mapDocuments={(mapDocuments as Document[]) ?? []}
+      mapTransactions={(mapTransactions as Transaction[]) ?? []}
+    />
+  );
 }

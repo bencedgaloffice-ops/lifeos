@@ -2,12 +2,14 @@
 
 import { useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, Line } from "@react-three/drei";
+import { OrbitControls, Line, Html } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import * as THREE from "three";
 import type { LifeMapLocation } from "@/lib/types";
+import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { StarField } from "./StarField";
 import { HUNGARY_BORDER, projectLonLat } from "@/lib/hungary-geo";
+import { layoutNavPins, type NavPinPosition } from "@/lib/module-nav-pins";
 
 const CATEGORY_COLOR: Record<string, string> = {
   home: "#F5A15E",
@@ -21,7 +23,10 @@ const WORLD_SIZE = 12;
 /** Height of Hungary's raised landmass above the surrounding base plate —
  * pins and connection lines sit at this level, not at y=0. */
 const GROUND_Y = 0.2;
+/** With the nav-pin ring showing (home screen), the resting shot needs to
+ * be wider so all 17 orbiting portals stay in frame, not just Hungary. */
 const CAMERA_TARGET: [number, number, number] = [0, 7.5, 9.5];
+const CAMERA_TARGET_WIDE: [number, number, number] = [0, 10.5, 13];
 const CAMERA_START: [number, number, number] = [0, 16, 20];
 
 /** A saved location's position_x/position_y are real longitude/latitude —
@@ -90,17 +95,18 @@ function SurroundingTerrain() {
  * resting orbit on mount — the same "arrival" beat as the landing globe.
  * OrbitControls only mounts once this finishes, so the two never fight
  * over camera position. */
-function CameraIntro({ onDone }: { onDone: () => void }) {
+function CameraIntro({ onDone, wide }: { onDone: () => void; wide: boolean }) {
   const { camera } = useThree();
   const elapsed = useRef(0);
   const done = useRef(false);
+  const target = wide ? CAMERA_TARGET_WIDE : CAMERA_TARGET;
 
   useFrame((_, delta) => {
     if (done.current) return;
     elapsed.current += delta;
     const t = Math.min(elapsed.current / 1.8, 1);
     const eased = 1 - Math.pow(1 - t, 3);
-    camera.position.lerpVectors(new THREE.Vector3(...CAMERA_START), new THREE.Vector3(...CAMERA_TARGET), eased);
+    camera.position.lerpVectors(new THREE.Vector3(...CAMERA_START), new THREE.Vector3(...target), eased);
     camera.lookAt(0, GROUND_Y, 0);
     if (t >= 1) {
       done.current = true;
@@ -214,18 +220,84 @@ function ConnectionLines({ locations }: { locations: LifeMapLocation[] }) {
   );
 }
 
+const NAV_RING_RADIUS = 6.5;
+
+/** A module shortcut orbiting Hungary — the sidebar's "pages on the sides"
+ * turned into a clickable place on the map. A floating glass chip (rendered
+ * via drei's Html so it can reuse real DOM/Tailwind styling) sits above a
+ * small glowing marker in the module's own accent color. */
+function NavPin({ pin, onNavigate }: { pin: NavPinPosition; onNavigate: (href: string) => void }) {
+  const { t } = useLocale();
+  const Icon = pin.icon;
+  const markerRef = useRef<THREE.Mesh>(null);
+  const label = t(`nav.${pin.key}.label`);
+
+  useFrame(({ clock }) => {
+    if (markerRef.current) {
+      markerRef.current.position.y = -0.08 + 0.3 + Math.sin(clock.elapsedTime * 1.4 + pin.x) * 0.04;
+    }
+  });
+
+  return (
+    <group position={[pin.x, 0, pin.z]}>
+      <mesh
+        ref={markerRef}
+        onClick={(e) => {
+          e.stopPropagation();
+          onNavigate(pin.href);
+        }}
+        onPointerOver={() => {
+          document.body.style.cursor = "pointer";
+        }}
+        onPointerOut={() => {
+          document.body.style.cursor = "default";
+        }}
+      >
+        <sphereGeometry args={[0.09, 16, 16]} />
+        <meshStandardMaterial color={pin.color} emissive={pin.color} emissiveIntensity={1.6} />
+      </mesh>
+      <Html center distanceFactor={9} position={[0, 0.85, 0]} occlude={false}>
+        <button
+          onClick={() => onNavigate(pin.href)}
+          className="flex select-none flex-col items-center gap-1 rounded-2xl border px-3 py-2 text-center backdrop-blur-md transition-transform hover:-translate-y-0.5"
+          style={{
+            background: "rgba(8,14,12,0.72)",
+            borderColor: `${pin.color}55`,
+            boxShadow: `0 0 24px -8px ${pin.color}99`,
+          }}
+        >
+          <span
+            className="flex h-7 w-7 items-center justify-center rounded-full"
+            style={{ backgroundColor: `${pin.color}22`, color: pin.soft }}
+          >
+            <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+          </span>
+          <span className="whitespace-nowrap text-[0.65rem] font-medium text-white/85">{label}</span>
+        </button>
+      </Html>
+    </group>
+  );
+}
+
 export function LifeMap({
   locations,
   selectedId,
   onSelect,
   progress,
+  navPins = false,
+  onNavigate,
 }: {
   locations: LifeMapLocation[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   progress?: Record<string, { total: number; completed: number }>;
+  /** Renders the sidebar's modules as a ring of clickable portals orbiting
+   * Hungary — used on the home screen, off by default on the plain map page. */
+  navPins?: boolean;
+  onNavigate?: (href: string) => void;
 }) {
   const [ready, setReady] = useState(false);
+  const pins = useMemo(() => (navPins ? layoutNavPins(NAV_RING_RADIUS) : []), [navPins]);
 
   return (
     <Canvas camera={{ position: CAMERA_START, fov: 42 }} dpr={[1, 2]} onPointerMissed={() => onSelect("")}>
@@ -235,13 +307,16 @@ export function LifeMap({
       <directionalLight position={[6, 9, 4]} intensity={1.15} color="#bfe3ff" />
       <directionalLight position={[-6, 4, -4]} intensity={0.25} color="#5EEAD4" />
       <StarField />
-      {!ready && <CameraIntro onDone={() => setReady(true)} />}
+      {!ready && <CameraIntro onDone={() => setReady(true)} wide={navPins} />}
       <SurroundingTerrain />
       <HungaryLandmass />
       <gridHelper args={[WORLD_SIZE + 5, 40, "#1c4a3f", "#0e2622"]} position={[0, -0.075, 0]} />
       <ConnectionLines locations={locations} />
       {locations.map((loc) => (
         <Pin key={loc.id} loc={loc} active={loc.id === selectedId} onSelect={onSelect} progress={progress?.[loc.id]} />
+      ))}
+      {pins.map((pin) => (
+        <NavPin key={pin.key} pin={pin} onNavigate={onNavigate ?? (() => {})} />
       ))}
       {ready && (
         <OrbitControls

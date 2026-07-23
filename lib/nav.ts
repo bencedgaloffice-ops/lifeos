@@ -18,7 +18,6 @@ import {
   Repeat,
   Briefcase,
   Building2,
-  Map as MapIcon,
   Car,
   type LucideIcon,
 } from "lucide-react";
@@ -47,7 +46,6 @@ export const lifeNav: NavItem[] = [
   { key: "journal", href: "/dashboard/journal", icon: BookOpen },
   { key: "kitchen", href: "/dashboard/kitchen", icon: ChefHat },
   { key: "nutrition", href: "/dashboard/nutrition", icon: Salad },
-  { key: "map", href: "/dashboard/map", icon: MapIcon },
   { key: "profile", href: "/dashboard/profile", icon: UserCircle },
 ];
 
