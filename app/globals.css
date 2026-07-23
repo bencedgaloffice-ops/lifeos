@@ -115,6 +115,15 @@
     color: transparent;
   }
 
+  /* Achievement / progression gold — used for Life Level & unlocked badges. */
+  .gradient-text-gold {
+    background: linear-gradient(120deg, #fff4d6 0%, #f5d58a 45%, #e7b24c 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
   /* --- Glass surface --- */
   .glass {
     background: rgba(255, 255, 255, 0.08);

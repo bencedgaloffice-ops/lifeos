@@ -19,6 +19,17 @@ const config: Config = {
           soft: "#60A5FA",
           deep: "#1D4ED8",
         },
+        // AI / Jarvis accent.
+        jarvis: {
+          DEFAULT: "#ff2d3f",
+          soft: "#ff8b93",
+        },
+        // Achievement / progression accent.
+        gold: {
+          DEFAULT: "#E7B24C",
+          soft: "#F5D58A",
+          deep: "#B8860B",
+        },
         glass: "rgba(255,255,255,0.08)",
         "glass-strong": "rgba(255,255,255,0.11)",
         hairline: "rgba(255,255,255,0.12)",
@@ -26,6 +37,8 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+        // Display face for headings / the command-center identity.
+        display: ["var(--font-display)", "var(--font-inter)", "system-ui", "sans-serif"],
       },
       letterSpacing: {
         tightest: "-0.045em",
@@ -44,6 +57,8 @@ const config: Config = {
         "glow-sm": "0 0 40px -8px rgba(59,130,246,0.45)",
         glow: "0 0 80px -16px rgba(59,130,246,0.55)",
         "glow-lg": "0 0 160px -20px rgba(59,130,246,0.5)",
+        "glow-gold": "0 0 50px -10px rgba(231,178,76,0.55)",
+        "glow-jarvis": "0 0 50px -10px rgba(255,45,63,0.55)",
         lift: "0 30px 80px -30px rgba(0,0,0,0.9)",
       },
       backgroundImage: {
