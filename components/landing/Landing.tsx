@@ -5,7 +5,6 @@ import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { EarthCanvas } from "@/components/three/EarthCanvas";
 import { FinancialParticles } from "@/components/landing/FinancialParticles";
-import { Logo } from "@/components/ui/Logo";
 import { LanguageSwitch } from "@/components/ui/LanguageSwitch";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { easePremium } from "@/lib/motion";
@@ -37,19 +36,6 @@ export function Landing() {
         }}
       />
 
-      {/* Wordmark */}
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 1, ease: easePremium, delay: 0.3 }}
-        className="absolute left-1/2 top-8 z-10 flex -translate-x-1/2 items-center gap-2.5"
-      >
-        <Logo className="h-6 w-6" />
-        <span className="text-sm font-semibold tracking-[0.08em] text-white/80">
-          LifeOS
-        </span>
-      </motion.div>
-
       {/* Language switch */}
       <motion.div
         initial={{ opacity: 0 }}
@@ -60,8 +46,17 @@ export function Landing() {
         <LanguageSwitch />
       </motion.div>
 
-      {/* The single door */}
-      <div className="absolute inset-x-0 bottom-[16vh] z-10 flex flex-col items-center">
+      {/* Brand mark + the single door — both live in the black void below the globe */}
+      <div className="absolute inset-x-0 bottom-8 z-10 flex flex-col items-center gap-5 sm:bottom-10">
+        <motion.span
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 1, ease: easePremium, delay: 0.6 }}
+          className="text-sm font-semibold tracking-[0.08em] text-white/70"
+        >
+          Gál-LifeOS
+        </motion.span>
+
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}

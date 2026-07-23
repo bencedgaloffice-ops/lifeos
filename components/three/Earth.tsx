@@ -318,9 +318,11 @@ function Globe({ pointer, hovered }: { pointer: React.MutableRefObject<PointerSt
 
   // Size the globe (halo included) so it always fits fully inside the
   // viewport with breathing room — never crops the poles or the limb,
-  // regardless of aspect ratio or screen size.
-  const maxDiameter = Math.min(viewport.width, viewport.height) * 0.82;
-  const scale = THREE.MathUtils.clamp(maxDiameter / (2 * HALO_RADIUS), 0.9, 2.5);
+  // regardless of aspect ratio or screen size. Kept smaller than a full
+  // hero fill so the black void above/below has room for the brand mark
+  // and the entry button.
+  const maxDiameter = Math.min(viewport.width, viewport.height) * 0.64;
+  const scale = THREE.MathUtils.clamp(maxDiameter / (2 * HALO_RADIUS), 0.7, 2);
 
   return (
     <group ref={floatGroup}>
