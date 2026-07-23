@@ -47,6 +47,7 @@ import {
   jarvisAddJournal,
   jarvisAddKitchen,
   jarvisAddShopping,
+  jarvisAnalyzeVehicle,
   jarvisAsk,
   jarvisCreateGoal,
   jarvisCreateReminder,
@@ -514,6 +515,8 @@ async function runIntent(command: JarvisCommand, locale: string): Promise<string
       // Nothing online → fall back to the grounded LifeOS answer.
       return answer ?? (await jarvisAsk(command.args.query ?? "", loc));
     }
+    case "garage.analyze":
+      return jarvisAnalyzeVehicle(command.args.query ?? "", loc);
     case "read.query":
     default:
       return jarvisAsk(command.args.query ?? "", loc);

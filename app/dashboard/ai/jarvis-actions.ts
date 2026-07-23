@@ -12,6 +12,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { Locale } from "@/lib/i18n/translations";
+import { formatCurrency } from "@/lib/format";
 import { askCompanion } from "./actions";
 
 async function requireUser() {
@@ -102,6 +103,70 @@ export async function jarvisWebAnswer(query: string): Promise<string | null> {
   }
 
   return null;
+}
+
+/**
+ * Level 1 — "Analyze this BMW X5"-style vehicle questions, grounded in the
+ * user's own My Garage data (owned vehicles, the import pipeline, the dream
+ * garage wishlist).
+ *
+ * This is a placeholder heuristic, not a real market-data lookup — there's no
+ * external pricing API wired in yet. It exists so the intent, the voice
+ * phrasing, and the "Market value / Recommended purchase price / Profit
+ * potential" response shape are already correct; swapping in a real
+ * valuation source later only touches this one function.
+ */
+export async function jarvisAnalyzeVehicle(query: string, locale: Locale = "en"): Promise<string> {
+  const { supabase, user } = await requireUser();
+  const clean = query.trim();
+  if (!clean) return locale === "hu" ? "Melyik járművet elemezzem?" : "Which vehicle should I analyze?";
+
+  const { data: profile } = await supabase.from("profiles").select("preferred_currency").eq("id", user.id).maybeSingle();
+  const currency = profile?.preferred_currency || "USD";
+  const fc = (n: number) => formatCurrency(n, currency, { locale });
+
+  const terms = clean.split(/\s+/).filter((t) => t.length > 1);
+  const orFilter = terms.map((t) => `brand.ilike.%${t}%,model.ilike.%${t}%`).join(",");
+
+  const [{ data: deals }, { data: vehicles }, { data: dreams }] = await Promise.all([
+    supabase.from("garage_import_deals").select("*").or(orFilter).limit(1),
+    supabase.from("garage_vehicles").select("*").or(orFilter).limit(1),
+    supabase.from("garage_dream_vehicles").select("*").or(orFilter).limit(1),
+  ]);
+
+  const deal = deals?.[0];
+  if (deal) {
+    const investment = Number(deal.purchase_price) + Number(deal.transport_cost) + Number(deal.registration_cost) + Number(deal.repair_cost);
+    const profit = Number(deal.expected_selling_price) - investment;
+    const roi = investment > 0 ? Math.round((profit / investment) * 100) : 0;
+    if (locale === "hu") {
+      return `${deal.brand} ${deal.model} (import): becsült eladási ár ${fc(Number(deal.expected_selling_price))}, teljes befektetés ${fc(investment)}, várható profit ${fc(profit)} (${roi}% ROI). Jelenlegi fázis: ${deal.stage}.`;
+    }
+    return `${deal.brand} ${deal.model} in your import pipeline — expected selling price ${fc(Number(deal.expected_selling_price))}, total investment ${fc(investment)}, projected profit ${fc(profit)} (${roi}% ROI). Currently at the "${deal.stage}" stage.`;
+  }
+
+  const vehicle = vehicles?.[0];
+  if (vehicle) {
+    const value = vehicle.value !== null ? Number(vehicle.value) : null;
+    const paid = vehicle.purchase_price !== null ? Number(vehicle.purchase_price) : null;
+    const delta = value !== null && paid !== null ? value - paid : null;
+    if (locale === "hu") {
+      return `${vehicle.brand} ${vehicle.model}${vehicle.year ? ` (${vehicle.year})` : ""} a garázsodban: becsült érték ${value !== null ? fc(value) : "nincs megadva"}${delta !== null ? `, ${delta >= 0 ? "+" : ""}${fc(delta)} a vételár óta` : ""}.`;
+    }
+    return `${vehicle.brand} ${vehicle.model}${vehicle.year ? ` (${vehicle.year})` : ""} in My Vehicles — estimated value ${value !== null ? fc(value) : "not set"}${delta !== null ? `, ${delta >= 0 ? "up" : "down"} ${fc(Math.abs(delta))} since purchase` : ""}.`;
+  }
+
+  const dream = dreams?.[0];
+  if (dream) {
+    if (locale === "hu") {
+      return `${dream.brand} ${dream.model} az álomgarázsban: becsült ár ${dream.estimated_price !== null ? fc(Number(dream.estimated_price)) : "nincs megadva"}, prioritás ${dream.priority_rating}/5.`;
+    }
+    return `${dream.brand} ${dream.model} in your Dream Garage — estimated price ${dream.estimated_price !== null ? fc(Number(dream.estimated_price)) : "not set"}, priority ${dream.priority_rating}/5. Add it to the import pipeline once you're ready to chase it.`;
+  }
+
+  return locale === "hu"
+    ? `Nincs "${clean}" a Garázsodban. Ha hozzáadod (Saját járművek, Álomgarázs vagy Import), tudok elemzést adni.`
+    : `I don't see "${clean}" anywhere in My Garage yet — add it under My Vehicles, Dream Garage, or the import pipeline and I can pull real numbers next time.`;
 }
 
 /** Level 2 — add an item to the shopping list. */

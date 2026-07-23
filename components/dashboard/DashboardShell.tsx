@@ -22,6 +22,7 @@ type Props = {
  * ambient background can wash into that module's identity color. */
 function activeModuleKey(pathname: string): ModuleKey {
   if (pathname === "/dashboard") return "overview";
+  if (pathname.startsWith("/dashboard/business/garage")) return "garage";
   if (pathname.startsWith("/dashboard/business")) return "business";
   const match = pathname.match(/^\/dashboard\/([a-z]+)/);
   const key = match?.[1];

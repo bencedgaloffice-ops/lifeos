@@ -19,6 +19,7 @@ import {
   Briefcase,
   Building2,
   Map as MapIcon,
+  Car,
   type LucideIcon,
 } from "lucide-react";
 
@@ -54,6 +55,7 @@ export const lifeNav: NavItem[] = [
 export const businessNav: NavItem[] = [
   { key: "businessOverview", href: "/dashboard/business", icon: Briefcase },
   { key: "organizations", href: "/dashboard/business/organizations", icon: Building2 },
+  { key: "garage", href: "/dashboard/business/garage", icon: Car },
 ];
 
 /** Utility items shown regardless of the active section. */

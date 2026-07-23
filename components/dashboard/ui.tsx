@@ -119,10 +119,12 @@ export function Numeral({
   children,
   className,
   size = "inherit",
+  style,
 }: {
   children: React.ReactNode;
   className?: string;
   size?: "inherit" | "sm" | "lg";
+  style?: React.CSSProperties;
 }) {
   return (
     <span
@@ -132,6 +134,7 @@ export function Numeral({
         size === "lg" && "text-2xl sm:text-[1.75rem]",
         className,
       )}
+      style={style}
     >
       {children}
     </span>

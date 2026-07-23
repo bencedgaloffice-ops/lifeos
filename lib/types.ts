@@ -486,6 +486,7 @@ export type Document = {
   expires_at: string | null;
   reminder_days_before: number | null;
   organization_id: string | null;
+  garage_vehicle_id: string | null;
   tags: string[];
   uploaded_at: string;
 };
@@ -581,4 +582,69 @@ export type WeightLogEntry = {
   logged_date: string;
   weight_kg: number;
   created_at: string;
+};
+
+export type GarageVehicle = {
+  id: string;
+  user_id: string;
+  brand: string;
+  model: string;
+  year: number | null;
+  mileage: number | null;
+  value: number | null;
+  purchase_price: number | null;
+  image_url: string | null;
+  notes: string | null;
+  links: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type GarageServiceRecord = {
+  id: string;
+  user_id: string;
+  vehicle_id: string;
+  service_date: string;
+  description: string;
+  cost: number | null;
+  mileage_at_service: number | null;
+  created_at: string;
+};
+
+export type GarageDreamVehicle = {
+  id: string;
+  user_id: string;
+  brand: string;
+  model: string;
+  year: number | null;
+  image_url: string | null;
+  estimated_price: number | null;
+  priority_rating: number;
+  purchase_goal: string | null;
+  target_date: string | null;
+  notes: string | null;
+  created_at: string;
+};
+
+export type GarageDealStage = "found" | "inspection" | "purchase" | "transport" | "registration" | "ready_for_sale" | "sold";
+
+export type GarageImportDeal = {
+  id: string;
+  user_id: string;
+  organization_id: string | null;
+  brand: string;
+  model: string;
+  year: number | null;
+  image_url: string | null;
+  stage: GarageDealStage;
+  purchase_price: number;
+  transport_cost: number;
+  registration_cost: number;
+  repair_cost: number;
+  expected_selling_price: number;
+  actual_selling_price: number | null;
+  notes: string | null;
+  links: string[];
+  created_at: string;
+  updated_at: string;
 };

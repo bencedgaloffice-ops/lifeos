@@ -27,7 +27,8 @@ export type ModuleKey =
   | "ai"
   | "jarvis"
   | "settings"
-  | "map";
+  | "map"
+  | "garage";
 
 export type ModuleTheme = {
   /** The module's signature color. */
@@ -57,6 +58,7 @@ export const MODULE_THEME: Record<ModuleKey, ModuleTheme> = {
   jarvis: { color: "#ff2d3f", soft: "#ff8b93", identity: "AI Core" },
   settings: { color: "#9CA3AF", soft: "#D1D5DB", identity: "Settings" },
   map: { color: "#67E8F9", soft: "#A5F3FC", identity: "Life Map" },
+  garage: { color: "#9BB0C4", soft: "#D6E2ED", identity: "My Garage" },
 };
 
 export function moduleTheme(key: ModuleKey | undefined | null): ModuleTheme | null {
