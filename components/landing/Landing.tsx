@@ -4,6 +4,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { EarthCanvas } from "@/components/three/EarthCanvas";
+import { FinancialParticles } from "@/components/landing/FinancialParticles";
 import { Logo } from "@/components/ui/Logo";
 import { LanguageSwitch } from "@/components/ui/LanguageSwitch";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
@@ -22,6 +23,9 @@ export function Landing() {
       <div className="absolute inset-0">
         <EarthCanvas />
       </div>
+
+      {/* Elegant financial ambience, confined to the far edges */}
+      <FinancialParticles />
 
       {/* Cinematic vignette to seat the globe in deep space */}
       <div
