@@ -148,6 +148,13 @@ const en = {
       noRefreshToken: "Google didn't grant a refresh token — try disconnecting from your Google Account's app permissions, then connect again.",
       disabledHint: "Sync paused — Google access may have been revoked. Reconnect to resume.",
     },
+    jarvisAi: {
+      title: "Jarvis intelligence",
+      hint: "A real Claude model reasoning over your data, not just keyword matching.",
+      active: "Active — open-ended questions get real reasoning.",
+      inactive: "Not active — Jarvis is answering from rule-based matching only.",
+      setupHint: "Add an ANTHROPIC_API_KEY environment variable in your Vercel project to turn this on.",
+    },
   },
   overview: {
     heroTitle1: "Your life, ",
@@ -1236,6 +1243,13 @@ const hu: typeof en = {
       connectError: "Hiba történt a Google Naptár csatlakoztatásakor.",
       noRefreshToken: "A Google nem adott frissítési tokent — próbáld leválasztani a Google-fiókod alkalmazás-engedélyei közül, majd csatlakozz újra.",
       disabledHint: "A szinkronizálás szüneteltetve — lehet, hogy a Google hozzáférés visszavonásra került. Csatlakozz újra a folytatáshoz.",
+    },
+    jarvisAi: {
+      title: "Jarvis intelligencia",
+      hint: "Egy valódi Claude modell gondolkodik az adataidon, nem csak kulcsszó-egyezés.",
+      active: "Aktív — a nyílt végű kérdésekre valódi következtetést kapsz.",
+      inactive: "Nem aktív — Jarvis csak szabályalapú egyezés alapján válaszol.",
+      setupHint: "Adj hozzá egy ANTHROPIC_API_KEY környezeti változót a Vercel projektedhez ennek bekapcsolásához.",
     },
   },
   overview: {

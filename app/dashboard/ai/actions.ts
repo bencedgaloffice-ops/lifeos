@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { formatCurrency } from "@/lib/format";
 import type { Locale } from "@/lib/i18n/translations";
 import { expandOccurrences } from "@/lib/calendar/recurrence";
+import { isAnthropicConfigured, askClaude } from "@/lib/jarvis/llm";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -322,6 +323,39 @@ export async function askCompanion(question: string, locale: Locale = "en"): Pro
 
   if (/(who am i|about me|profile|myself|ki vagyok|magamról|profilom)/.test(q)) {
     return L.whoami(profile?.display_name || name);
+  }
+
+  // Nothing in the fast keyword cascade above matched — this is genuinely
+  // open-ended. With a real model configured, answer it properly instead of
+  // falling back to a canned summary; without one, the canned summary below
+  // is exactly what always ran here.
+  if (isAnthropicConfigured()) {
+    const docs = documents ?? [];
+    const resps = responsibilities ?? [];
+    const nowMs = Date.now();
+    const expiringDocs = docs.filter((d) => d.expires_at && new Date(d.expires_at).getTime() - nowMs < 30 * 86_400_000).length;
+    const overdueResps = resps.filter((r) => !r.completed && r.due_date && new Date(r.due_date).getTime() < nowMs).length;
+    const todaysGaps = freeGaps(now).slice(0, 3).map((g) => `${timeFmt(g.start)}–${timeFmt(g.end)}`);
+
+    const context = {
+      name,
+      currency,
+      finance: { monthIncome: income, monthSpending: spending, savingsRate, currentSavings: profile?.current_savings ?? null, financialGoal: profile?.financial_goal ?? null },
+      goals: activeGoals.map((g) => ({ title: g.title, progress: g.progress_percent, targetDate: g.target_date })),
+      projects: (projects ?? []).filter((p) => p.status !== "completed").map((p) => ({ name: p.name, progress: p.progress_percent, deadline: p.deadline })),
+      protection: { expiringDocumentsSoon: expiringDocs, overdueResponsibilities: overdueResps },
+      legacy: { dreams: (dreams ?? []).length, milestones: (milestones ?? []).length },
+      kitchenItemCount: (kitchenItems ?? []).length,
+      todaysOpenSlots: todaysGaps,
+    };
+
+    const system =
+      locale === "hu"
+        ? `Te Jarvis vagy, a LifeOS személyes AI asszisztense. Válaszolj természetesen, tömören (2-4 mondat, hacsak nem kérnek részletesebbet) és segítőkészen, KIZÁRÓLAG az alábbi valós adatok alapján a felhasználóról. Ha nincs elég adatod egy kérdés megválaszolásához, mondd ki egyenesen — ne találj ki semmit. Ne ismételd szó szerint a nyers JSON-t, fogalmazd át emberi nyelvre.\n\nA felhasználó adatai:\n${JSON.stringify(context)}`
+        : `You are Jarvis, the personal AI companion inside LifeOS. Answer naturally, concisely (2-4 sentences unless asked for more detail), and helpfully, grounded ONLY in the real data about the user below. If you don't have enough information to answer something, say so plainly — never invent data. Don't repeat the raw JSON verbatim; phrase it as natural language.\n\nThe user's real data:\n${JSON.stringify(context)}`;
+
+    const answer = await askClaude(system, question);
+    if (answer) return answer;
   }
 
   const bits: string[] = [];
