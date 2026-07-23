@@ -1,19 +1,25 @@
 /**
  * Road-following waypoint polylines for the LifeOS vehicle simulation.
  *
- * IMPORTANT — these are hand-authored from real highway geography (the M0
- * ring, M7 towards Balaton/Somogy, M1 towards Győr/Hegyeshalom), not a live
- * pull from OpenStreetMap/OSRM: this sandbox's egress policy blocks both
- * router.project-osrm.org and overpass-api.de (confirmed 403 at the proxy),
- * so no live routing API was reachable. The bend points below follow the
- * real corridors closely enough that the vehicle turns the way the actual
- * roads do, but treat them as a stylized approximation, not surveyed data.
- * Swapping in a real routing/tracking source later only means replacing the
- * `path` arrays here — everything downstream (lib/vehicle-sim.ts, the 3D
- * scene) just consumes points, it doesn't care where they came from.
+ * IMPORTANT — hand-authored from real highway geography, not a live pull
+ * from OpenStreetMap/OSRM: this sandbox's egress policy blocks every
+ * routing/OSM host reachable to this agent (router.project-osrm.org,
+ * router.osrm.org, several Overpass mirrors, api.openstreetmap.org — all
+ * confirmed 403 at the proxy). The M0/M1/M7 legs below share their bend
+ * points with the labeled roads drawn in lib/hungary-roads.ts, so the
+ * vehicle visibly rides the same line rendered on the map, not a path that
+ * merely resembles it. Treat the geometry as a stylized approximation, not
+ * surveyed data. Swapping in a real routing/tracking source later only
+ * means replacing the `path` arrays here — everything downstream
+ * (lib/vehicle-sim.ts, the 3D scene) just consumes points.
  */
 
+import { ROADS } from "./hungary-roads";
+
 export type LonLat = [number, number];
+
+const M1 = ROADS.find((r) => r.key === "M1")!.path;
+const M7 = ROADS.find((r) => r.key === "M7")!.path;
 
 export const ROUTES: Record<string, LonLat[]> = {
   // Diósd — just southwest of Budapest — to the ICSB work site, via the M0 ring's western arc into the city.
@@ -31,30 +37,25 @@ export const ROUTES: Record<string, LonLat[]> = {
     [18.985, 47.448],
     [19.0402, 47.4979],
   ],
-  // Diósd south along the M7 towards the Balaton shore, then down to Somogy/Kaposvár.
+  // Diósd to the M0's south junction, then the M7 exactly as drawn — through
+  // Székesfehérvár, along the Balaton shore, down to Somogy/Kaposvár.
   "diosd-somogy": [
     [18.868, 47.394],
-    [18.6, 47.2],
-    [18.3, 47.0],
-    [18.0525, 46.9057],
-    [17.9, 46.65],
+    [18.9, 47.35],
+    ...M7,
     [17.797, 46.359],
   ],
-  // Same M7 corridor, stopping at the Balaton shore (Siófok).
+  // Same M0→M7 corridor, stopping at the Balaton shore (Siófok) instead of continuing to Somogy.
   "diosd-balaton": [
     [18.868, 47.394],
-    [18.6, 47.2],
-    [18.3, 47.0],
-    [18.0525, 46.9057],
+    [18.9, 47.35],
+    ...M7.slice(0, M7.findIndex(([lon, lat]) => lon === 18.0525 && lat === 46.9057) + 1),
   ],
-  // Diósd west via the M0 ring, then the M1 through Tatabánya and Győr to the Hegyeshalom crossing — the route toward Germany.
+  // Diósd to the M0's west junction, then the M1 exactly as drawn — through
+  // Tatabánya and Győr to the Hegyeshalom crossing — the route toward Germany.
   "diosd-germany": [
     [18.868, 47.394],
-    [18.75, 47.45],
-    [18.4, 47.58],
-    [17.87, 47.66],
-    [17.65, 47.687],
-    [17.13, 47.914],
+    ...M1,
   ],
 };
 
