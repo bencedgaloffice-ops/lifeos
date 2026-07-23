@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { ArrowRight } from "lucide-react";
 import { EarthCanvas } from "@/components/three/EarthCanvas";
 import { FinancialParticles } from "@/components/landing/FinancialParticles";
+import { JarvisRoot } from "@/components/jarvis/JarvisRoot";
 import { LanguageSwitch } from "@/components/ui/LanguageSwitch";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { easePremium } from "@/lib/motion";
@@ -88,6 +89,9 @@ export function Landing() {
           </Link>
         </motion.div>
       </div>
+
+      {/* Voice access — a compact Jarvis orb in the lower-right corner */}
+      <JarvisRoot variant="landing" />
     </main>
   );
 }

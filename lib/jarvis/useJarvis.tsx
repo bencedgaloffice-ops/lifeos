@@ -1,0 +1,475 @@
+"use client";
+
+/**
+ * JarvisProvider — the state machine that ties every piece together.
+ *
+ * It owns the companion's live status, the permission session, the voice
+ * engines and the running transcript, and exposes a small imperative API the
+ * UI (orb, widget, command palette, settings) drives. Voice is optional: with
+ * the microphone denied or unsupported, everything still works through typed
+ * input, so the feature degrades gracefully.
+ */
+
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { useRouter } from "next/navigation";
+import { useLocale } from "@/lib/i18n/LocaleProvider";
+import { SpeechEngine } from "./speech";
+import { RecognitionEngine, recognitionSupported } from "./recognition";
+import { parseCommand } from "./commands";
+import {
+  baseSession,
+  grant,
+  reconcile,
+  satisfies,
+  touch,
+  type PermissionSession,
+} from "./permissions";
+import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "./settings";
+import type {
+  JarvisCommand,
+  JarvisNotification,
+  JarvisNotificationTone,
+  JarvisSettings,
+  JarvisStatus,
+  PermissionLevel,
+  TranscriptLine,
+} from "./types";
+import {
+  jarvisAddJournal,
+  jarvisAddKitchen,
+  jarvisAddShopping,
+  jarvisAsk,
+  jarvisCreateGoal,
+  jarvisCreateReminder,
+  jarvisRemember,
+  jarvisRemoveShopping,
+} from "@/app/dashboard/ai/jarvis-actions";
+
+type JarvisContextValue = {
+  status: JarvisStatus;
+  level: PermissionLevel;
+  settings: JarvisSettings;
+  voiceSupported: boolean;
+  listening: boolean;
+  transcript: TranscriptLine[];
+  interim: string;
+  notifications: JarvisNotification[];
+  paletteOpen: boolean;
+  settingsOpen: boolean;
+  pendingConfirm: JarvisCommand | null;
+
+  activate: () => void; // manual mic toggle
+  runText: (text: string) => void; // typed / palette input
+  confirmPending: (yes: boolean) => void;
+  setPaletteOpen: (open: boolean) => void;
+  setSettingsOpen: (open: boolean) => void;
+  updateSettings: (patch: Partial<JarvisSettings>) => void;
+  elevateToOperator: () => void;
+  setDeveloperUnlocked: (on: boolean) => void;
+  lockDown: () => void;
+  notify: (tone: JarvisNotificationTone, title: string, body?: string) => void;
+  dismissNotification: (id: string) => void;
+  speak: (text: string) => void;
+};
+
+const JarvisContext = createContext<JarvisContextValue | null>(null);
+
+let idCounter = 0;
+const uid = () => `j${Date.now().toString(36)}${(idCounter++).toString(36)}`;
+
+export function JarvisProvider({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const { locale } = useLocale();
+
+  const [settings, setSettings] = useState<JarvisSettings>(DEFAULT_SETTINGS);
+  const [status, setStatus] = useState<JarvisStatus>("idle");
+  const [session, setSession] = useState<PermissionSession>(baseSession());
+  const [listening, setListening] = useState(false);
+  const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
+  const [interim, setInterim] = useState("");
+  const [notifications, setNotifications] = useState<JarvisNotification[]>([]);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [pendingConfirm, setPendingConfirm] = useState<JarvisCommand | null>(null);
+
+  // Refs mirror state so engine callbacks (created once) read current values.
+  const speechRef = useRef<SpeechEngine | null>(null);
+  const recRef = useRef<RecognitionEngine | null>(null);
+  const settingsRef = useRef(settings);
+  const sessionRef = useRef(session);
+  const localeRef = useRef(locale);
+  const awaitingOperatorFor = useRef<JarvisCommand | null>(null);
+  settingsRef.current = settings;
+  sessionRef.current = session;
+  localeRef.current = locale;
+
+  /* ---- notifications ---- */
+  const notify = useCallback((tone: JarvisNotificationTone, title: string, body?: string) => {
+    const n: JarvisNotification = { id: uid(), tone, title, body, createdAt: Date.now() };
+    setNotifications((prev) => [...prev, n]);
+    // Auto-expire non-critical toasts.
+    const ttl = tone === "denied" ? 5200 : 4200;
+    setTimeout(() => setNotifications((prev) => prev.filter((x) => x.id !== n.id)), ttl);
+  }, []);
+  const dismissNotification = useCallback((id: string) => {
+    setNotifications((prev) => prev.filter((x) => x.id !== id));
+  }, []);
+
+  const pushLine = useCallback((role: TranscriptLine["role"], text: string) => {
+    setTranscript((prev) => [...prev.slice(-30), { id: uid(), role, text }]);
+  }, []);
+
+  /* ---- speech ---- */
+  const speak = useCallback((text: string) => {
+    if (!text) return;
+    pushLine("jarvis", text);
+    const engine = speechRef.current;
+    if (!engine || !settingsRef.current.soundEffects) return;
+    setStatus("speaking");
+    engine
+      .speak(text, settingsRef.current, {})
+      .then(() => setStatus((s) => (s === "speaking" ? "idle" : s)));
+  }, [pushLine]);
+
+  /* ---- command execution ---- */
+  const execute = useCallback(
+    async (command: JarvisCommand) => {
+      const sess = reconcile(sessionRef.current);
+
+      // Trust gate ---------------------------------------------------------
+      if (!satisfies(sess, command.level)) {
+        if (command.level === 2) {
+          awaitingOperatorFor.current = command;
+          notify("warning", "Operator access required", "Say or type “I allow it”.");
+          speak("That needs Operator access. Say, I allow it, to continue.");
+          if (settingsRef.current.alwaysListening || listening) recRef.current?.startCommand();
+          return;
+        }
+        if (command.level === 3) {
+          setStatus("denied");
+          notify("denied", "Permission Denied", "Developer mode is required for that.");
+          speak("Developer access is required. Enable Developer mode in AI settings.");
+          setTimeout(() => setStatus("idle"), 1600);
+          return;
+        }
+      }
+
+      switch (command.intent) {
+        case "system.sleep":
+          recRef.current?.stop();
+          setStatus("idle");
+          speak("Standing by.");
+          return;
+        case "system.palette":
+          setPaletteOpen(true);
+          setStatus("idle");
+          return;
+        case "system.elevate": {
+          const next = grant(2);
+          setSession(next);
+          sessionRef.current = next;
+          notify("granted", "Permission Granted", "Operator access unlocked.");
+          const pending = awaitingOperatorFor.current;
+          awaitingOperatorFor.current = null;
+          if (pending) {
+            await execute(pending);
+          } else {
+            speak("Operator access granted.");
+          }
+          return;
+        }
+        case "system.developer":
+          if (settingsRef.current.developerUnlocked) {
+            const next = grant(3);
+            setSession(next);
+            sessionRef.current = next;
+            notify("granted", "Permission Granted", "Developer access active.");
+            speak("Developer mode active.");
+          } else {
+            notify("denied", "Permission Denied", "Enable Developer mode in AI settings first.");
+            speak("Developer mode must be enabled in settings first.");
+          }
+          return;
+        case "system.backup":
+          notify("success", "Backup started", "Your LifeOS snapshot is being prepared.");
+          speak("I've started a backup of your LifeOS.");
+          setStatus("idle");
+          return;
+        case "navigate":
+          router.push(command.args.route);
+          notify("info", command.label);
+          speak(`Opening ${command.args.label}.`);
+          return;
+        case "developer.generic":
+          notify("info", "Developer request noted", command.args.request);
+          speak("Noted. I've logged that developer request.");
+          setStatus("idle");
+          return;
+      }
+
+      // Confirmations for destructive edits -------------------------------
+      if (command.confirm && pendingConfirm?.intent !== command.intent) {
+        setPendingConfirm(command);
+        notify("warning", "Confirm action", command.label);
+        speak(`${command.label}. Shall I proceed?`);
+        return;
+      }
+      setPendingConfirm(null);
+
+      // Reads + writes -----------------------------------------------------
+      setStatus("thinking");
+      try {
+        const reply = await runIntent(command, localeRef.current);
+        touchSession();
+        speak(reply);
+      } catch {
+        speak("Something went wrong running that.");
+        setStatus("idle");
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [notify, speak, router, listening, pendingConfirm],
+  );
+
+  const touchSession = useCallback(() => {
+    setSession((s) => {
+      const next = touch(s);
+      sessionRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const runText = useCallback(
+    (text: string) => {
+      const clean = text.trim();
+      if (!clean) return;
+      pushLine("user", clean);
+      setInterim("");
+      execute(parseCommand(clean));
+    },
+    [execute, pushLine],
+  );
+
+  const confirmPending = useCallback(
+    (yes: boolean) => {
+      const cmd = pendingConfirm;
+      setPendingConfirm(null);
+      if (!cmd) return;
+      if (yes) {
+        execute({ ...cmd, confirm: false });
+      } else {
+        speak("Cancelled.");
+        setStatus("idle");
+      }
+    },
+    [pendingConfirm, execute, speak],
+  );
+
+  /* ---- engine wiring (client only) ---- */
+  useEffect(() => {
+    setSettings(loadSettings());
+    speechRef.current = new SpeechEngine();
+    // Warm the voice list (some browsers populate asynchronously).
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.getVoices();
+      window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+    }
+
+    const rec = new RecognitionEngine({
+      onWake: (trailing) => {
+        setStatus("waking");
+        notify("info", "Jarvis online", "Listening…");
+        setTimeout(() => {
+          if (trailing) {
+            runText(trailing);
+          } else {
+            setStatus("listening");
+            recRef.current?.startCommand();
+          }
+        }, 550);
+      },
+      onCommand: (text) => {
+        if (text) {
+          runText(text);
+        } else {
+          setStatus("idle");
+        }
+        // Resume passive listening if enabled.
+        if (settingsRef.current.alwaysListening) {
+          setTimeout(() => recRef.current?.startWake(), 400);
+        }
+      },
+      onInterim: (t) => {
+        setStatus("listening");
+        setInterim(t);
+      },
+      onError: (err) => {
+        if (err === "not-allowed" || err === "service-not-allowed") {
+          notify("warning", "Microphone blocked", "Enable mic access to talk to Jarvis.");
+        }
+      },
+      onListeningChange: setListening,
+    });
+    recRef.current = rec;
+    return () => {
+      rec.stop();
+      speechRef.current?.cancel();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Keep the recognition engine's config in sync with settings.
+  useEffect(() => {
+    const rec = recRef.current;
+    if (!rec) return;
+    rec.setWakeWords(settings.wakeWords);
+    rec.setLanguage(settings.language);
+    if (settings.enabled && settings.alwaysListening) rec.startWake();
+    else if (!settings.alwaysListening) {
+      // leave any active command capture alone; just stop passive wake loop
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.wakeWords, settings.language, settings.alwaysListening, settings.enabled]);
+
+  // Drop elevated sessions once they expire.
+  useEffect(() => {
+    if (session.level === 1) return;
+    const t = setInterval(() => {
+      setSession((s) => {
+        const next = reconcile(s);
+        if (next.level !== s.level) notify("info", "Session locked", "Back to Assistant access.");
+        return next;
+      });
+    }, 5000);
+    return () => clearInterval(t);
+  }, [session.level, notify]);
+
+  /* ---- public actions ---- */
+  const activate = useCallback(() => {
+    const rec = recRef.current;
+    if (!rec || !recognitionSupported()) {
+      notify("warning", "Voice unavailable", "This browser can't capture speech — type instead.");
+      return;
+    }
+    if (listening) {
+      rec.stop();
+      setStatus("idle");
+    } else {
+      setStatus("listening");
+      rec.startCommand();
+    }
+  }, [listening, notify]);
+
+  const updateSettings = useCallback((patch: Partial<JarvisSettings>) => {
+    setSettings((prev) => {
+      const next = { ...prev, ...patch };
+      saveSettings(next);
+      return next;
+    });
+  }, []);
+
+  const elevateToOperator = useCallback(() => {
+    const next = grant(2);
+    setSession(next);
+    sessionRef.current = next;
+    notify("granted", "Permission Granted", "Operator access unlocked.");
+  }, [notify]);
+
+  const setDeveloperUnlocked = useCallback(
+    (on: boolean) => {
+      updateSettings({ developerUnlocked: on });
+      if (on) {
+        const next = grant(3);
+        setSession(next);
+        sessionRef.current = next;
+        notify("granted", "Permission Granted", "Developer access active.");
+      } else {
+        setSession(baseSession());
+        sessionRef.current = baseSession();
+      }
+    },
+    [updateSettings, notify],
+  );
+
+  const lockDown = useCallback(() => {
+    setSession(baseSession());
+    sessionRef.current = baseSession();
+    notify("info", "Locked", "Session returned to Assistant access.");
+  }, [notify]);
+
+  const value = useMemo<JarvisContextValue>(
+    () => ({
+      status,
+      level: session.level,
+      settings,
+      voiceSupported: recognitionSupported(),
+      listening,
+      transcript,
+      interim,
+      notifications,
+      paletteOpen,
+      settingsOpen,
+      pendingConfirm,
+      activate,
+      runText,
+      confirmPending,
+      setPaletteOpen,
+      setSettingsOpen,
+      updateSettings,
+      elevateToOperator,
+      setDeveloperUnlocked,
+      lockDown,
+      notify,
+      dismissNotification,
+      speak,
+    }),
+    [
+      status, session.level, settings, listening, transcript, interim, notifications,
+      paletteOpen, settingsOpen, pendingConfirm, activate, runText, confirmPending, updateSettings,
+      elevateToOperator, setDeveloperUnlocked, lockDown, notify, dismissNotification, speak,
+    ],
+  );
+
+  return <JarvisContext.Provider value={value}>{children}</JarvisContext.Provider>;
+}
+
+export function useJarvis() {
+  const ctx = useContext(JarvisContext);
+  if (!ctx) throw new Error("useJarvis must be used within a JarvisProvider");
+  return ctx;
+}
+
+/* ------------------------------------------------------------------ */
+/*  Intent → server action dispatch                                    */
+/* ------------------------------------------------------------------ */
+
+async function runIntent(command: JarvisCommand, locale: string): Promise<string> {
+  const loc = (locale === "hu" ? "hu" : "en") as "en" | "hu";
+  switch (command.intent) {
+    case "shopping.add":
+      return (await jarvisAddShopping(command.args.name)).message;
+    case "shopping.remove":
+      return (await jarvisRemoveShopping(command.args.name)).message;
+    case "kitchen.add":
+      return (await jarvisAddKitchen(command.args.name)).message;
+    case "goal.create":
+      return (await jarvisCreateGoal(command.args.title)).message;
+    case "reminder.create":
+      return (await jarvisCreateReminder(command.args.title)).message;
+    case "journal.add":
+      return (await jarvisAddJournal(command.args.text)).message;
+    case "memory.add":
+      return (await jarvisRemember(command.args.text)).message;
+    case "read.query":
+    default:
+      return jarvisAsk(command.args.query ?? "", loc);
+  }
+}

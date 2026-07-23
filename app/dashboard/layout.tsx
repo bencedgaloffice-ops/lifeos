@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
+import { JarvisRoot } from "@/components/jarvis/JarvisRoot";
 
 export const dynamic = "force-dynamic";
 
@@ -35,8 +36,12 @@ export default async function DashboardLayout({
   const name = profile?.display_name || metaName;
 
   return (
-    <DashboardShell name={name} email={user.email ?? ""}>
-      {children}
-    </DashboardShell>
+    <>
+      <DashboardShell name={name} email={user.email ?? ""}>
+        {children}
+      </DashboardShell>
+      {/* Persistent AI companion — available on every dashboard page. */}
+      <JarvisRoot variant="dashboard" />
+    </>
   );
 }
