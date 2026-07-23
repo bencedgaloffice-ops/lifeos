@@ -10,7 +10,7 @@ import {
   type LifeSnapshot,
 } from "@/lib/gamification";
 
-export const metadata = { title: "Command Center" };
+export const metadata = { title: "Mission Control" };
 
 export default async function DashboardHome() {
   const supabase = await createClient();

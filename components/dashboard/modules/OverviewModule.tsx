@@ -9,10 +9,11 @@ import {
   Image as ImageIcon, HeartHandshake, Repeat,
   type LucideIcon,
 } from "lucide-react";
-import { Panel, Progress, Pill, ScoreRing } from "@/components/dashboard/ui";
+import { Panel, Progress, Pill, ScoreRing, Numeral } from "@/components/dashboard/ui";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import type { LifeProgress, Mission } from "@/lib/gamification/types";
+import { MODULE_THEME, type ModuleKey } from "@/lib/module-theme";
 import { cn } from "@/lib/utils";
 
 type AchievementView = {
@@ -132,24 +133,24 @@ export function OverviewModule({ data }: { data: OverviewData }) {
       <motion.section variants={fade} initial="hidden" animate="visible" custom={3}>
         <SectionHeader icon={Zap} title={t("command.areas")} />
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <AreaTile icon={CalendarDays} href="/dashboard/calendar" label={t("nav.calendar.label")}
+          <AreaTile icon={CalendarDays} href="/dashboard/calendar" label={t("nav.calendar.label")} moduleKey="calendar"
             stat={data.todayCalendar.count > 0 ? t("command.eventsToday", { n: data.todayCalendar.count }) : t("command.clearToday")} />
-          <AreaTile icon={Wallet} href="/dashboard/finance" label={t("nav.finance.label")} stat={fc(data.netWorth)} />
-          <AreaTile icon={Target} href="/dashboard/goals" label={t("nav.goals.label")}
+          <AreaTile icon={Wallet} href="/dashboard/finance" label={t("nav.finance.label")} moduleKey="finance" statNode={<Numeral>{fc(data.netWorth)}</Numeral>} />
+          <AreaTile icon={Target} href="/dashboard/goals" label={t("nav.goals.label")} moduleKey="goals"
             stat={data.goalsAvg === null ? t("command.noneYet") : `${data.goalsAvg}% · ${data.activeGoals}`} />
-          <AreaTile icon={FolderKanban} href="/dashboard/projects" label={t("nav.projects.label")}
+          <AreaTile icon={FolderKanban} href="/dashboard/projects" label={t("nav.projects.label")} moduleKey="projects"
             stat={t("command.inMotion", { n: data.activeProjects })} />
-          <AreaTile icon={Salad} href="/dashboard/nutrition" label={t("nav.nutrition.label")}
+          <AreaTile icon={Salad} href="/dashboard/nutrition" label={t("nav.nutrition.label")} moduleKey="nutrition"
             stat={t("command.daysLogged", { n: data.tiles.consistencyDays })} />
-          <AreaTile icon={ChefHat} href="/dashboard/kitchen" label={t("nav.kitchen.label")}
+          <AreaTile icon={ChefHat} href="/dashboard/kitchen" label={t("nav.kitchen.label")} moduleKey="kitchen"
             stat={t("command.toBuy", { n: data.tiles.shoppingItems })} />
-          <AreaTile icon={Landmark} href="/dashboard/legacy" label={t("nav.legacy.label")}
+          <AreaTile icon={Landmark} href="/dashboard/legacy" label={t("nav.legacy.label")} moduleKey="legacy"
             stat={t("command.dreamsMilestones", { d: data.tiles.dreams, m: data.tiles.milestones })} />
-          <AreaTile icon={ImageIcon} href="/dashboard/vision" label={t("nav.vision.label")} />
-          <AreaTile icon={HeartHandshake} href="/dashboard/relationship" label={t("nav.relationship.label")} />
-          <AreaTile icon={Repeat} href="/dashboard/habits" label={t("nav.habits.label")} />
-          <AreaTile icon={Briefcase} href="/dashboard/business" label={t("nav.businessOverview.label")} />
-          <AreaTile icon={Bot} href="/dashboard/jarvis" label={t("nav.jarvis.label")} stat={t("command.systemOnline")} accent="jarvis" />
+          <AreaTile icon={ImageIcon} href="/dashboard/vision" label={t("nav.vision.label")} moduleKey="vision" />
+          <AreaTile icon={HeartHandshake} href="/dashboard/relationship" label={t("nav.relationship.label")} moduleKey="relationship" />
+          <AreaTile icon={Repeat} href="/dashboard/habits" label={t("nav.habits.label")} moduleKey="habits" />
+          <AreaTile icon={Briefcase} href="/dashboard/business" label={t("nav.businessOverview.label")} moduleKey="business" />
+          <AreaTile icon={Bot} href="/dashboard/jarvis" label={t("nav.jarvis.label")} moduleKey="jarvis" stat={t("command.systemOnline")} />
         </div>
       </motion.section>
 
@@ -236,7 +237,7 @@ function LifeLevelHero({
         {/* Level identity */}
         <div className="flex items-center gap-5">
           <div className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-2xl border border-gold/25 bg-gold/5 shadow-glow-gold">
-            <span className="font-display text-3xl font-bold gradient-text-gold">{progress.level}</span>
+            <Numeral className="text-3xl font-bold gradient-text-gold">{progress.level}</Numeral>
           </div>
           <div>
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-gold-soft/80">{t("command.level")}</p>
@@ -250,7 +251,7 @@ function LifeLevelHero({
         {/* Net worth stat */}
         <div className="lg:text-right">
           <p className="text-xs uppercase tracking-wider text-white/40">{netWorthLabel}</p>
-          <p className="font-display text-2xl font-semibold tracking-tight text-white sm:text-3xl">{netWorth}</p>
+          <Numeral className="block text-2xl font-semibold tracking-tight text-white sm:text-3xl">{netWorth}</Numeral>
         </div>
       </div>
 
@@ -258,7 +259,7 @@ function LifeLevelHero({
       <div className="relative mt-6">
         <div className="mb-1.5 flex justify-between text-xs text-white/45">
           <span>{t("command.progress")}</span>
-          <span className="tabular-nums text-gold-soft">{progress.progressPct}%</span>
+          <Numeral className="text-gold-soft">{progress.progressPct}%</Numeral>
         </div>
         <div className="h-2.5 w-full overflow-hidden rounded-full bg-white/8">
           <motion.div
@@ -278,7 +279,7 @@ function LifeLevelHero({
             <div key={c.label}>
               <div className="flex items-center justify-between text-xs">
                 <span className="text-white/55">{t(`command.contrib.${c.label.toLowerCase()}`)}</span>
-                <span className="tabular-nums text-white/40">{c.xp}</span>
+                <Numeral className="text-white/40">{c.xp}</Numeral>
               </div>
               <div className="mt-1 h-1 w-full overflow-hidden rounded-full bg-white/6">
                 <div className="h-full rounded-full bg-gold/60" style={{ width: `${(c.xp / maxContribution) * 100}%` }} />
@@ -337,26 +338,23 @@ function MissionCard({ mission, nextLabel }: { mission: Mission; nextLabel: stri
 }
 
 function AreaTile({
-  icon: Icon, href, label, stat = "", accent = "accent",
+  icon: Icon, href, label, stat = "", statNode, moduleKey,
 }: {
-  icon: LucideIcon; href: string; label: string; stat?: string; accent?: "accent" | "jarvis";
+  icon: LucideIcon; href: string; label: string; stat?: string; statNode?: React.ReactNode; moduleKey: ModuleKey;
 }) {
-  const isJarvis = accent === "jarvis";
+  const theme = MODULE_THEME[moduleKey];
   return (
     <Link href={href}>
       <motion.div
         whileHover={{ y: -4 }}
-        className={cn(
-          "group relative h-full overflow-hidden rounded-2xl border p-4 transition-colors",
-          isJarvis ? "border-jarvis/20 hover:border-jarvis/40" : "border-hairline hover:border-accent/30",
-        )}
-        style={{ background: "rgba(255,255,255,0.02)" }}
+        className="group relative h-full overflow-hidden rounded-2xl border p-4 transition-colors"
+        style={{ background: "rgba(255,255,255,0.02)", borderColor: `${theme.color}26` }}
       >
-        <div className={cn("mb-3 flex h-9 w-9 items-center justify-center rounded-xl", isJarvis ? "bg-jarvis/10 text-jarvis-soft" : "glass text-accent-soft")}>
+        <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl glass" style={{ color: theme.soft }}>
           <Icon className="h-5 w-5" strokeWidth={1.75} />
         </div>
         <p className="text-sm font-medium text-white/85">{label}</p>
-        <p className={cn("mt-0.5 truncate text-xs", isJarvis ? "text-jarvis-soft/80" : "text-white/45")}>{stat}</p>
+        <p className="mt-0.5 truncate text-xs" style={{ color: `${theme.soft}CC` }}>{statNode ?? stat}</p>
         <ArrowRight className="absolute right-3 top-3 h-3.5 w-3.5 text-white/0 transition-all group-hover:text-white/40" />
       </motion.div>
     </Link>

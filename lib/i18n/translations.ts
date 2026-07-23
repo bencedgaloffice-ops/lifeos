@@ -58,7 +58,7 @@ const en = {
     section: { life: "Life", business: "Business" },
   },
   command: {
-    eyebrow: "Command Center",
+    eyebrow: "Mission Control",
     greeting: "Welcome back, {{name}}",
     level: "Life Level",
     xpTotal: "{{xp}} XP",
@@ -1043,7 +1043,7 @@ const hu: typeof en = {
     section: { life: "Élet", business: "Üzlet" },
   },
   command: {
-    eyebrow: "Parancsközpont",
+    eyebrow: "Küldetésirányítás",
     greeting: "Üdv újra, {{name}}",
     level: "Élet Szint",
     xpTotal: "{{xp}} XP",
