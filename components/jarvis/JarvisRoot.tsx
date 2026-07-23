@@ -19,9 +19,16 @@ import { JarvisSettingsPanel } from "./JarvisSettingsPanel";
  * carries a transform, which would otherwise become the containing block for
  * their `position: fixed` and knock them off the viewport.
  */
-export function JarvisRoot({ variant = "dashboard" }: { variant?: "dashboard" | "landing" }) {
+export function JarvisRoot({
+  variant = "dashboard",
+  children,
+}: {
+  variant?: "dashboard" | "landing";
+  children?: React.ReactNode;
+}) {
   return (
     <JarvisProvider>
+      {children}
       <ActivationDim />
       <JarvisWidget variant={variant} />
       <JarvisNotifications />

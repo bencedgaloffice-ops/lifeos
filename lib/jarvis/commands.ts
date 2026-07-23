@@ -81,37 +81,43 @@ export function parseCommand(raw: string): JarvisCommand {
     }
   }
 
-  /* ---- Writes (Operator, L2) ---- */
+  /* ---- Writes (Operator, L2) ----
+     Ordered most-specific first: the "goal / reminder / journal / remember"
+     verbs are checked before the generic "add X → shopping list" catch-all,
+     otherwise "add a reminder to call mum" would be misread as a grocery. */
   let m: RegExpMatchArray | null;
 
+  // Note: transcripts are normalized (punctuation stripped), so match the
+  // spoken forms — "note that …", "journal …" — not "note: …".
+  if ((m = text.match(/^(?:create|add|new|set)\s+(?:a\s+)?goal\s+(?:to\s+)?(.+)$/))) {
+    return cmd({ kind: "write", level: 2, label: `Create goal “${m[1]}”`, intent: "goal.create", args: { title: m[1] } });
+  }
+  if ((m = text.match(/^(?:create|add|set|make)\s+(?:a\s+)?reminder\s+(?:to\s+)?(.+)$/)) ||
+      (m = text.match(/^remind me to\s+(.+)$/))) {
+    return cmd({ kind: "write", level: 2, label: "Create reminder", intent: "reminder.create", args: { title: m[1] } });
+  }
+  // Memory before journal so "note down that …" / "keep in mind …" win.
+  if ((m = text.match(/^(?:remember|note down|keep in mind)\s+(?:that\s+)?(.+)$/))) {
+    return cmd({ kind: "write", level: 2, label: "Remember that", intent: "memory.add", args: { text: m[1] } });
+  }
+  if ((m = text.match(/^(?:add|new|create)\s+(?:a\s+)?journal\s+(?:entry\s+)?(.+)$/)) ||
+      (m = text.match(/^(?:journal|note)\s+(.+)$/))) {
+    return cmd({ kind: "write", level: 2, label: "Add journal entry", intent: "journal.add", args: { text: m[1] } });
+  }
   if ((m = text.match(/^(?:add|buy|put)\s+(.+?)\s+(?:to|on)\s+(?:the\s+)?(?:shopping|shopping list|list)$/)) ||
       (m = text.match(/^(?:add|buy)\s+(.+?)\s+to\s+shopping$/))) {
     return cmd({ kind: "write", level: 2, label: `Add ${m[1]} to shopping list`, intent: "shopping.add", args: { name: m[1] } });
   }
-  if ((m = text.match(/^add\s+(.+?)\s+to\s+(?:the\s+)?(?:kitchen|fridge|pantry)$/))) {
+  if ((m = text.match(/^add\s+(.+?)\s+to\s+(?:the\s+)?(?:kitchen|fridge|pantry|freezer)$/))) {
     return cmd({ kind: "write", level: 2, label: `Add ${m[1]} to kitchen`, intent: "kitchen.add", args: { name: m[1] } });
-  }
-  // Bare "add milk" → shopping list (the most common intent).
-  if ((m = text.match(/^(?:add|buy)\s+(.+)$/)) && !/\bgoal\b/.test(text)) {
-    return cmd({ kind: "write", level: 2, label: `Add ${m[1]} to shopping list`, intent: "shopping.add", args: { name: m[1] } });
   }
   if ((m = text.match(/^(?:remove|delete|take off)\s+(.+?)\s+from\s+(?:the\s+)?(?:shopping|list|kitchen|fridge)$/)) ||
       (m = text.match(/^(?:remove|delete)\s+(.+)$/))) {
     return cmd({ kind: "write", level: 2, label: `Remove ${m[1]}`, intent: "shopping.remove", confirm: true, args: { name: m[1] } });
   }
-  if ((m = text.match(/^(?:create|add|new)\s+goal\s+(.+)$/)) || (m = text.match(/^goal\s*[:]\s*(.+)$/))) {
-    return cmd({ kind: "write", level: 2, label: `Create goal “${m[1]}”`, intent: "goal.create", args: { title: m[1] } });
-  }
-  if ((m = text.match(/^(?:create|add|set)\s+(?:a\s+)?reminder\s+(?:to\s+)?(.+)$/)) ||
-      (m = text.match(/^remind me to\s+(.+)$/))) {
-    return cmd({ kind: "write", level: 2, label: `Create reminder`, intent: "reminder.create", args: { title: m[1] } });
-  }
-  if ((m = text.match(/^(?:add|new)\s+journal\s+(?:entry\s+)?(.+)$/)) ||
-      (m = text.match(/^(?:journal|note)\s*[:]\s*(.+)$/))) {
-    return cmd({ kind: "write", level: 2, label: "Add journal entry", intent: "journal.add", args: { text: m[1] } });
-  }
-  if ((m = text.match(/^(?:remember|note down)\s+(?:that\s+)?(.+)$/))) {
-    return cmd({ kind: "write", level: 2, label: "Remember that", intent: "memory.add", args: { text: m[1] } });
+  // Bare "add milk" / "buy eggs" → shopping list (the most common intent).
+  if ((m = text.match(/^(?:add|buy)\s+(.+)$/))) {
+    return cmd({ kind: "write", level: 2, label: `Add ${m[1]} to shopping list`, intent: "shopping.add", args: { name: m[1] } });
   }
 
   /* ---- Developer (L3) ---- */

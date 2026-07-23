@@ -99,6 +99,9 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pendingConfirm, setPendingConfirm] = useState<JarvisCommand | null>(null);
+  // Resolved after mount only — computing it during render would differ between
+  // the server (no `window`) and the client and break hydration.
+  const [voiceSupported, setVoiceSupported] = useState(false);
 
   // Refs mirror state so engine callbacks (created once) read current values.
   const speechRef = useRef<SpeechEngine | null>(null);
@@ -276,6 +279,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
   /* ---- engine wiring (client only) ---- */
   useEffect(() => {
     setSettings(loadSettings());
+    setVoiceSupported(recognitionSupported());
     speechRef.current = new SpeechEngine();
     // Warm the voice list (some browsers populate asynchronously).
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
@@ -410,7 +414,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
       status,
       level: session.level,
       settings,
-      voiceSupported: recognitionSupported(),
+      voiceSupported,
       listening,
       transcript,
       interim,
@@ -432,7 +436,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
       speak,
     }),
     [
-      status, session.level, settings, listening, transcript, interim, notifications,
+      status, session.level, settings, voiceSupported, listening, transcript, interim, notifications,
       paletteOpen, settingsOpen, pendingConfirm, activate, runText, confirmPending, updateSettings,
       elevateToOperator, setDeveloperUnlocked, lockDown, notify, dismissNotification, speak,
     ],

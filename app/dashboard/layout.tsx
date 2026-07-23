@@ -35,13 +35,13 @@ export default async function DashboardLayout({
 
   const name = profile?.display_name || metaName;
 
+  // The companion provider wraps the whole dashboard so the floating widget
+  // and the dedicated Jarvis page share one live session.
   return (
-    <>
+    <JarvisRoot variant="dashboard">
       <DashboardShell name={name} email={user.email ?? ""}>
         {children}
       </DashboardShell>
-      {/* Persistent AI companion — available on every dashboard page. */}
-      <JarvisRoot variant="dashboard" />
-    </>
+    </JarvisRoot>
   );
 }
