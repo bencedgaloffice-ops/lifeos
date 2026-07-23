@@ -49,6 +49,7 @@ export default async function DashboardHome() {
     { count: milestonesCount },
     { count: kitchenCount },
     { count: shoppingCount },
+    { count: mapLocationsCount },
     { data: achievementRows },
   ] = await Promise.all([
     supabase.from("accounts").select("current_balance").is("organization_id", null),
@@ -61,6 +62,7 @@ export default async function DashboardHome() {
     supabase.from("milestones").select("id", { count: "exact", head: true }),
     supabase.from("kitchen_items").select("id", { count: "exact", head: true }),
     supabase.from("shopping_list_items").select("id", { count: "exact", head: true }).eq("checked", false),
+    supabase.from("life_map_locations").select("id", { count: "exact", head: true }),
     supabase.from("achievements").select("key, unlocked_at"),
   ]);
 
@@ -110,6 +112,7 @@ export default async function DashboardHome() {
     honeyHarvestCount: honeyCount ?? 0,
     dreamsCount: dreamsCount ?? 0,
     milestonesCount: milestonesCount ?? 0,
+    mapLocationsCount: mapLocationsCount ?? 0,
     achievementsUnlocked: 0,
   };
   const unlockedKeys = evaluateAchievements(baseSnapshot);

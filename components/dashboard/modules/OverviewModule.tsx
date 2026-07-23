@@ -6,7 +6,7 @@ import {
   Target, Wallet, FolderKanban, CalendarDays, BookOpen, Sparkles, ArrowRight, Salad, ChefHat,
   Landmark, Bot, Rocket, ChevronRight, Zap, Lock,
   Trophy, CircleCheck, Briefcase, Home, ShieldCheck, Hexagon, TrendingUp, Coins, Gem, PiggyBank, Milestone, Flame,
-  Image as ImageIcon, HeartHandshake, Repeat,
+  Image as ImageIcon, HeartHandshake, Repeat, MapPin, Globe2,
   type LucideIcon,
 } from "lucide-react";
 import { Panel, Progress, Pill, ScoreRing, Numeral } from "@/components/dashboard/ui";
@@ -60,6 +60,7 @@ export type OverviewData = {
 const ACH_ICONS: Record<string, LucideIcon> = {
   Target, CircleCheck, Trophy, Rocket, FolderKanban, Briefcase, Home, ShieldCheck,
   Hexagon, TrendingUp, Coins, Gem, PiggyBank, BookOpen, Sparkles, Milestone, Flame,
+  MapPin, Globe2,
 };
 
 const fade = {

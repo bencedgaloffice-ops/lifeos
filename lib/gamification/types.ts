@@ -32,6 +32,7 @@ export type LifeSnapshot = {
   honeyHarvestCount: number;
   dreamsCount: number;
   milestonesCount: number;
+  mapLocationsCount: number;
   // Feeds back into XP so unlocking achievements advances your level.
   achievementsUnlocked: number;
 };

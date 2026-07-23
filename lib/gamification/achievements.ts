@@ -29,6 +29,9 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { key: "dreamer", title: "Dreamer", description: "Add a dream to your vision board.", icon: "Sparkles", tier: "bronze", test: (s) => s.dreamsCount >= 1 },
   { key: "milestone_maker", title: "Milestone Maker", description: "Record a life milestone.", icon: "Milestone", tier: "bronze", test: (s) => s.milestonesCount >= 1 },
   { key: "consistent", title: "Consistent", description: "Log habits seven days running.", icon: "Flame", tier: "gold", test: (s) => s.consistencyDays >= 7 },
+  // Life Map
+  { key: "cartographer", title: "Cartographer", description: "Place your first location on the Life Map.", icon: "MapPin", tier: "bronze", test: (s) => s.mapLocationsCount >= 1 },
+  { key: "world_builder", title: "World Builder", description: "Chart five locations on your Life Map.", icon: "Globe2", tier: "gold", test: (s) => s.mapLocationsCount >= 5 },
 ];
 
 /** Keys of every achievement currently satisfied by the snapshot. */

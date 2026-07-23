@@ -27,10 +27,12 @@ export function LifeMapCanvas({
   locations,
   selectedId,
   onSelect,
+  progress,
 }: {
   locations: LifeMapLocation[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  progress?: Record<string, { total: number; completed: number }>;
 }) {
-  return <LifeMap locations={locations} selectedId={selectedId} onSelect={onSelect} />;
+  return <LifeMap locations={locations} selectedId={selectedId} onSelect={onSelect} progress={progress} />;
 }

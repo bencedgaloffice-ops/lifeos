@@ -51,6 +51,19 @@ export function LifeMapModule({ locations, lifeAreas, organizations, goals, docu
   );
   const netForLocation = linkedTransactions.reduce((s, tx) => s + (tx.direction === "in" ? Number(tx.amount) : -Number(tx.amount)), 0);
 
+  /** Per-pin goal completion, so a location can visibly "light up" as its
+   * linked goals get achieved — the map doubles as a progress readout. */
+  const progressByLocation = useMemo(() => {
+    const map: Record<string, { total: number; completed: number }> = {};
+    for (const loc of locations) {
+      if (!loc.life_area_id) continue;
+      const forLocation = goals.filter((g) => g.life_area_id === loc.life_area_id);
+      if (forLocation.length === 0) continue;
+      map[loc.id] = { total: forLocation.length, completed: forLocation.filter((g) => g.status === "achieved").length };
+    }
+    return map;
+  }, [goals, locations]);
+
   return (
     <div>
       <ModuleHeader
@@ -134,7 +147,12 @@ export function LifeMapModule({ locations, lifeAreas, organizations, goals, docu
             {locations.length === 0 ? (
               <div className="flex h-full items-center justify-center text-sm text-white/40">{t("map.empty")}</div>
             ) : (
-              <LifeMapCanvas locations={locations} selectedId={selectedId} onSelect={(id) => setSelectedId(id || null)} />
+              <LifeMapCanvas
+                locations={locations}
+                selectedId={selectedId}
+                onSelect={(id) => setSelectedId(id || null)}
+                progress={progressByLocation}
+              />
             )}
           </div>
           <p className="mt-2 text-xs text-white/35">{t("map.hint")}</p>
