@@ -87,7 +87,12 @@ const JarvisContext = createContext<JarvisContextValue | null>(null);
 let idCounter = 0;
 const uid = () => `j${Date.now().toString(36)}${(idCounter++).toString(36)}`;
 
-export function JarvisProvider({ children }: { children: React.ReactNode }) {
+/** Structured developer-console trace for the whole voice pipeline. */
+function jlog(...args: unknown[]) {
+  if (typeof console !== "undefined") console.log("%c[JARVIS]", "color:#ff2d3f;font-weight:bold", ...args);
+}
+
+export function JarvisProvider({ children, userName }: { children: React.ReactNode; userName?: string }) {
   const router = useRouter();
   const { locale } = useLocale();
 
@@ -111,10 +116,12 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
   const settingsRef = useRef(settings);
   const sessionRef = useRef(session);
   const localeRef = useRef(locale);
+  const nameRef = useRef(userName);
   const awaitingOperatorFor = useRef<JarvisCommand | null>(null);
   settingsRef.current = settings;
   sessionRef.current = session;
   localeRef.current = locale;
+  nameRef.current = userName;
 
   /* ---- notifications ---- */
   const notify = useCallback((tone: JarvisNotificationTone, title: string, body?: string) => {
@@ -133,11 +140,11 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   /* ---- speech ---- */
-  const speak = useCallback((text: string) => {
-    if (!text) return;
+  const speak = useCallback((text: string, onDone?: () => void) => {
+    if (!text) { onDone?.(); return; }
     pushLine("jarvis", text);
     const engine = speechRef.current;
-    if (!engine || !settingsRef.current.soundEffects) return;
+    if (!engine || !settingsRef.current.soundEffects) { onDone?.(); return; }
     setStatus("speaking");
     orbSpeakStart();
     engine
@@ -147,7 +154,9 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
       })
       .then(() => {
         orbSpeakEnd();
+        jlog("Speech completed");
         setStatus((s) => (s === "speaking" ? "idle" : s));
+        onDone?.();
       });
   }, [pushLine]);
 
@@ -238,11 +247,14 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
 
       // Reads + writes -----------------------------------------------------
       setStatus("thinking");
+      jlog("Processing:", command.intent, command.args);
       try {
         const reply = await runIntent(command, localeRef.current);
+        jlog("AI response generated:", reply);
         touchSession();
         speak(reply);
-      } catch {
+      } catch (err) {
+        jlog("Error running command:", err);
         speak("Something went wrong running that.");
         setStatus("idle");
       }
@@ -297,27 +309,42 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
     }
 
     const rec = new RecognitionEngine({
+      // Stage 1 → Stage 2: greet, then re-open the mic for the command.
       onWake: (trailing) => {
+        jlog("Wake word detected");
         setStatus("waking");
         notify("info", "Jarvis online", "Listening…");
-        setTimeout(() => {
-          if (trailing) {
-            runText(trailing);
-          } else {
-            setStatus("listening");
-            recRef.current?.startCommand();
-          }
-        }, 550);
+
+        // Wake word + command in a single breath ("Hello Jarvis, open kitchen").
+        if (trailing) {
+          jlog("Command in same breath:", trailing);
+          runText(trailing);
+          if (settingsRef.current.alwaysListening) setTimeout(() => recRef.current?.startWake(), 500);
+          return;
+        }
+
+        const name = nameRef.current?.split(" ")[0];
+        const greeting = name ? `Yes, ${name}?` : "Yes?";
+        // Speak the acknowledgement first; only start capturing once it's done so
+        // the recogniser doesn't transcribe Jarvis's own voice.
+        speak(greeting, () => {
+          setStatus("listening");
+          jlog("Listening started (command window open)");
+          recRef.current?.startCommand();
+        });
       },
       onCommand: (text) => {
         if (text) {
+          jlog("Transcript received:", text);
+          setInterim("");
           runText(text);
         } else {
+          jlog("No command heard");
           setStatus("idle");
         }
-        // Resume passive listening if enabled.
+        // Resume passive wake listening if enabled.
         if (settingsRef.current.alwaysListening) {
-          setTimeout(() => recRef.current?.startWake(), 400);
+          setTimeout(() => recRef.current?.startWake(), 500);
         }
       },
       onInterim: (t) => {
@@ -330,6 +357,7 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
         }
       },
       onListeningChange: setListening,
+      onLog: (m) => jlog(m),
     });
     recRef.current = rec;
     return () => {
