@@ -100,7 +100,7 @@ export function StatCard({
       <p className="text-xs uppercase tracking-wider text-white/40">{label}</p>
       <p
         className={cn(
-          "mt-2 text-2xl font-semibold tracking-tight sm:text-[1.75rem]",
+          "mt-2 font-mono text-2xl font-semibold tabular-nums tracking-tight sm:text-[1.75rem]",
           !theme && accent && "text-accent-soft",
         )}
         style={theme ? { color: theme.soft } : undefined}

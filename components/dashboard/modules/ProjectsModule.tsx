@@ -14,6 +14,7 @@ import {
   EmptyState,
   Field,
   inputClass,
+  Numeral,
 } from "@/components/dashboard/ui";
 import {
   createProject,
@@ -33,6 +34,7 @@ export function ProjectsModule({ projects, organizations }: { projects: Project[
         icon={FolderKanban}
         title={t("projects.title")}
         subtitle={t("projects.subtitle")}
+        accent="projects"
         action={
           <button
             onClick={() => setOpen((v) => !v)}
@@ -94,7 +96,7 @@ export function ProjectsModule({ projects, organizations }: { projects: Project[
             <div className="flex gap-3 sm:col-span-2">
               <button
                 type="submit"
-                className="rounded-full bg-accent px-5 py-2.5 text-sm font-medium text-white transition-transform hover:-translate-y-0.5"
+                className="rounded-full bg-violet-500 px-5 py-2.5 text-sm font-medium text-white transition-transform hover:-translate-y-0.5"
               >
                 {t("projects.create")}
               </button>
@@ -173,9 +175,9 @@ function ProjectCard({ project, index, organizations }: { project: Project; inde
 
         <div className="mt-5">
           <div className="mb-2 flex items-center justify-between text-sm">
-            <span className="tabular-nums font-medium text-white/70">
+            <Numeral className="font-medium text-violet-300">
               {project.progress_percent}%
-            </span>
+            </Numeral>
             {project.deadline && (
               <span className="text-xs text-white/40">
                 {formatDate(project.deadline, undefined, locale)} · {relativeDays(project.deadline, locale)}

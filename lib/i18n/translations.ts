@@ -239,7 +239,7 @@ const en = {
     },
   },
   finance: {
-    title: "Finance",
+    title: "Wealth Command Center",
     subtitle: "Your wealth, managed like a private bank.",
     addTransaction: "Add transaction",
     formType: "Type",
@@ -342,7 +342,7 @@ const en = {
     categories: ["Life", "Health", "Career", "Finance", "Learning", "Relationships"],
   },
   projects: {
-    title: "Projects",
+    title: "Operations",
     subtitle: "Move the work of your life forward.",
     newProject: "New project",
     formName: "Project name",
@@ -1224,7 +1224,7 @@ const hu: typeof en = {
     },
   },
   finance: {
-    title: "Pénzügyek",
+    title: "Vagyonközpont",
     subtitle: "A vagyonod, private banki szinten kezelve.",
     addTransaction: "Tranzakció hozzáadása",
     formType: "Típus",
@@ -1327,7 +1327,7 @@ const hu: typeof en = {
     categories: ["Élet", "Egészség", "Karrier", "Pénzügy", "Tanulás", "Kapcsolatok"],
   },
   projects: {
-    title: "Projektek",
+    title: "Műveletek",
     subtitle: "Vidd előre az életed munkáit.",
     newProject: "Új projekt",
     formName: "Projekt neve",
