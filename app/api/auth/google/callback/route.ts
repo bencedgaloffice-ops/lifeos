@@ -64,14 +64,17 @@ export async function GET(request: Request) {
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token,
     token_expires_at: new Date(Date.now() + tokens.expires_in * 1000).toISOString(),
+    google_calendar_id: "primary",
     sync_enabled: true,
     sync_token: null,
   };
 
-  if (existing) {
-    await supabase.from("google_calendar_connections").update(row).eq("id", existing.id);
-  } else {
-    await supabase.from("google_calendar_connections").insert(row);
+  const { error: writeError } = existing
+    ? await supabase.from("google_calendar_connections").update(row).eq("id", existing.id)
+    : await supabase.from("google_calendar_connections").insert(row);
+
+  if (writeError) {
+    return NextResponse.redirect(`${origin}/dashboard/settings?google=error`);
   }
 
   const response = NextResponse.redirect(`${origin}/dashboard/settings?google=connected`);

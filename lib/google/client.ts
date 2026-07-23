@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import type { GoogleCalendarConnection } from "@/lib/types";
 
@@ -14,8 +15,12 @@ export function isGoogleConfigured(): boolean {
   return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
 }
 
-export async function getConnection(userId: string): Promise<GoogleCalendarConnection | null> {
-  const supabase = await createClient();
+/** Every function here defaults to the cookie-bound Server Component/Action
+ * client, exactly as before — but accepts an already-built client too, so
+ * the sync cron job (no request, no session) can pass in a service-role
+ * client instead. */
+export async function getConnection(userId: string, client?: SupabaseClient): Promise<GoogleCalendarConnection | null> {
+  const supabase = client ?? (await createClient());
   const { data } = await supabase
     .from("google_calendar_connections")
     .select("*")
@@ -28,14 +33,14 @@ export async function getConnection(userId: string): Promise<GoogleCalendarConne
  * minutes of expiring. Marks the connection sync_enabled=false if the
  * refresh token has been revoked (nothing else retries after that until
  * the user reconnects). */
-export async function getValidAccessToken(userId: string): Promise<string | null> {
-  const connection = await getConnection(userId);
+export async function getValidAccessToken(userId: string, client?: SupabaseClient): Promise<string | null> {
+  const connection = await getConnection(userId, client);
   if (!connection || !connection.sync_enabled) return null;
 
   const expiresInMs = new Date(connection.token_expires_at).getTime() - Date.now();
   if (expiresInMs > 2 * 60_000) return connection.access_token;
 
-  const supabase = await createClient();
+  const supabase = client ?? (await createClient());
   const res = await fetch(TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -62,9 +67,9 @@ export async function getValidAccessToken(userId: string): Promise<string | null
   return data.access_token;
 }
 
-export async function revokeConnection(userId: string): Promise<void> {
-  const connection = await getConnection(userId);
-  const supabase = await createClient();
+export async function revokeConnection(userId: string, client?: SupabaseClient): Promise<void> {
+  const connection = await getConnection(userId, client);
+  const supabase = client ?? (await createClient());
   if (connection) {
     await fetch(`${REVOKE_URL}?token=${encodeURIComponent(connection.refresh_token)}`, { method: "POST" }).catch(() => {});
   }
