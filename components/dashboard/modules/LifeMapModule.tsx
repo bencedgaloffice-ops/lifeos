@@ -1,15 +1,16 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
-import { Map, Plus, Trash2, Pencil, X, Target, FileStack, Wallet } from "lucide-react";
+import { Map, Plus, Trash2, Pencil, X, Target, FileStack, Wallet, Car, Navigation, Gauge, Clock, CheckCircle2 } from "lucide-react";
 import type { LifeMapLocation, LifeArea, Organization, Goal, Document, Transaction } from "@/lib/types";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { ModuleHeader, Panel, Field, inputClass, Progress, Numeral } from "@/components/dashboard/ui";
 import { LifeMapCanvas } from "@/components/three/LifeMapCanvas";
 import { createLocation, updateLocation, deleteLocation } from "@/app/dashboard/map/actions";
+import { computeVehicleState, type VehicleState } from "@/lib/vehicle-sim";
 
 type Props = {
   locations: LifeMapLocation[];
@@ -41,6 +42,18 @@ export function LifeMapModule({ locations, lifeAreas, organizations, goals, docu
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [category, setCategory] = useState<LifeMapLocation["category"]>("other");
+  const [vehicleOpen, setVehicleOpen] = useState(false);
+  const [vehicleState, setVehicleState] = useState<VehicleState | null>(null);
+
+  // Keeps the operational panel's distance/ETA/status live while it's open —
+  // the vehicle never stops moving, so its numbers shouldn't freeze either.
+  useEffect(() => {
+    if (!vehicleOpen) return;
+    const tick = () => setVehicleState(computeVehicleState());
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [vehicleOpen]);
 
   const selected = locations.find((l) => l.id === selectedId) ?? null;
 
@@ -163,7 +176,7 @@ export function LifeMapModule({ locations, lifeAreas, organizations, goals, docu
       )}
 
       <div className="grid gap-4 lg:grid-cols-5">
-        <div className={selected ? "lg:col-span-3" : "lg:col-span-5"}>
+        <div className={selected || vehicleOpen ? "lg:col-span-3" : "lg:col-span-5"}>
           <div className={`relative w-full overflow-hidden rounded-3xl border border-hairline ${compact ? "h-[72vh]" : "h-[65vh]"}`}>
             {locations.length === 0 && !showNavPins ? (
               <div className="flex h-full items-center justify-center text-sm text-white/40">{t("map.empty")}</div>
@@ -171,15 +184,93 @@ export function LifeMapModule({ locations, lifeAreas, organizations, goals, docu
               <LifeMapCanvas
                 locations={locations}
                 selectedId={selectedId}
-                onSelect={(id) => setSelectedId(id || null)}
+                onSelect={(id) => {
+                  setSelectedId(id || null);
+                  if (id) setVehicleOpen(false);
+                }}
                 progress={progressByLocation}
                 navPins={showNavPins}
                 onNavigate={(href) => router.push(href)}
+                onOpenVehicle={(state) => {
+                  setVehicleState(state);
+                  setVehicleOpen(true);
+                  setSelectedId(null);
+                }}
               />
             )}
           </div>
           <p className="mt-2 text-xs text-white/35">{t("map.hint")}</p>
         </div>
+
+        {/* Vehicle operational status panel */}
+        <AnimatePresence>
+          {vehicleOpen && vehicleState && (
+            <motion.div
+              key="vehicle"
+              initial={{ opacity: 0, x: 16 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 16 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              className="lg:col-span-2"
+            >
+              <Panel className="relative h-full" glow>
+                <button
+                  onClick={() => setVehicleOpen(false)}
+                  className="absolute right-4 top-4 inline-flex h-8 w-8 items-center justify-center rounded-full glass text-white/60 hover:text-white"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+                <div className="flex items-center gap-2 pr-8">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-full bg-cyan-400/15 text-cyan-300">
+                    <Car className="h-4.5 w-4.5" />
+                  </span>
+                  <div>
+                    <p className="text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-white/40">{t("vehicle.title")}</p>
+                    <p className="text-sm font-medium text-white/80">{t(`vehicle.status.${vehicleState.status}`)}</p>
+                  </div>
+                </div>
+
+                <div className="mt-5">
+                  <p className="mb-1.5 flex items-center gap-1.5 text-xs uppercase tracking-wider text-white/40">
+                    <Navigation className="h-3.5 w-3.5" /> {t("vehicle.currentMission")}
+                  </p>
+                  <p className="text-sm text-white/85">{t(`vehicle.mission.${vehicleState.missionKey}`)}</p>
+                </div>
+
+                <div className="mt-4">
+                  <p className="mb-1.5 text-xs uppercase tracking-wider text-white/40">{t("vehicle.location")}</p>
+                  <p className="text-sm text-white/85">
+                    {t(`homeMap.locationName.${vehicleState.fromKey}`)} → {t(`homeMap.locationName.${vehicleState.toKey}`)}
+                  </p>
+                </div>
+
+                {vehicleState.distanceKm > 0 && (
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="rounded-xl bg-white/[0.03] p-3">
+                      <p className="flex items-center gap-1.5 text-[0.65rem] uppercase tracking-wider text-white/40">
+                        <Gauge className="h-3 w-3" /> {t("vehicle.distance")}
+                      </p>
+                      <Numeral className="mt-1 block text-lg font-semibold text-white">{Math.round(vehicleState.distanceKm)} km</Numeral>
+                    </div>
+                    <div className="rounded-xl bg-white/[0.03] p-3">
+                      <p className="flex items-center gap-1.5 text-[0.65rem] uppercase tracking-wider text-white/40">
+                        <Clock className="h-3 w-3" /> {t("vehicle.eta")}
+                      </p>
+                      <Numeral className="mt-1 block text-lg font-semibold text-cyan-300">{vehicleState.etaMinutes} {t("vehicle.minutes")}</Numeral>
+                    </div>
+                  </div>
+                )}
+
+                <div className="mt-5 flex items-center gap-1.5 text-xs text-white/45">
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  {t("vehicle.dailyActivity", { n: vehicleState.locationsVisitedToday })}
+                </div>
+
+                <p className="mt-5 text-xs leading-relaxed text-white/30">{t("vehicle.simNote")}</p>
+              </Panel>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Drill-down side panel */}
         <AnimatePresence>

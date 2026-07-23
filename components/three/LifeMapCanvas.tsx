@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import type { LifeMapLocation } from "@/lib/types";
+import type { VehicleState } from "@/lib/vehicle-sim";
 
 /** Three.js is heavy — load the scene only on the client. */
 const LifeMap = dynamic(() => import("./LifeMap").then((m) => m.LifeMap), {
@@ -30,6 +31,7 @@ export function LifeMapCanvas({
   progress,
   navPins,
   onNavigate,
+  onOpenVehicle,
 }: {
   locations: LifeMapLocation[];
   selectedId: string | null;
@@ -37,6 +39,7 @@ export function LifeMapCanvas({
   progress?: Record<string, { total: number; completed: number }>;
   navPins?: boolean;
   onNavigate?: (href: string) => void;
+  onOpenVehicle?: (state: VehicleState) => void;
 }) {
   return (
     <LifeMap
@@ -46,6 +49,7 @@ export function LifeMapCanvas({
       progress={progress}
       navPins={navPins}
       onNavigate={onNavigate}
+      onOpenVehicle={onOpenVehicle}
     />
   );
 }

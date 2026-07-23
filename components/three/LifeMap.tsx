@@ -2,14 +2,16 @@
 
 import { useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, Line, Html } from "@react-three/drei";
+import { OrbitControls, Line, Html, Trail } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import * as THREE from "three";
+import { ChevronRight } from "lucide-react";
 import type { LifeMapLocation } from "@/lib/types";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { StarField } from "./StarField";
 import { HUNGARY_BORDER, projectLonLat } from "@/lib/hungary-geo";
-import { layoutNavPins, type NavPinPosition } from "@/lib/module-nav-pins";
+import { LOCATION_CLUSTERS, type LocationCluster } from "@/lib/hungary-locations";
+import { computeVehicleState, type VehicleState } from "@/lib/vehicle-sim";
 
 const CATEGORY_COLOR: Record<string, string> = {
   home: "#F5A15E",
@@ -23,10 +25,7 @@ const WORLD_SIZE = 12;
 /** Height of Hungary's raised landmass above the surrounding base plate —
  * pins and connection lines sit at this level, not at y=0. */
 const GROUND_Y = 0.2;
-/** With the nav-pin ring showing (home screen), the resting shot needs to
- * be wider so all 17 orbiting portals stay in frame, not just Hungary. */
 const CAMERA_TARGET: [number, number, number] = [0, 7.5, 9.5];
-const CAMERA_TARGET_WIDE: [number, number, number] = [0, 10.5, 13];
 const CAMERA_START: [number, number, number] = [0, 16, 20];
 
 /** A saved location's position_x/position_y are real longitude/latitude —
@@ -67,6 +66,27 @@ function HungaryLandmass() {
   );
 }
 
+/** A soft glowing outline traced along Hungary's real border, sitting right
+ * on the landmass's top edge — two stacked lines (a bright core, a wider
+ * translucent halo) so Bloom picks it up as a genuine glow, not a flat
+ * outline. */
+function BorderGlow() {
+  const points = useMemo<[number, number, number][]>(
+    () => HUNGARY_BORDER.map(([lon, lat]) => {
+      const [x, z] = projectLonLat(lon, lat, WORLD_SIZE);
+      return [x, GROUND_Y + 0.01, z];
+    }),
+    [],
+  );
+
+  return (
+    <>
+      <Line points={points} color="#8FE3FF" lineWidth={2.5} transparent opacity={0.9} />
+      <Line points={points} color="#8FE3FF" lineWidth={7} transparent opacity={0.25} />
+    </>
+  );
+}
+
 /** The surrounding region beyond Hungary's border — a dimmer, lower plate so
  * the country itself reads as the raised, lit centerpiece. Travel pins for
  * trips abroad land out here, past the silhouette's edge. */
@@ -95,18 +115,17 @@ function SurroundingTerrain() {
  * resting orbit on mount — the same "arrival" beat as the landing globe.
  * OrbitControls only mounts once this finishes, so the two never fight
  * over camera position. */
-function CameraIntro({ onDone, wide }: { onDone: () => void; wide: boolean }) {
+function CameraIntro({ onDone }: { onDone: () => void }) {
   const { camera } = useThree();
   const elapsed = useRef(0);
   const done = useRef(false);
-  const target = wide ? CAMERA_TARGET_WIDE : CAMERA_TARGET;
 
   useFrame((_, delta) => {
     if (done.current) return;
     elapsed.current += delta;
     const t = Math.min(elapsed.current / 1.8, 1);
     const eased = 1 - Math.pow(1 - t, 3);
-    camera.position.lerpVectors(new THREE.Vector3(...CAMERA_START), new THREE.Vector3(...target), eased);
+    camera.position.lerpVectors(new THREE.Vector3(...CAMERA_START), new THREE.Vector3(...CAMERA_TARGET), eased);
     camera.lookAt(0, GROUND_Y, 0);
     if (t >= 1) {
       done.current = true;
@@ -220,62 +239,172 @@ function ConnectionLines({ locations }: { locations: LifeMapLocation[] }) {
   );
 }
 
-const NAV_RING_RADIUS = 6.5;
-
-/** A module shortcut orbiting Hungary — the sidebar's "pages on the sides"
- * turned into a clickable place on the map. A floating glass chip (rendered
- * via drei's Html so it can reuse real DOM/Tailwind styling) sits above a
- * small glowing marker in the module's own accent color. */
-function NavPin({ pin, onNavigate }: { pin: NavPinPosition; onNavigate: (href: string) => void }) {
+/** One of the five real places LifeOS's sections live geographically
+ * (Budapest, Diósd, Somogy, Balaton, the Germany route) — an animated
+ * glowing marker that expands into its section shortcuts on hover/click. */
+function LocationClusterPin({ cluster, onNavigate }: { cluster: LocationCluster; onNavigate: (href: string) => void }) {
   const { t } = useLocale();
-  const Icon = pin.icon;
+  const [x, z] = projectLonLat(cluster.lon, cluster.lat, WORLD_SIZE);
+  const [open, setOpen] = useState(false);
+  const [hovered, setHovered] = useState(false);
   const markerRef = useRef<THREE.Mesh>(null);
-  const label = t(`nav.${pin.key}.label`);
+  const Icon = cluster.icon;
+  const scale = hovered || open ? 1.35 : 1;
 
   useFrame(({ clock }) => {
     if (markerRef.current) {
-      markerRef.current.position.y = -0.08 + 0.3 + Math.sin(clock.elapsedTime * 1.4 + pin.x) * 0.04;
+      markerRef.current.position.y = GROUND_Y + 0.4 + Math.sin(clock.elapsedTime * 1.3 + x) * 0.05;
     }
   });
 
   return (
-    <group position={[pin.x, 0, pin.z]}>
+    <group position={[x, 0, z]}>
+      {/* Ground halo ring — a soft footprint under the marker. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, GROUND_Y + 0.012, 0]}>
+        <ringGeometry args={[0.2, 0.32, 32]} />
+        <meshBasicMaterial color={cluster.color} transparent opacity={hovered || open ? 0.55 : 0.3} side={THREE.DoubleSide} />
+      </mesh>
+
       <mesh
         ref={markerRef}
+        scale={scale}
         onClick={(e) => {
           e.stopPropagation();
-          onNavigate(pin.href);
+          setOpen((v) => !v);
         }}
         onPointerOver={() => {
+          setHovered(true);
           document.body.style.cursor = "pointer";
         }}
         onPointerOut={() => {
+          setHovered(false);
           document.body.style.cursor = "default";
         }}
       >
-        <sphereGeometry args={[0.09, 16, 16]} />
-        <meshStandardMaterial color={pin.color} emissive={pin.color} emissiveIntensity={1.6} />
+        <sphereGeometry args={[0.13, 20, 20]} />
+        <meshStandardMaterial color={cluster.color} emissive={cluster.color} emissiveIntensity={hovered || open ? 2.6 : 1.7} />
       </mesh>
-      <Html center distanceFactor={9} position={[0, 0.85, 0]} occlude={false}>
-        <button
-          onClick={() => onNavigate(pin.href)}
-          className="flex select-none flex-col items-center gap-1 rounded-2xl border px-3 py-2 text-center backdrop-blur-md transition-transform hover:-translate-y-0.5"
-          style={{
-            background: "rgba(8,14,12,0.72)",
-            borderColor: `${pin.color}55`,
-            boxShadow: `0 0 24px -8px ${pin.color}99`,
-          }}
-        >
-          <span
-            className="flex h-7 w-7 items-center justify-center rounded-full"
-            style={{ backgroundColor: `${pin.color}22`, color: pin.soft }}
+
+      <Html center distanceFactor={9} position={[0, cluster.labelOffsetY ?? 1.05, 0]} occlude={false}>
+        {open ? (
+          <div
+            className="w-56 select-none rounded-2xl border p-3 text-left backdrop-blur-md"
+            style={{ background: "rgba(6,11,10,0.88)", borderColor: `${cluster.color}55`, boxShadow: `0 0 32px -6px ${cluster.color}aa` }}
           >
-            <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
-          </span>
-          <span className="whitespace-nowrap text-[0.65rem] font-medium text-white/85">{label}</span>
-        </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpen(false);
+              }}
+              className="mb-1.5 flex w-full items-center gap-2 text-left"
+            >
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: `${cluster.color}22`, color: cluster.color }}>
+                <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+              </span>
+              <span className="text-sm font-semibold text-white">{t(`homeMap.${cluster.nameKey}`)}</span>
+            </button>
+            <p className="mb-2 text-[0.7rem] leading-relaxed text-white/50">{t(`homeMap.${cluster.previewKey}`)}</p>
+            <div className="space-y-1">
+              {cluster.items.map((item) => {
+                const ItemIcon = item.icon;
+                return (
+                  <button
+                    key={item.key}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onNavigate(item.href);
+                    }}
+                    className="flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-xs text-white/75 transition-colors hover:bg-white/[0.06] hover:text-white"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <ItemIcon className="h-3.5 w-3.5" strokeWidth={1.75} />
+                      {t(`homeMap.${item.labelKey}`)}
+                    </span>
+                    <ChevronRight className="h-3 w-3 opacity-50" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setOpen(true)}
+            className="whitespace-nowrap rounded-full border px-3 py-1.5 text-xs font-medium text-white/85 backdrop-blur-md transition-transform hover:-translate-y-0.5"
+            style={{ background: "rgba(6,11,10,0.72)", borderColor: `${cluster.color}55`, boxShadow: hovered ? `0 0 24px -6px ${cluster.color}aa` : undefined }}
+          >
+            {t(`homeMap.${cluster.nameKey}`)}
+          </button>
+        )}
       </Html>
     </group>
+  );
+}
+
+const STATUS_COLOR: Record<VehicleState["status"], string> = {
+  driving: "#67E8F9",
+  returning: "#67E8F9",
+  working: "#FBBF24",
+  arrived: "#34D399",
+  waiting: "#9CA3AF",
+};
+
+/** The living vehicle — follows the hand-modeled road corridors between
+ * Diósd, ICSB, Budapest, Somogy, and the Germany route on a continuously
+ * repeating simulated schedule (lib/vehicle-sim.ts). Headlights and a
+ * brighter trail switch on during the loop's simulated night. Clicking it
+ * opens the operational status panel (handled by the parent module). */
+function VehicleMarker({ onOpen }: { onOpen: (state: VehicleState) => void }) {
+  const groupRef = useRef<THREE.Group>(null);
+  const bodyRef = useRef<THREE.Mesh>(null);
+  const [hovered, setHovered] = useState(false);
+  const lastHeading = useRef(0);
+
+  useFrame(() => {
+    const state = computeVehicleState();
+    const [x, z] = projectLonLat(state.position[0], state.position[1], WORLD_SIZE);
+    if (groupRef.current) {
+      const dx = x - groupRef.current.position.x;
+      const dz = z - groupRef.current.position.z;
+      groupRef.current.position.set(x, GROUND_Y + 0.06, z);
+      if (dx * dx + dz * dz > 0.00001) {
+        lastHeading.current = Math.atan2(dx, dz);
+      }
+      groupRef.current.rotation.y = lastHeading.current;
+    }
+    if (bodyRef.current) {
+      const s = hovered ? 1.5 : 1;
+      bodyRef.current.scale.setScalar(s);
+    }
+  });
+
+  const state = computeVehicleState();
+  const color = STATUS_COLOR[state.status];
+
+  return (
+    <Trail width={state.speedFactor > 0 ? 2.2 : 0} length={5} color={color} attenuation={(t) => t * t} local>
+      <group
+        ref={groupRef}
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpen(computeVehicleState());
+        }}
+        onPointerOver={() => {
+          setHovered(true);
+          document.body.style.cursor = "pointer";
+        }}
+        onPointerOut={() => {
+          setHovered(false);
+          document.body.style.cursor = "default";
+        }}
+      >
+        <mesh ref={bodyRef} castShadow>
+          <coneGeometry args={[0.06, 0.16, 3]} />
+          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.8} />
+        </mesh>
+        {/* Headlights — only bright during the loop's simulated night. */}
+        <pointLight position={[0, 0, 0.1]} intensity={state.isNight ? 0.9 : 0.15} distance={1.2} color="#fff6d8" />
+      </group>
+    </Trail>
   );
 }
 
@@ -286,18 +415,19 @@ export function LifeMap({
   progress,
   navPins = false,
   onNavigate,
+  onOpenVehicle,
 }: {
   locations: LifeMapLocation[];
   selectedId: string | null;
   onSelect: (id: string) => void;
   progress?: Record<string, { total: number; completed: number }>;
-  /** Renders the sidebar's modules as a ring of clickable portals orbiting
-   * Hungary — used on the home screen, off by default on the plain map page. */
+  /** Renders the Budapest/Diósd/Somogy/Balaton/Germany location clusters and
+   * the living vehicle — used on the home screen, off on the plain map view. */
   navPins?: boolean;
   onNavigate?: (href: string) => void;
+  onOpenVehicle?: (state: VehicleState) => void;
 }) {
   const [ready, setReady] = useState(false);
-  const pins = useMemo(() => (navPins ? layoutNavPins(NAV_RING_RADIUS) : []), [navPins]);
 
   return (
     <Canvas camera={{ position: CAMERA_START, fov: 42 }} dpr={[1, 2]} onPointerMissed={() => onSelect("")}>
@@ -307,17 +437,23 @@ export function LifeMap({
       <directionalLight position={[6, 9, 4]} intensity={1.15} color="#bfe3ff" />
       <directionalLight position={[-6, 4, -4]} intensity={0.25} color="#5EEAD4" />
       <StarField />
-      {!ready && <CameraIntro onDone={() => setReady(true)} wide={navPins} />}
+      {!ready && <CameraIntro onDone={() => setReady(true)} />}
       <SurroundingTerrain />
       <HungaryLandmass />
+      <BorderGlow />
       <gridHelper args={[WORLD_SIZE + 5, 40, "#1c4a3f", "#0e2622"]} position={[0, -0.075, 0]} />
       <ConnectionLines locations={locations} />
       {locations.map((loc) => (
         <Pin key={loc.id} loc={loc} active={loc.id === selectedId} onSelect={onSelect} progress={progress?.[loc.id]} />
       ))}
-      {pins.map((pin) => (
-        <NavPin key={pin.key} pin={pin} onNavigate={onNavigate ?? (() => {})} />
-      ))}
+      {navPins && (
+        <>
+          {LOCATION_CLUSTERS.map((cluster) => (
+            <LocationClusterPin key={cluster.key} cluster={cluster} onNavigate={onNavigate ?? (() => {})} />
+          ))}
+          <VehicleMarker onOpen={onOpenVehicle ?? (() => {})} />
+        </>
+      )}
       {ready && (
         <OrbitControls
           enablePan
