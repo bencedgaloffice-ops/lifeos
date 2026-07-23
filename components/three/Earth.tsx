@@ -8,6 +8,7 @@ import * as THREE from "three";
 import { StarField } from "./StarField";
 import { SpaceDust } from "./SpaceDust";
 import { HoloRings } from "./HoloRings";
+import { enterSignal } from "@/lib/landing/enterSignal";
 
 /* ------------------------------------------------------------------
    Realistic NASA-style Earth — real Blue Marble day imagery, city
@@ -293,16 +294,24 @@ function Globe({ pointer, hovered }: { pointer: React.MutableRefObject<PointerSt
     }
 
     // --- Cinematic camera: mouse parallax + slow orbital drift + zoom breathing ---
+    // On "Enter LifeOS" the camera dives straight into the globe (a warp into
+    // the personal world) — recentre and rush the dolly toward the surface.
+    const entering = enterSignal.entering;
     const orbitalAngle = t * 0.05;
     const orbitalX = Math.sin(orbitalAngle) * 0.12;
     const orbitalY = Math.cos(orbitalAngle * 0.7) * 0.05;
     const zoomBreathe = Math.sin(t * 0.12) * 0.15;
-    const targetCamX = p.x * 0.45 + orbitalX;
-    const targetCamY = 0.15 + p.y * -0.28 + orbitalY;
-    camera.position.x = damp(camera.position.x, targetCamX, 2.2, dt);
-    camera.position.y = damp(camera.position.y, targetCamY, 2.2, dt);
-    camera.position.z = damp(camera.position.z, 6 + zoomBreathe, 2.2, dt);
+    const targetCamX = entering ? 0 : p.x * 0.45 + orbitalX;
+    const targetCamY = entering ? 0 : 0.15 + p.y * -0.28 + orbitalY;
+    // A slower, deliberate dolly so the continents visibly rush up to meet you
+    // before the light burst takes over — not an instant cut to the dark side.
+    const targetCamZ = entering ? 2.35 : 6 + zoomBreathe;
+    const camLambda = entering ? 2.4 : 2.2;
+    camera.position.x = damp(camera.position.x, targetCamX, camLambda, dt);
+    camera.position.y = damp(camera.position.y, targetCamY, camLambda, dt);
+    camera.position.z = damp(camera.position.z, targetCamZ, camLambda, dt);
     camera.lookAt(0, 0, 0);
+    if (entering) spinVelocity.current = damp(spinVelocity.current, 0.6, 2, dt); // subtle acceleration
 
     // --- Hover / interaction glow boost, eased ---
     const targetGlow = hovered.current || p.down ? 1 : 0;
