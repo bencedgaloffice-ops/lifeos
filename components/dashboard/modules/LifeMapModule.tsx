@@ -9,6 +9,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { ModuleHeader, Panel, Field, inputClass, Progress, Numeral } from "@/components/dashboard/ui";
 import { LifeMapCanvas } from "@/components/three/LifeMapCanvas";
+import { RealLifeMapCanvas } from "@/components/map/RealLifeMapCanvas";
 import { createLocation, updateLocation, deleteLocation } from "@/app/dashboard/map/actions";
 import { computeVehicleState, type VehicleState } from "@/lib/vehicle-sim";
 
@@ -175,6 +176,18 @@ export function LifeMapModule({ locations, lifeAreas, organizations, goals, docu
         </div>
       )}
 
+      {/* Home / overview screen: a real dark street map of Hungary with the
+          living Escalade driving the actual motorway network. */}
+      {showNavPins && (
+        <>
+          <div className={`relative w-full overflow-hidden rounded-3xl border border-hairline ${compact ? "h-[72vh]" : "h-[65vh]"}`}>
+            <RealLifeMapCanvas onNavigate={(href) => router.push(href)} />
+          </div>
+          <p className="mt-2 text-xs text-white/35">{t("map.hint")}</p>
+        </>
+      )}
+
+      {!showNavPins && (
       <div className="grid gap-4 lg:grid-cols-5">
         <div className={selected || vehicleOpen ? "lg:col-span-3" : "lg:col-span-5"}>
           <div className={`relative w-full overflow-hidden rounded-3xl border border-hairline ${compact ? "h-[72vh]" : "h-[65vh]"}`}>
@@ -409,6 +422,7 @@ export function LifeMapModule({ locations, lifeAreas, organizations, goals, docu
           )}
         </AnimatePresence>
       </div>
+      )}
     </div>
   );
 }
