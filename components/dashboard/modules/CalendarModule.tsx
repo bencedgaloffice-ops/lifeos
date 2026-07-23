@@ -152,19 +152,18 @@ export function CalendarModule({
         }
       />
 
-      <div className="mb-4 flex flex-wrap items-center gap-3">
-        <Segmented value={focus} onChange={setFocus} options={focusOptions} className="focus-mode" />
-      </div>
-
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+      {/* One consolidated toolbar row: primary navigation (view + date) on
+          the left, secondary filtering (focus + search) pushed right — was
+          two stacked full-width rows before, which crowded the top of every
+          view before you'd even seen an event. */}
+      <div className="mb-5 flex flex-wrap items-center gap-3">
         <Segmented value={view} onChange={setView} options={viewOptions} />
-        <SearchBar value={searchQuery} onChange={setSearchQuery} />
         {!showingSearch && dateAnchoredViews.includes(view) && (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button onClick={() => step(-1)} className="flex h-8 w-8 items-center justify-center rounded-full glass text-white/60 hover:text-white">
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="min-w-[10rem] text-center text-sm font-medium text-white/75">{anchorLabel}</span>
+            <span className="min-w-[9rem] text-center text-sm font-medium text-white/75">{anchorLabel}</span>
             <button onClick={() => step(1)} className="flex h-8 w-8 items-center justify-center rounded-full glass text-white/60 hover:text-white">
               <ChevronRight className="h-4 w-4" />
             </button>
@@ -176,6 +175,22 @@ export function CalendarModule({
             </button>
           </div>
         )}
+
+        <div className="ml-auto flex flex-wrap items-center gap-3">
+          <select
+            value={focus}
+            onChange={(e) => setFocus(e.target.value as typeof focus)}
+            className="rounded-full border border-hairline bg-white/[0.03] px-3.5 py-2 text-xs font-medium text-white/70 outline-none transition-colors focus:border-accent/60"
+            title={t("calendar.focus.all")}
+          >
+            {focusOptions.map((o) => (
+              <option key={o.value} value={o.value} className="bg-base">
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <SearchBar value={searchQuery} onChange={setSearchQuery} />
+        </div>
       </div>
 
       <AnimatePresence mode="wait">
