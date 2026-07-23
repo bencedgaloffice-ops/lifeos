@@ -41,6 +41,7 @@ export type Profile = {
 export type Goal = {
   id: string;
   user_id: string;
+  life_area_id: string | null;
   title: string;
   description: string | null;
   target_date: string | null;
@@ -389,6 +390,21 @@ export type HabitLog = {
   created_at: string;
 };
 
+export type LifeMapLocation = {
+  id: string;
+  user_id: string;
+  name: string;
+  category: "home" | "agriculture" | "work" | "travel" | "other";
+  description: string | null;
+  position_x: number;
+  position_y: number;
+  life_area_id: string | null;
+  organization_id: string | null;
+  image_url: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type VisionCard = {
   id: string;
   user_id: string;
@@ -463,6 +479,7 @@ export type AiMemory = {
 export type Document = {
   id: string;
   user_id: string;
+  life_area_id: string | null;
   title: string;
   file_path: string;
   category: string | null;
