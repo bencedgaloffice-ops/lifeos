@@ -6,6 +6,7 @@ import {
   Target, Wallet, FolderKanban, CalendarDays, BookOpen, Sparkles, ArrowRight, Salad, ChefHat,
   Landmark, Bot, Rocket, ChevronRight, Zap, Lock,
   Trophy, CircleCheck, Briefcase, Home, ShieldCheck, Hexagon, TrendingUp, Coins, Gem, PiggyBank, Milestone, Flame,
+  Image as ImageIcon, HeartHandshake, Repeat,
   type LucideIcon,
 } from "lucide-react";
 import { Panel, Progress, Pill, ScoreRing } from "@/components/dashboard/ui";
@@ -144,6 +145,10 @@ export function OverviewModule({ data }: { data: OverviewData }) {
             stat={t("command.toBuy", { n: data.tiles.shoppingItems })} />
           <AreaTile icon={Landmark} href="/dashboard/legacy" label={t("nav.legacy.label")}
             stat={t("command.dreamsMilestones", { d: data.tiles.dreams, m: data.tiles.milestones })} />
+          <AreaTile icon={ImageIcon} href="/dashboard/vision" label={t("nav.vision.label")} />
+          <AreaTile icon={HeartHandshake} href="/dashboard/relationship" label={t("nav.relationship.label")} />
+          <AreaTile icon={Repeat} href="/dashboard/habits" label={t("nav.habits.label")} />
+          <AreaTile icon={Briefcase} href="/dashboard/business" label={t("nav.businessOverview.label")} />
           <AreaTile icon={Bot} href="/dashboard/jarvis" label={t("nav.jarvis.label")} stat={t("command.systemOnline")} accent="jarvis" />
         </div>
       </motion.section>
@@ -332,9 +337,9 @@ function MissionCard({ mission, nextLabel }: { mission: Mission; nextLabel: stri
 }
 
 function AreaTile({
-  icon: Icon, href, label, stat, accent = "accent",
+  icon: Icon, href, label, stat = "", accent = "accent",
 }: {
-  icon: LucideIcon; href: string; label: string; stat: string; accent?: "accent" | "jarvis";
+  icon: LucideIcon; href: string; label: string; stat?: string; accent?: "accent" | "jarvis";
 }) {
   const isJarvis = accent === "jarvis";
   return (

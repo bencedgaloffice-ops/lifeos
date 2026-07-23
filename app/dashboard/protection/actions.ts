@@ -26,6 +26,11 @@ export async function createDocument(formData: FormData) {
 
   const category = String(formData.get("category") ?? "").trim() || null;
   const expiresAt = String(formData.get("expires_at") ?? "") || null;
+  const organizationId = String(formData.get("organization_id") ?? "") || null;
+  const tags = String(formData.get("tags") ?? "")
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
 
   await supabase.from("documents").insert({
     user_id: user.id,
@@ -33,6 +38,8 @@ export async function createDocument(formData: FormData) {
     file_path: "",
     category,
     expires_at: expiresAt,
+    organization_id: organizationId,
+    tags,
   });
   refresh();
 }

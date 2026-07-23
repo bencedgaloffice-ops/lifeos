@@ -20,7 +20,7 @@ function toGoogleEvent(row: Pick<CalendarEvent, "title" | "description" | "locat
   return body;
 }
 
-function fromGoogleEvent(item: GoogleEvent): Omit<CalendarEvent, "id" | "user_id" | "created_at" | "updated_at" | "google_event_id" | "life_area_id" | "priority" | "reminder_minutes_before" | "subtype" | "parent_event_id" | "category"> {
+function fromGoogleEvent(item: GoogleEvent): Omit<CalendarEvent, "id" | "user_id" | "created_at" | "updated_at" | "google_event_id" | "life_area_id" | "organization_id" | "priority" | "reminder_minutes_before" | "subtype" | "parent_event_id" | "category"> {
   const allDay = Boolean(item.start?.date);
   const start_at = item.start?.dateTime ?? (item.start?.date ? `${item.start.date}T00:00:00Z` : new Date().toISOString());
   const end_at = item.end?.dateTime ?? (item.end?.date ? `${item.end.date}T00:00:00Z` : new Date(Date.now() + 3_600_000).toISOString());

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { ShieldCheck, FileText, ListChecks, KeyRound, Plus, Trash2, Check } from "lucide-react";
-import type { Document, Responsibility, SecurityNote } from "@/lib/types";
+import { useMemo, useState, useTransition } from "react";
+import { ShieldCheck, FileText, ListChecks, KeyRound, Plus, Trash2, Check, Search } from "lucide-react";
+import type { Document, Responsibility, SecurityNote, Organization } from "@/lib/types";
 import { formatDate, relativeDays } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import {
@@ -27,6 +27,7 @@ type Props = {
   documents: Document[];
   responsibilities: Responsibility[];
   notes: SecurityNote[];
+  organizations: Organization[];
 };
 
 function expiryTone(dateStr: string | null): "amber" | "green" | null {
@@ -37,15 +38,24 @@ function expiryTone(dateStr: string | null): "amber" | "green" | null {
   return null;
 }
 
-export function ProtectionModule({ documents, responsibilities, notes }: Props) {
+export function ProtectionModule({ documents, responsibilities, notes, organizations }: Props) {
   const { t, locale } = useLocale();
   const [, startTransition] = useTransition();
   const [openDoc, setOpenDoc] = useState(false);
   const [openResp, setOpenResp] = useState(false);
   const [openNote, setOpenNote] = useState(false);
+  const [query, setQuery] = useState("");
 
   const activeResponsibilities = responsibilities.filter((r) => !r.completed);
   const doneResponsibilities = responsibilities.filter((r) => r.completed);
+
+  const filteredDocuments = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return documents;
+    return documents.filter((d) =>
+      [d.title, d.category ?? "", ...(d.tags ?? [])].some((field) => field.toLowerCase().includes(q)),
+    );
+  }, [documents, query]);
 
   return (
     <div>
@@ -64,6 +74,16 @@ export function ProtectionModule({ documents, responsibilities, notes }: Props) 
             >
               <Plus className="h-3.5 w-3.5" /> {t("protection.addDocument")}
             </button>
+          </div>
+
+          <div className="relative mb-4">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-white/30" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t("protection.searchPlaceholder")}
+              className={inputClass + " pl-10"}
+            />
           </div>
 
           {openDoc && (
@@ -85,15 +105,32 @@ export function ProtectionModule({ documents, responsibilities, notes }: Props) 
                   <input type="date" name="expires_at" className={inputClass} />
                 </Field>
               </div>
+              <Field label={t("protection.formTags")}>
+                <input name="tags" placeholder={t("protection.formTagsPlaceholder")} className={inputClass} />
+              </Field>
+              {organizations.length > 0 && (
+                <Field label={t("protection.formOrganization")}>
+                  <select name="organization_id" defaultValue="" className={inputClass}>
+                    <option value="" className="bg-base">{t("protection.formOrganizationNone")}</option>
+                    {organizations.map((o) => (
+                      <option key={o.id} value={o.id} className="bg-base">{o.name}</option>
+                    ))}
+                  </select>
+                </Field>
+              )}
               <FormButtons onCancel={() => setOpenDoc(false)} t={t} />
             </form>
           )}
 
-          {documents.length === 0 ? (
-            <EmptyState icon={FileText} title={t("protection.noDocuments")} hint={t("protection.noDocumentsHint")} />
+          {filteredDocuments.length === 0 ? (
+            <EmptyState
+              icon={FileText}
+              title={query ? t("protection.noSearchResults") : t("protection.noDocuments")}
+              hint={query ? undefined : t("protection.noDocumentsHint")}
+            />
           ) : (
             <div className="divide-y divide-hairline">
-              {documents.map((d) => {
+              {filteredDocuments.map((d) => {
                 const tone = expiryTone(d.expires_at);
                 return (
                   <div key={d.id} className="group flex items-center gap-3 py-3">
@@ -106,6 +143,13 @@ export function ProtectionModule({ documents, responsibilities, notes }: Props) 
                         <p className="text-xs text-white/40">
                           {t("protection.expiresPrefix")} {formatDate(d.expires_at, undefined, locale)} · {relativeDays(d.expires_at, locale)}
                         </p>
+                      )}
+                      {d.tags?.length > 0 && (
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {d.tags.map((tag) => (
+                            <span key={tag} className="rounded-full bg-white/6 px-2 py-0.5 text-[0.65rem] text-white/50">{tag}</span>
+                          ))}
+                        </div>
                       )}
                     </div>
                     {tone && (
