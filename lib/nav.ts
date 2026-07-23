@@ -6,6 +6,7 @@ import {
   FolderKanban,
   BookOpen,
   Brain,
+  Bot,
   Settings,
   ShieldCheck,
   Landmark,
@@ -35,5 +36,6 @@ export const dashboardNav: NavItem[] = [
   { key: "journal", href: "/dashboard/journal", icon: BookOpen },
   { key: "profile", href: "/dashboard/profile", icon: UserCircle },
   { key: "ai", href: "/dashboard/ai", icon: Brain },
+  { key: "jarvis", href: "/dashboard/jarvis", icon: Bot },
   { key: "settings", href: "/dashboard/settings", icon: Settings },
 ];

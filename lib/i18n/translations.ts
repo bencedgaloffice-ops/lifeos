@@ -41,6 +41,7 @@ const en = {
     nutrition: { label: "Nutrition", description: "Meals, weight & energy" },
     journal: { label: "Journal", description: "Your journey, remembered" },
     ai: { label: "AI Companion", description: "Understands your life" },
+    jarvis: { label: "Jarvis", description: "Voice, command & control" },
     settings: { label: "Settings", description: "Password & preferences" },
   },
   shell: {
@@ -744,6 +745,7 @@ const hu: typeof en = {
     nutrition: { label: "Táplálkozás", description: "Étkezések, súly és energia" },
     journal: { label: "Napló", description: "Az utad, megőrizve" },
     ai: { label: "AI Társ", description: "Érti az életedet" },
+    jarvis: { label: "Jarvis", description: "Hang, parancs és irányítás" },
     settings: { label: "Beállítások", description: "Jelszó és beállítások" },
   },
   shell: {

@@ -1,9 +1,13 @@
 "use client";
 
-import { Suspense, useMemo, useRef } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Stars, useTexture } from "@react-three/drei";
+import { useTexture } from "@react-three/drei";
+import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import * as THREE from "three";
+import { StarField } from "./StarField";
+import { SpaceDust } from "./SpaceDust";
+import { HoloRings } from "./HoloRings";
 
 /* ------------------------------------------------------------------
    Realistic NASA-style Earth — real Blue Marble day imagery, city
@@ -173,6 +177,29 @@ type PointerState = {
 // halo included, always fits inside the viewport.
 const HALO_RADIUS = 1.16;
 
+// The day texture is a standard equirectangular map (u=0.5 → 0° longitude,
+// Greenwich). Three.js's own sphere UV mapping puts u=0.25 facing the
+// default camera, so we rotate the globe by -90° to bring u=0.5 to face
+// front, then bias a further ~12° east to center the view on Central
+// Europe (Germany/Italy/Hungary) rather than the Atlantic edge of the UK.
+const EUROPE_FACING_ROTATION_Y = -Math.PI / 2 - THREE.MathUtils.degToRad(12);
+
+// A gentle axial tilt (applied once, before the perpetual Y-spin) lifts
+// Central Europe out of the top rim of the frame and into the vertical
+// center — without it, Germany/Hungary sit right at the edge of view.
+const EUROPE_FACING_TILT_X = THREE.MathUtils.degToRad(22);
+
+// Cinematic intro: hold on Europe fully still, then ease up into the
+// perpetual slow spin — so the first thing anyone sees unambiguously reads
+// as "Europe", not a blur of continents.
+const INTRO_HOLD_SECONDS = 2.4;
+const INTRO_EASE_SECONDS = 3.6;
+
+function smoothstep01(k: number) {
+  const x = THREE.MathUtils.clamp(k, 0, 1);
+  return x * x * (3 - 2 * x);
+}
+
 function Globe({ pointer, hovered }: { pointer: React.MutableRefObject<PointerState>; hovered: React.MutableRefObject<boolean> }) {
   const spinGroup = useRef<THREE.Group>(null); // owns perpetual spin + drag
   const floatGroup = useRef<THREE.Group>(null); // owns float/breathing offset
@@ -236,11 +263,21 @@ function Globe({ pointer, hovered }: { pointer: React.MutableRefObject<PointerSt
     const t = state.clock.elapsedTime;
     const p = pointer.current;
 
+    // --- Cinematic intro: hold still on Europe, then ease into the loop ---
+    let idleSpeed = baseSpinSpeed;
+    if (t < INTRO_HOLD_SECONDS) {
+      idleSpeed = 0;
+    } else if (t < INTRO_HOLD_SECONDS + INTRO_EASE_SECONDS) {
+      idleSpeed = baseSpinSpeed * smoothstep01((t - INTRO_HOLD_SECONDS) / INTRO_EASE_SECONDS);
+    }
+    // Hovering reads as the globe "paying attention" — rotation eases down slightly.
+    idleSpeed *= 1 - glowBoost.current * 0.35;
+
     // --- Spin: perpetual + drag inertia, independent of camera parallax ---
     if (p.down) {
       spinVelocity.current = damp(spinVelocity.current, p.dragDX * 2.4, 10, dt);
     } else {
-      spinVelocity.current = damp(spinVelocity.current, baseSpinSpeed, 1.6, dt);
+      spinVelocity.current = damp(spinVelocity.current, idleSpeed, 1.6, dt);
     }
     if (spinGroup.current) {
       spinGroup.current.rotation.y += spinVelocity.current * dt;
@@ -255,12 +292,16 @@ function Globe({ pointer, hovered }: { pointer: React.MutableRefObject<PointerSt
       floatGroup.current.scale.setScalar(breathe);
     }
 
-    // --- Cinematic camera parallax (dolly + tilt) ---
-    const targetCamX = p.x * 0.45;
-    const targetCamY = 0.15 + p.y * -0.28;
+    // --- Cinematic camera: mouse parallax + slow orbital drift + zoom breathing ---
+    const orbitalAngle = t * 0.05;
+    const orbitalX = Math.sin(orbitalAngle) * 0.12;
+    const orbitalY = Math.cos(orbitalAngle * 0.7) * 0.05;
+    const zoomBreathe = Math.sin(t * 0.12) * 0.15;
+    const targetCamX = p.x * 0.45 + orbitalX;
+    const targetCamY = 0.15 + p.y * -0.28 + orbitalY;
     camera.position.x = damp(camera.position.x, targetCamX, 2.2, dt);
     camera.position.y = damp(camera.position.y, targetCamY, 2.2, dt);
-    camera.position.z = damp(camera.position.z, 6, 2.2, dt);
+    camera.position.z = damp(camera.position.z, 6 + zoomBreathe, 2.2, dt);
     camera.lookAt(0, 0, 0);
 
     // --- Hover / interaction glow boost, eased ---
@@ -277,13 +318,18 @@ function Globe({ pointer, hovered }: { pointer: React.MutableRefObject<PointerSt
 
   // Size the globe (halo included) so it always fits fully inside the
   // viewport with breathing room — never crops the poles or the limb,
-  // regardless of aspect ratio or screen size.
-  const maxDiameter = Math.min(viewport.width, viewport.height) * 0.82;
-  const scale = THREE.MathUtils.clamp(maxDiameter / (2 * HALO_RADIUS), 0.9, 2.5);
+  // regardless of aspect ratio or screen size. Kept smaller than a full
+  // hero fill so the black void above/below has room for the brand mark
+  // and the entry button.
+  const maxDiameter = Math.min(viewport.width, viewport.height) * 0.64;
+  const scale = THREE.MathUtils.clamp(maxDiameter / (2 * HALO_RADIUS), 0.7, 2);
 
   return (
     <group ref={floatGroup}>
-      <group ref={spinGroup} scale={scale}>
+      <group ref={spinGroup} scale={scale} rotation={[EUROPE_FACING_TILT_X, EUROPE_FACING_ROTATION_Y, 0]}>
+        {/* Holographic tracking layer — rings, scan band, satellite dots */}
+        <HoloRings glowBoost={glowBoost} />
+
         {/* Earth surface */}
         <mesh
           onPointerOver={() => (hovered.current = true)}
@@ -344,10 +390,22 @@ function Globe({ pointer, hovered }: { pointer: React.MutableRefObject<PointerSt
   );
 }
 
+/** Pauses the render loop while the tab is hidden — no wasted GPU/battery. */
+function useVisibleFrameloop() {
+  const [frameloop, setFrameloop] = useState<"always" | "never">("always");
+  useEffect(() => {
+    const onVisibility = () => setFrameloop(document.hidden ? "never" : "always");
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, []);
+  return frameloop;
+}
+
 export default function Earth() {
   const pointer = useRef<PointerState>({ x: 0, y: 0, down: false, dragDX: 0, dragDY: 0, velX: 0 });
   const hovered = useRef(false);
   const lastX = useRef(0);
+  const frameloop = useVisibleFrameloop();
 
   return (
     <Canvas
@@ -355,6 +413,7 @@ export default function Earth() {
       dpr={[1, 2]}
       gl={{ antialias: true, alpha: true, powerPreference: "high-performance" }}
       style={{ touchAction: "none" }}
+      frameloop={frameloop}
       onPointerMove={(e) => {
         const x = (e.clientX / window.innerWidth) * 2 - 1;
         const y = (e.clientY / window.innerHeight) * 2 - 1;
@@ -381,10 +440,14 @@ export default function Earth() {
       <directionalLight position={[5, 2, 4]} intensity={1.25} />
       {/* Subtle cool fill from the opposite side so the night limb never goes fully flat black */}
       <directionalLight position={[-4, -1, -3]} intensity={0.12} color="#3b5bdb" />
-      <Stars radius={90} depth={50} count={3200} factor={3.2} saturation={0} fade speed={0.35} />
+      <StarField />
+      <SpaceDust />
       <Suspense fallback={null}>
         <Globe pointer={pointer} hovered={hovered} />
       </Suspense>
+      <EffectComposer multisampling={0} enableNormalPass={false}>
+        <Bloom luminanceThreshold={0.42} luminanceSmoothing={0.9} intensity={0.4} mipmapBlur radius={0.6} />
+      </EffectComposer>
     </Canvas>
   );
 }
