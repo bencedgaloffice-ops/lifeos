@@ -11,6 +11,7 @@ import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { StarField } from "./StarField";
 import { HUNGARY_BORDER, projectLonLat } from "@/lib/hungary-geo";
 import { LOCATION_CLUSTERS, type LocationCluster } from "@/lib/hungary-locations";
+import { ROADS } from "@/lib/hungary-roads";
 import { computeVehicleState, type VehicleState } from "@/lib/vehicle-sim";
 
 const CATEGORY_COLOR: Record<string, string> = {
@@ -83,6 +84,36 @@ function BorderGlow() {
     <>
       <Line points={points} color="#8FE3FF" lineWidth={2.5} transparent opacity={0.9} />
       <Line points={points} color="#8FE3FF" lineWidth={7} transparent opacity={0.25} />
+    </>
+  );
+}
+
+/** Hungary's real motorway network (M0 ring + M1/M3/M5/M7 spokes) traced
+ * onto the terrain — a warm asphalt glow distinct from the border's cool
+ * cyan, with a small floating label at each road's midpoint so it reads as
+ * "M1", "M3", etc., not an unlabeled line. The vehicle's own routes ride
+ * these exact same points (see lib/vehicle-routes.ts). */
+function RoadNetwork() {
+  return (
+    <>
+      {ROADS.map((road) => {
+        const points: [number, number, number][] = road.path.map(([lon, lat]) => {
+          const [x, z] = projectLonLat(lon, lat, WORLD_SIZE);
+          return [x, GROUND_Y + 0.008, z];
+        });
+        const mid = points[Math.floor(points.length / 2)];
+        return (
+          <group key={road.key}>
+            <Line points={points} color="#F3C969" lineWidth={1.6} transparent opacity={0.75} />
+            <Line points={points} color="#F3C969" lineWidth={4.5} transparent opacity={0.18} />
+            <Html center distanceFactor={10} position={mid} occlude={false}>
+              <span className="whitespace-nowrap rounded-full border border-amber-200/25 bg-black/50 px-1.5 py-0.5 text-[0.55rem] font-semibold tracking-wide text-amber-100/80 backdrop-blur-sm">
+                {road.label}
+              </span>
+            </Html>
+          </group>
+        );
+      })}
     </>
   );
 }
@@ -355,7 +386,7 @@ const STATUS_COLOR: Record<VehicleState["status"], string> = {
  * opens the operational status panel (handled by the parent module). */
 function VehicleMarker({ onOpen }: { onOpen: (state: VehicleState) => void }) {
   const groupRef = useRef<THREE.Group>(null);
-  const bodyRef = useRef<THREE.Mesh>(null);
+  const bodyRef = useRef<THREE.Group>(null);
   const [hovered, setHovered] = useState(false);
   const lastHeading = useRef(0);
 
@@ -397,12 +428,56 @@ function VehicleMarker({ onOpen }: { onOpen: (state: VehicleState) => void }) {
           document.body.style.cursor = "default";
         }}
       >
-        <mesh ref={bodyRef} castShadow>
-          <coneGeometry args={[0.06, 0.16, 3]} />
-          <meshStandardMaterial color={color} emissive={color} emissiveIntensity={1.8} />
-        </mesh>
-        {/* Headlights — only bright during the loop's simulated night. */}
-        <pointLight position={[0, 0, 0.1]} intensity={state.isNight ? 0.9 : 0.15} distance={1.2} color="#fff6d8" />
+        {/* A small stylized car, not a directionless cone — nose faces local
+            +Z, matching the heading rotation applied to the parent group, so
+            it visibly turns to face the way it's actually driving. */}
+        <group ref={bodyRef}>
+          <mesh position={[0, 0.045, 0]} castShadow>
+            <boxGeometry args={[0.095, 0.05, 0.19]} />
+            <meshStandardMaterial color="#D8DEE4" roughness={0.35} metalness={0.55} />
+          </mesh>
+          <mesh position={[0, 0.085, -0.015]} castShadow>
+            <boxGeometry args={[0.075, 0.04, 0.1]} />
+            <meshStandardMaterial color="#141a1f" roughness={0.2} metalness={0.4} />
+          </mesh>
+          {/* Roof light bar — carries the status color, the one part of the
+              car that isn't just neutral bodywork. */}
+          <mesh position={[0, 0.108, -0.015]}>
+            <boxGeometry args={[0.05, 0.012, 0.05]} />
+            <meshStandardMaterial color={color} emissive={color} emissiveIntensity={2.2} />
+          </mesh>
+          {/* Headlights (front, +Z) / taillights (back, -Z). */}
+          <mesh position={[0.03, 0.045, 0.096]}>
+            <sphereGeometry args={[0.014, 8, 8]} />
+            <meshStandardMaterial color="#fff6d8" emissive="#fff6d8" emissiveIntensity={state.isNight ? 3 : 1.2} />
+          </mesh>
+          <mesh position={[-0.03, 0.045, 0.096]}>
+            <sphereGeometry args={[0.014, 8, 8]} />
+            <meshStandardMaterial color="#fff6d8" emissive="#fff6d8" emissiveIntensity={state.isNight ? 3 : 1.2} />
+          </mesh>
+          <mesh position={[0.032, 0.045, -0.096]}>
+            <sphereGeometry args={[0.011, 8, 8]} />
+            <meshStandardMaterial color="#dc2626" emissive="#dc2626" emissiveIntensity={1.4} />
+          </mesh>
+          <mesh position={[-0.032, 0.045, -0.096]}>
+            <sphereGeometry args={[0.011, 8, 8]} />
+            <meshStandardMaterial color="#dc2626" emissive="#dc2626" emissiveIntensity={1.4} />
+          </mesh>
+          {/* Wheels. */}
+          {[
+            [0.05, 0.07],
+            [0.05, -0.07],
+            [-0.05, 0.07],
+            [-0.05, -0.07],
+          ].map(([wx, wz], i) => (
+            <mesh key={i} position={[wx, 0.02, wz]} rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[0.02, 0.02, 0.018, 12]} />
+              <meshStandardMaterial color="#0e0e10" roughness={0.8} />
+            </mesh>
+          ))}
+        </group>
+        {/* Headlight glow — only bright during the loop's simulated night. */}
+        <pointLight position={[0, 0.06, 0.12]} intensity={state.isNight ? 0.9 : 0.15} distance={1.2} color="#fff6d8" />
       </group>
     </Trail>
   );
@@ -448,6 +523,7 @@ export function LifeMap({
       ))}
       {navPins && (
         <>
+          <RoadNetwork />
           {LOCATION_CLUSTERS.map((cluster) => (
             <LocationClusterPin key={cluster.key} cluster={cluster} onNavigate={onNavigate ?? (() => {})} />
           ))}
