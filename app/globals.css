@@ -205,3 +205,43 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* ── Leaflet dark theme (real Life Map) ───────────────────────────── */
+.leaflet-container {
+  background: #05070a;
+  font-family: var(--font-inter), system-ui, sans-serif;
+}
+.leaflet-bar,
+.leaflet-bar a {
+  background: rgba(12, 16, 22, 0.9);
+  color: #cbd5e1;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+.leaflet-bar a:hover {
+  background: rgba(30, 38, 50, 0.95);
+  color: #fff;
+}
+.leaflet-control-attribution {
+  background: rgba(0, 0, 0, 0.55) !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+.leaflet-control-attribution a {
+  color: rgba(103, 232, 249, 0.6) !important;
+}
+.lifeos-popup .leaflet-popup-content-wrapper {
+  background: rgba(8, 12, 16, 0.92);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  backdrop-filter: blur(10px);
+}
+.lifeos-popup .leaflet-popup-tip {
+  background: rgba(8, 12, 16, 0.92);
+}
+.lifeos-popup .leaflet-popup-content {
+  margin: 12px 14px;
+}
+.lifeos-popup .lifeos-navlink:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
