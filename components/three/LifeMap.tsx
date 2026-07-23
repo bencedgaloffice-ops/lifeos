@@ -7,6 +7,7 @@ import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import * as THREE from "three";
 import type { LifeMapLocation } from "@/lib/types";
 import { StarField } from "./StarField";
+import { HUNGARY_BORDER, projectLonLat } from "@/lib/hungary-geo";
 
 const CATEGORY_COLOR: Record<string, string> = {
   home: "#F5A15E",
@@ -17,26 +18,61 @@ const CATEGORY_COLOR: Record<string, string> = {
 };
 
 const WORLD_SIZE = 12;
+/** Height of Hungary's raised landmass above the surrounding base plate —
+ * pins and connection lines sit at this level, not at y=0. */
+const GROUND_Y = 0.2;
 const CAMERA_TARGET: [number, number, number] = [0, 7.5, 9.5];
 const CAMERA_START: [number, number, number] = [0, 16, 20];
 
+/** A saved location's position_x/position_y are real longitude/latitude —
+ * this projects them onto the local ground plane. */
 function toWorld(loc: LifeMapLocation): [number, number] {
-  return [(loc.position_x / 1000) * WORLD_SIZE - WORLD_SIZE / 2, (loc.position_y / 1000) * WORLD_SIZE - WORLD_SIZE / 2];
+  return projectLonLat(loc.position_x, loc.position_y, WORLD_SIZE);
 }
 
-/** A stylized, procedurally-displaced terrain plate — an artistic relief,
- * not real elevation data (per the "custom stylized 3D" design decision). */
-function Terrain() {
+/** Hungary's actual national border, extruded into a raised, lit landmass —
+ * the recognizable silhouette the map was missing, not a generic plate. */
+function HungaryLandmass() {
   const geometry = useMemo(() => {
-    const geo = new THREE.PlaneGeometry(WORLD_SIZE + 4, WORLD_SIZE + 4, 90, 90);
+    const shape = new THREE.Shape();
+    HUNGARY_BORDER.forEach(([lon, lat], i) => {
+      const [x, z] = projectLonLat(lon, lat, WORLD_SIZE);
+      // The mesh is rotated -90° about X below, which maps a shape's local
+      // (x, y) to world (x, -y) — negate z here so the final world Z matches
+      // every pin's own projectLonLat output.
+      if (i === 0) shape.moveTo(x, -z);
+      else shape.lineTo(x, -z);
+    });
+    const geo = new THREE.ExtrudeGeometry(shape, {
+      depth: GROUND_Y,
+      bevelEnabled: true,
+      bevelThickness: 0.035,
+      bevelSize: 0.05,
+      bevelSegments: 3,
+      curveSegments: 6,
+    });
+    geo.computeVertexNormals();
+    return geo;
+  }, []);
+
+  return (
+    <mesh geometry={geometry} rotation={[-Math.PI / 2, 0, 0]} receiveShadow castShadow>
+      <meshStandardMaterial color="#123626" roughness={0.82} metalness={0.12} />
+    </mesh>
+  );
+}
+
+/** The surrounding region beyond Hungary's border — a dimmer, lower plate so
+ * the country itself reads as the raised, lit centerpiece. Travel pins for
+ * trips abroad land out here, past the silhouette's edge. */
+function SurroundingTerrain() {
+  const geometry = useMemo(() => {
+    const geo = new THREE.PlaneGeometry(WORLD_SIZE + 5, WORLD_SIZE + 5, 60, 60);
     const pos = geo.attributes.position;
     for (let i = 0; i < pos.count; i++) {
       const x = pos.getX(i);
       const y = pos.getY(i);
-      const h =
-        Math.sin(x * 0.55) * Math.cos(y * 0.45) * 0.32 +
-        Math.sin(x * 1.3 + y * 0.6) * 0.12 +
-        Math.sin(x * 0.15 + y * 0.2) * 0.4;
+      const h = Math.sin(x * 0.4) * Math.cos(y * 0.35) * 0.1 + Math.sin(x * 0.9 + y * 0.5) * 0.04;
       pos.setZ(i, h);
     }
     geo.computeVertexNormals();
@@ -44,8 +80,8 @@ function Terrain() {
   }, []);
 
   return (
-    <mesh geometry={geometry} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-      <meshStandardMaterial color="#0b241f" roughness={0.95} metalness={0.05} />
+    <mesh geometry={geometry} rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.08, 0]} receiveShadow>
+      <meshStandardMaterial color="#060f0c" roughness={0.97} metalness={0.02} />
     </mesh>
   );
 }
@@ -65,7 +101,7 @@ function CameraIntro({ onDone }: { onDone: () => void }) {
     const t = Math.min(elapsed.current / 1.8, 1);
     const eased = 1 - Math.pow(1 - t, 3);
     camera.position.lerpVectors(new THREE.Vector3(...CAMERA_START), new THREE.Vector3(...CAMERA_TARGET), eased);
-    camera.lookAt(0, 0, 0);
+    camera.lookAt(0, GROUND_Y, 0);
     if (t >= 1) {
       done.current = true;
       onDone();
@@ -94,12 +130,12 @@ function Pin({
 
   useFrame(({ clock }) => {
     if (sphereRef.current) {
-      sphereRef.current.position.y = 0.95 + Math.sin(clock.elapsedTime * 1.6 + x) * 0.05;
+      sphereRef.current.position.y = GROUND_Y + 0.95 + Math.sin(clock.elapsedTime * 1.6 + x) * 0.05;
     }
   });
 
   return (
-    <group position={[x, 0, z]}>
+    <group position={[x, GROUND_Y, z]}>
       <mesh position={[0, 0.45, 0]}>
         <cylinderGeometry args={[0.015, 0.015, 0.9, 8]} />
         <meshBasicMaterial color={color} transparent opacity={0.45} />
@@ -164,8 +200,8 @@ function ConnectionLines({ locations }: { locations: LifeMapLocation[] }) {
             <Line
               key={l.id}
               points={[
-                [hx, 0.05, hz],
-                [x, 0.05, z],
+                [hx, GROUND_Y + 0.05, hz],
+                [x, GROUND_Y + 0.05, z],
               ]}
               color="#5EEAD4"
               opacity={0.3}
@@ -196,12 +232,13 @@ export function LifeMap({
       <color attach="background" args={["#050a08"]} />
       <fog attach="fog" args={["#050a08", 9, 23]} />
       <ambientLight intensity={0.4} />
-      <directionalLight position={[6, 9, 4]} intensity={1.1} color="#bfe3ff" />
+      <directionalLight position={[6, 9, 4]} intensity={1.15} color="#bfe3ff" />
       <directionalLight position={[-6, 4, -4]} intensity={0.25} color="#5EEAD4" />
       <StarField />
       {!ready && <CameraIntro onDone={() => setReady(true)} />}
-      <Terrain />
-      <gridHelper args={[WORLD_SIZE + 4, 32, "#1c4a3f", "#0e2622"]} position={[0, 0.015, 0]} />
+      <SurroundingTerrain />
+      <HungaryLandmass />
+      <gridHelper args={[WORLD_SIZE + 5, 40, "#1c4a3f", "#0e2622"]} position={[0, -0.075, 0]} />
       <ConnectionLines locations={locations} />
       {locations.map((loc) => (
         <Pin key={loc.id} loc={loc} active={loc.id === selectedId} onSelect={onSelect} progress={progress?.[loc.id]} />
@@ -212,7 +249,7 @@ export function LifeMap({
           minDistance={4}
           maxDistance={17}
           maxPolarAngle={Math.PI / 2.15}
-          target={[0, 0, 0]}
+          target={[0, GROUND_Y, 0]}
           autoRotate
           autoRotateSpeed={0.25}
         />

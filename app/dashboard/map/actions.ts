@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { randomHungaryLonLat } from "@/lib/hungary-geo";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -21,6 +22,7 @@ export async function createLocation(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
 
+  const [lon, lat] = randomHungaryLonLat();
   await supabase.from("life_map_locations").insert({
     user_id: user.id,
     name,
@@ -28,13 +30,13 @@ export async function createLocation(formData: FormData) {
     description: String(formData.get("description") ?? "").trim() || null,
     life_area_id: String(formData.get("life_area_id") ?? "") || null,
     organization_id: String(formData.get("organization_id") ?? "") || null,
-    position_x: 400 + Math.random() * 200,
-    position_y: 400 + Math.random() * 200,
+    position_x: lon,
+    position_y: lat,
   });
   refresh();
 }
 
-/** Persists a pin's position after it's dragged on the map. */
+/** Persists a pin's position (real longitude/latitude) after it's dragged on the map. */
 export async function updateLocationPosition(id: string, x: number, y: number) {
   const { supabase } = await requireUser();
   await supabase
