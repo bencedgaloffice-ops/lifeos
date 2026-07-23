@@ -29,6 +29,7 @@ export default async function CalendarPage() {
   const [
     { data: profile },
     { data: lifeAreas },
+    { data: organizations },
     { data: events },
     { data: shifts },
     { data: goals },
@@ -43,6 +44,7 @@ export default async function CalendarPage() {
   ] = await Promise.all([
     supabase.from("profiles").select("display_name, icsb_hourly_rate, preferred_currency").maybeSingle(),
     supabase.from("life_areas").select("*").order("name"),
+    supabase.from("organizations").select("*").order("created_at", { ascending: true }),
     supabase.from("calendar_events").select("*"),
     supabase.from("shifts").select("*").order("start_at", { ascending: false }),
     supabase.from("goals").select("id, title, target_date, life_area_id"),
@@ -76,6 +78,7 @@ export default async function CalendarPage() {
     <CalendarModule
       items={items}
       lifeAreas={lifeAreas ?? []}
+      organizations={organizations ?? []}
       shifts={shifts ?? []}
       apiaries={apiaries ?? []}
       harvestLog={harvestLog ?? []}

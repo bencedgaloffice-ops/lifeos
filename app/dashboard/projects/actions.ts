@@ -20,18 +20,28 @@ export async function createProject(formData: FormData) {
   const description = String(formData.get("description") ?? "").trim() || null;
   const deadline = String(formData.get("deadline") ?? "") || null;
   const progress_percent = Number(formData.get("progress_percent") ?? 0) || 0;
+  const organization_id = String(formData.get("organization_id") ?? "") || null;
 
   await supabase.from("projects").insert({
     user_id: user.id,
     name,
     description,
     deadline,
+    organization_id,
     progress_percent: Math.max(0, Math.min(100, progress_percent)),
     status: "active",
   });
 
   revalidatePath("/dashboard/projects");
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/business");
+}
+
+export async function updateProjectOrganization(id: string, organization_id: string | null) {
+  const { supabase } = await requireUser();
+  await supabase.from("projects").update({ organization_id }).eq("id", id);
+  revalidatePath("/dashboard/projects");
+  revalidatePath("/dashboard/business");
 }
 
 export async function updateProjectProgress(id: string, progress: number) {

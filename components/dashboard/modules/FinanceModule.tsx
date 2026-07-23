@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   Wallet,
@@ -50,6 +51,7 @@ type Props = {
   currency: string;
   holderName: string | null;
   netWorth: number;
+  businessNet: number;
   accountsTotal: number;
   monthIncome: number;
   monthSpending: number;
@@ -175,6 +177,13 @@ export function FinanceModule(props: Props) {
           />
           <StatCard label={t("finance.statIncome")} value={fc(props.monthIncome)} />
           <StatCard label={t("finance.statSpending")} value={fc(props.monthSpending)} />
+          <Link href="/dashboard/business" className="transition-transform hover:-translate-y-0.5">
+            <StatCard
+              label={t("finance.statBusinessNet")}
+              value={fc(props.businessNet)}
+              hint={t("finance.statBusinessNetHint")}
+            />
+          </Link>
         </div>
       </div>
 

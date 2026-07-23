@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, Trash2, ExternalLink, Repeat } from "lucide-react";
-import type { CalendarItem, LifeArea } from "@/lib/types";
+import type { CalendarItem, LifeArea, Organization } from "@/lib/types";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { inputClass } from "@/components/dashboard/ui";
 import { resolveIcon } from "@/lib/icon-registry";
@@ -20,12 +20,14 @@ export function EventModal({
   item,
   createDefaults,
   lifeAreas,
+  organizations,
 }: {
   open: boolean;
   onClose: () => void;
   item: CalendarItem | null;
   createDefaults: CreateDefaults | null;
   lifeAreas: LifeArea[];
+  organizations: Organization[];
 }) {
   const { t } = useLocale();
   const [pending, startTransition] = useTransition();
@@ -177,6 +179,20 @@ export function EventModal({
                 <input type="checkbox" name="all_day" defaultChecked={item?.allDay ?? false} className="h-4 w-4 rounded accent-accent" />
                 {t("calendar.event.allDay")}
               </label>
+
+              {organizations.length > 0 && (
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-white/45">
+                    {t("calendar.event.organization")}
+                  </label>
+                  <select name="organization_id" defaultValue={item?.organizationId ?? ""} className={inputClass}>
+                    <option value="" className="bg-base">{t("calendar.event.organizationNone")}</option>
+                    {organizations.map((o) => (
+                      <option key={o.id} value={o.id} className="bg-base">{o.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <input
                 name="location"

@@ -63,6 +63,7 @@ export async function upsertCalendarEvent(formData: FormData) {
     title,
     description: str(formData, "description"),
     life_area_id: str(formData, "life_area_id"),
+    organization_id: str(formData, "organization_id"),
     start_at: start.toISOString(),
     end_at: end.toISOString(),
     all_day: allDay,

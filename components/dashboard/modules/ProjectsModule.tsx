@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { motion } from "framer-motion";
 import { FolderKanban, Plus, Trash2, Minus } from "lucide-react";
-import type { Project } from "@/lib/types";
+import type { Project, Organization } from "@/lib/types";
 import { formatDate, relativeDays } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import {
@@ -18,10 +18,11 @@ import {
 import {
   createProject,
   updateProjectProgress,
+  updateProjectOrganization,
   deleteProject,
 } from "@/app/dashboard/projects/actions";
 
-export function ProjectsModule({ projects }: { projects: Project[] }) {
+export function ProjectsModule({ projects, organizations }: { projects: Project[]; organizations: Organization[] }) {
   const [open, setOpen] = useState(false);
   const [, startTransition] = useTransition();
   const { t } = useLocale();
@@ -78,6 +79,18 @@ export function ProjectsModule({ projects }: { projects: Project[] }) {
                 className={inputClass}
               />
             </Field>
+            {organizations.length > 0 && (
+              <div className="sm:col-span-2">
+                <Field label={t("projects.formOrganization")}>
+                  <select name="organization_id" defaultValue="" className={inputClass}>
+                    <option value="" className="bg-base">{t("projects.formOrganizationNone")}</option>
+                    {organizations.map((o) => (
+                      <option key={o.id} value={o.id} className="bg-base">{o.name}</option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+            )}
             <div className="flex gap-3 sm:col-span-2">
               <button
                 type="submit"
@@ -106,7 +119,7 @@ export function ProjectsModule({ projects }: { projects: Project[] }) {
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {projects.map((p, i) => (
-            <ProjectCard key={p.id} project={p} index={i} />
+            <ProjectCard key={p.id} project={p} index={i} organizations={organizations} />
           ))}
         </div>
       )}
@@ -114,7 +127,7 @@ export function ProjectsModule({ projects }: { projects: Project[] }) {
   );
 }
 
-function ProjectCard({ project, index }: { project: Project; index: number }) {
+function ProjectCard({ project, index, organizations }: { project: Project; index: number; organizations: Organization[] }) {
   const [pending, startTransition] = useTransition();
   const { t, locale } = useLocale();
   const step = (delta: number) =>
@@ -189,6 +202,18 @@ function ProjectCard({ project, index }: { project: Project; index: number }) {
             </button>
             <span className="text-xs text-white/35">{t("projects.adjustProgress")}</span>
           </div>
+          {organizations.length > 0 && (
+            <select
+              defaultValue={project.organization_id ?? ""}
+              onChange={(e) => startTransition(() => updateProjectOrganization(project.id, e.target.value || null))}
+              className="mt-3 w-full rounded-full bg-white/6 px-3 py-1.5 text-xs text-white/60"
+            >
+              <option value="" className="bg-base">{t("projects.formOrganizationNone")}</option>
+              {organizations.map((o) => (
+                <option key={o.id} value={o.id} className="bg-base">{o.name}</option>
+              ))}
+            </select>
+          )}
         </div>
       </Panel>
     </motion.div>

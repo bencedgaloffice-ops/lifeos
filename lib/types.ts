@@ -53,6 +53,7 @@ export type Goal = {
 export type Account = {
   id: string;
   user_id: string;
+  organization_id: string | null;
   name: string;
   type: string | null;
   currency: string;
@@ -78,6 +79,8 @@ export type Transaction = {
 export type Project = {
   id: string;
   user_id: string;
+  organization_id: string | null;
+  life_area_id: string | null;
   name: string;
   description: string | null;
   status: string;
@@ -442,6 +445,7 @@ export type CalendarItem = {
   recurrenceRule: string | null;
   isRecurringInstance: boolean;
   lifeAreaId: string | null;
+  organizationId: string | null;
   reminderMinutesBefore: number | null;
   subtype: string | null;
   fromGoogle: boolean;

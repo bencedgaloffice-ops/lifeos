@@ -27,6 +27,7 @@ export default async function FinancePage() {
     { data: recurring },
     { data: snapshots },
     { data: assets },
+    { data: businessTx },
   ] = await Promise.all([
     supabase
       .from("profiles")
@@ -35,9 +36,14 @@ export default async function FinancePage() {
     supabase
       .from("transactions")
       .select("id, amount, direction, description, occurred_at, account_id, budget_categories(name)")
+      .is("organization_id", null)
       .order("occurred_at", { ascending: false }),
     supabase.from("investment_holdings").select("id, symbol, quantity, avg_cost, current_value"),
-    supabase.from("accounts").select("id, name, type, current_balance, currency").order("created_at", { ascending: true }),
+    supabase
+      .from("accounts")
+      .select("id, name, type, current_balance, currency")
+      .is("organization_id", null)
+      .order("created_at", { ascending: true }),
     supabase
       .from("budget_categories")
       .select("id, name, monthly_limit")
@@ -54,6 +60,7 @@ export default async function FinancePage() {
       .order("snapshot_date", { ascending: true })
       .limit(90),
     supabase.from("assets").select("id, name, category, estimated_value").order("created_at", { ascending: true }),
+    supabase.from("transactions").select("amount, direction").not("organization_id", "is", null),
   ]);
 
   const currency = profile?.preferred_currency || "USD";
@@ -111,11 +118,17 @@ export default async function FinancePage() {
   const assetsTotal = (assets ?? []).reduce((s, a) => s + num(a.estimated_value), 0);
   const netWorth = num(profile?.current_savings) + portfolioValue + accountsTotal + assetsTotal;
 
+  const businessNet = (businessTx ?? []).reduce(
+    (s, t) => s + (t.direction === "in" ? num(t.amount) : -num(t.amount)),
+    0,
+  );
+
   return (
     <FinanceModule
       currency={currency}
       holderName={profile?.display_name ?? null}
       netWorth={netWorth}
+      businessNet={businessNet}
       accountsTotal={accountsTotal}
       monthIncome={monthIncome}
       monthSpending={monthSpending}

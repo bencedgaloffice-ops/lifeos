@@ -51,7 +51,7 @@ export default async function DashboardHome() {
     { count: shoppingCount },
     { data: achievementRows },
   ] = await Promise.all([
-    supabase.from("accounts").select("current_balance"),
+    supabase.from("accounts").select("current_balance").is("organization_id", null),
     supabase.from("assets").select("estimated_value, category"),
     supabase.from("nutrition_entries").select("logged_at").gte("logged_at", new Date(Date.now() - 14 * 86_400_000).toISOString()),
     supabase.from("shifts").select("id", { count: "exact", head: true }),

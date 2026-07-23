@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, CalendarDays, Plus, Palette } from "lucide-react";
-import type { Apiary, CalendarItem, HabitEntry, HoneyHarvestLog, LifeArea, Shift } from "@/lib/types";
+import type { Apiary, CalendarItem, HabitEntry, HoneyHarvestLog, LifeArea, Organization, Shift } from "@/lib/types";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { ModuleHeader, Segmented } from "@/components/dashboard/ui";
 import { MonthView } from "@/components/dashboard/calendar/MonthView";
@@ -25,6 +25,7 @@ type View = "today" | "week" | "month" | "quarter" | "year" | "timeline" | "agen
 export function CalendarModule({
   items,
   lifeAreas,
+  organizations,
   shifts,
   apiaries,
   harvestLog,
@@ -36,6 +37,7 @@ export function CalendarModule({
 }: {
   items: CalendarItem[];
   lifeAreas: LifeArea[];
+  organizations: Organization[];
   shifts: Shift[];
   apiaries: Apiary[];
   harvestLog: HoneyHarvestLog[];
@@ -240,6 +242,7 @@ export function CalendarModule({
         item={activeItem}
         createDefaults={createDefaults}
         lifeAreas={lifeAreas}
+        organizations={organizations}
       />
       <CategoryManager open={categoriesOpen} onClose={() => setCategoriesOpen(false)} lifeAreas={lifeAreas} />
     </div>

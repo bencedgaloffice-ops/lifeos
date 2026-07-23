@@ -24,12 +24,11 @@ async function ensureOrgAccount(
   orgId: string,
   orgName: string,
 ): Promise<string> {
-  const accountName = `${orgName} — Business`;
   const { data: existing } = await supabase
     .from("accounts")
     .select("id")
     .eq("user_id", userId)
-    .eq("name", accountName)
+    .eq("organization_id", orgId)
     .maybeSingle();
   if (existing) return existing.id;
 
@@ -43,7 +42,8 @@ async function ensureOrgAccount(
     .from("accounts")
     .insert({
       user_id: userId,
-      name: accountName,
+      organization_id: orgId,
+      name: `${orgName} — Business`,
       type: "other",
       currency: profile?.preferred_currency || "USD",
     })
