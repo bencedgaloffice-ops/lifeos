@@ -130,6 +130,7 @@ export function CalendarModule({
         icon={CalendarDays}
         title={t("calendar.title")}
         subtitle={t("calendar.subtitle")}
+        accent="calendar"
         action={
           <div className="flex items-center gap-2">
             <ReminderBell items={items} />

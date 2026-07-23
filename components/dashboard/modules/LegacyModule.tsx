@@ -32,7 +32,7 @@ export function LegacyModule({ identity, familyMembers, milestones, goals, proje
 
   return (
     <div>
-      <ModuleHeader icon={Landmark} title={t("legacy.title")} subtitle={t("legacy.subtitle")} />
+      <ModuleHeader icon={Landmark} title={t("legacy.title")} subtitle={t("legacy.subtitle")} accent="legacy" />
 
       {/* Emblem + anchor scripture — the identity this system is built to hold */}
       <Panel className="mb-4" glow>

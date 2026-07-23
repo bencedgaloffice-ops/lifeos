@@ -113,7 +113,7 @@ export function SettingsModule({
 
   return (
     <div>
-      <ModuleHeader icon={Settings} title={t("settings.title")} subtitle={t("settings.subtitle")} />
+      <ModuleHeader icon={Settings} title={t("settings.title")} subtitle={t("settings.subtitle")} accent="settings" />
 
       <div className="grid max-w-2xl gap-4">
         {/* Language */}

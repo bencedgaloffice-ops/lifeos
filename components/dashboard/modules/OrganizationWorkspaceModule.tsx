@@ -117,6 +117,7 @@ export function OrganizationWorkspaceModule(props: Props) {
         icon={Briefcase}
         title={organization.name}
         subtitle={organization.description ?? t(`business.type.${organization.type ?? "own_business"}`)}
+        accent="business"
         action={
           <button
             onClick={() => setEditing((v) => !v)}
@@ -153,9 +154,9 @@ export function OrganizationWorkspaceModule(props: Props) {
       )}
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label={t("business.statIncome")} value={formatCurrency(income, currency, { compact: true, locale })} />
+        <StatCard label={t("business.statIncome")} value={formatCurrency(income, currency, { compact: true, locale })} moduleAccent="business" />
         <StatCard label={t("business.statExpense")} value={formatCurrency(expense, currency, { compact: true, locale })} />
-        <StatCard label={t("business.statNet")} value={formatCurrency(net, currency, { compact: true, locale })} accent={net >= 0} />
+        <StatCard label={t("business.statNet")} value={formatCurrency(net, currency, { compact: true, locale })} moduleAccent={net >= 0 ? "business" : undefined} />
         <StatCard label={t("business.statProjects")} value={String(projects.length)} />
       </div>
 

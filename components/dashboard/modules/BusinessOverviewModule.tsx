@@ -40,12 +40,12 @@ export function BusinessOverviewModule({ organizations, transactions, events, cu
 
   return (
     <div>
-      <ModuleHeader icon={Briefcase} title={t("nav.businessOverview.label")} subtitle={t("business.overviewSubtitle")} />
+      <ModuleHeader icon={Briefcase} title={t("nav.businessOverview.label")} subtitle={t("business.overviewSubtitle")} accent="business" />
 
       <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label={t("business.statIncome")} value={formatCurrency(income, currency, { compact: true, locale })} />
+        <StatCard label={t("business.statIncome")} value={formatCurrency(income, currency, { compact: true, locale })} moduleAccent="business" />
         <StatCard label={t("business.statExpense")} value={formatCurrency(expense, currency, { compact: true, locale })} />
-        <StatCard label={t("business.statNet")} value={formatCurrency(net, currency, { compact: true, locale })} accent={net >= 0} />
+        <StatCard label={t("business.statNet")} value={formatCurrency(net, currency, { compact: true, locale })} moduleAccent={net >= 0 ? "business" : undefined} />
         <StatCard label={t("business.statOrgs")} value={String(organizations.length)} />
       </div>
 

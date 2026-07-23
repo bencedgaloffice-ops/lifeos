@@ -51,6 +51,7 @@ export function AICompanion({
         icon={Brain}
         title={t("ai.title")}
         subtitle={t("ai.subtitle")}
+        accent="ai"
       />
 
       <div className="grid gap-4 lg:grid-cols-5">

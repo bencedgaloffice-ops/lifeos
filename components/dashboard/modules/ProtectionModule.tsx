@@ -76,7 +76,7 @@ export function ProtectionModule({ documents, responsibilities, notes, organizat
 
   return (
     <div>
-      <ModuleHeader icon={ShieldCheck} title={t("protection.title")} subtitle={t("protection.subtitle")} />
+      <ModuleHeader icon={ShieldCheck} title={t("protection.title")} subtitle={t("protection.subtitle")} accent="protection" />
 
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Documents */}

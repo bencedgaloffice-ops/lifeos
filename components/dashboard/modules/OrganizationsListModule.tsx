@@ -19,7 +19,7 @@ export function OrganizationsListModule({ organizations }: Props) {
 
   return (
     <div>
-      <ModuleHeader icon={Building2} title={t("nav.organizations.label")} subtitle={t("business.orgsSubtitle")} />
+      <ModuleHeader icon={Building2} title={t("nav.organizations.label")} subtitle={t("business.orgsSubtitle")} accent="business" />
 
       <div className="grid gap-4 sm:grid-cols-2">
         {organizations.map((org) => (

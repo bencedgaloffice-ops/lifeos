@@ -28,6 +28,7 @@ export function JournalModule({ entries }: { entries: JournalEntry[] }) {
         icon={BookOpen}
         title={t("journal.title")}
         subtitle={t("journal.subtitle")}
+        accent="journal"
         action={
           <button
             onClick={() => setOpen((v) => !v)}

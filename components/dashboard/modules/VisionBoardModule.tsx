@@ -70,6 +70,7 @@ export function VisionBoardModule({ cards, goals, organizations }: Props) {
         icon={ImageIcon}
         title={t("nav.vision.label")}
         subtitle={t("vision.subtitle")}
+        accent="vision"
         action={
           <div className="flex items-center gap-2">
             <Segmented

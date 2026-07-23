@@ -32,7 +32,7 @@ export function RelationshipModule({ relationship, weddingTasks, sharedMilestone
 
   return (
     <div>
-      <ModuleHeader icon={HeartHandshake} title={t("nav.relationship.label")} subtitle={t("relationship.subtitle")} />
+      <ModuleHeader icon={HeartHandshake} title={t("nav.relationship.label")} subtitle={t("relationship.subtitle")} accent="relationship" />
 
       <Panel className="mb-4" glow>
         <div className="mb-4 flex items-center justify-between">
@@ -79,9 +79,9 @@ export function RelationshipModule({ relationship, weddingTasks, sharedMilestone
           </form>
         ) : (
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <StatCard label={t("relationship.since")} value={relationship?.relationship_start_date ? formatDate(relationship.relationship_start_date, undefined, locale) : "—"} />
-            <StatCard label={t("relationship.engaged")} value={relationship?.engagement_date ? formatDate(relationship.engagement_date, undefined, locale) : "—"} />
-            <StatCard label={t("relationship.wedding")} value={relationship?.wedding_date ? formatDate(relationship.wedding_date, undefined, locale) : "—"} accent />
+            <StatCard label={t("relationship.since")} value={relationship?.relationship_start_date ? formatDate(relationship.relationship_start_date, undefined, locale) : "—"} moduleAccent="relationship" />
+            <StatCard label={t("relationship.engaged")} value={relationship?.engagement_date ? formatDate(relationship.engagement_date, undefined, locale) : "—"} moduleAccent="relationship" />
+            <StatCard label={t("relationship.wedding")} value={relationship?.wedding_date ? formatDate(relationship.wedding_date, undefined, locale) : "—"} moduleAccent="relationship" />
           </div>
         )}
       </Panel>

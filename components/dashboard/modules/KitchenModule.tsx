@@ -73,7 +73,7 @@ export function KitchenModule({ items, shoppingList, suggestions }: Props) {
 
   return (
     <div>
-      <ModuleHeader icon={ChefHat} title={t("kitchen.title")} subtitle={t("kitchen.subtitle")} />
+      <ModuleHeader icon={ChefHat} title={t("kitchen.title")} subtitle={t("kitchen.subtitle")} accent="kitchen" />
 
       <div className="grid gap-4 lg:grid-cols-3">
         {(["fridge", "pantry", "freezer"] as const).map((loc) => {

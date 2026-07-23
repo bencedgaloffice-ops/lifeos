@@ -38,6 +38,7 @@ export function HabitsModule({ habits, logs }: Props) {
         icon={Repeat}
         title={t("nav.habits.label")}
         subtitle={t("habits.subtitle")}
+        accent="habits"
         action={
           <button
             onClick={() => setOpen((v) => !v)}
