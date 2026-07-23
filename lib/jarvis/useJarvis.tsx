@@ -33,6 +33,7 @@ import {
   type PermissionSession,
 } from "./permissions";
 import { DEFAULT_SETTINGS, loadSettings, saveSettings } from "./settings";
+import { orbSpeakStart, orbSpeakBoundary, orbSpeakEnd } from "./orbSignal";
 import type {
   JarvisCommand,
   JarvisNotification,
@@ -51,6 +52,7 @@ import {
   jarvisCreateReminder,
   jarvisRemember,
   jarvisRemoveShopping,
+  jarvisWebAnswer,
 } from "@/app/dashboard/ai/jarvis-actions";
 
 type JarvisContextValue = {
@@ -137,9 +139,16 @@ export function JarvisProvider({ children }: { children: React.ReactNode }) {
     const engine = speechRef.current;
     if (!engine || !settingsRef.current.soundEffects) return;
     setStatus("speaking");
+    orbSpeakStart();
     engine
-      .speak(text, settingsRef.current, {})
-      .then(() => setStatus((s) => (s === "speaking" ? "idle" : s)));
+      .speak(text, settingsRef.current, {
+        onStart: orbSpeakStart,
+        onBoundary: orbSpeakBoundary,
+      })
+      .then(() => {
+        orbSpeakEnd();
+        setStatus((s) => (s === "speaking" ? "idle" : s));
+      });
   }, [pushLine]);
 
   /* ---- command execution ---- */
@@ -472,6 +481,11 @@ async function runIntent(command: JarvisCommand, locale: string): Promise<string
       return (await jarvisAddJournal(command.args.text)).message;
     case "memory.add":
       return (await jarvisRemember(command.args.text)).message;
+    case "web.query": {
+      const answer = await jarvisWebAnswer(command.args.query ?? "");
+      // Nothing online → fall back to the grounded LifeOS answer.
+      return answer ?? (await jarvisAsk(command.args.query ?? "", loc));
+    }
     case "read.query":
     default:
       return jarvisAsk(command.args.query ?? "", loc);

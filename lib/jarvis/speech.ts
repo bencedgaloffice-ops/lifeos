@@ -15,6 +15,8 @@ import type { JarvisSettings } from "./types";
 export type SpeakOptions = {
   onStart?: () => void;
   onEnd?: () => void;
+  /** Fires as each word begins — used to pulse the orb in time with speech. */
+  onBoundary?: () => void;
   signal?: AbortSignal;
 };
 
@@ -90,6 +92,7 @@ class BrowserVoiceProvider implements VoiceProvider {
         resolve();
       };
       utter.onstart = () => opts?.onStart?.();
+      utter.onboundary = () => opts?.onBoundary?.();
       utter.onend = finish;
       utter.onerror = finish;
 

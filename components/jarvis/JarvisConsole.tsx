@@ -37,12 +37,12 @@ const CAPABILITIES = [
 const EXAMPLES = [
   "What's my schedule today?",
   "How much have I spent this month?",
-  "How much protein have I eaten today?",
+  "Who painted the Mona Lisa?",
   "Add milk to my shopping list",
   "Create goal run a half marathon",
-  "Remind me to call the accountant",
+  "What is the capital of Japan?",
   "Open the calendar",
-  "Add journal today was productive",
+  "Search for the tallest mountain",
 ];
 
 export function JarvisConsole() {
@@ -121,8 +121,8 @@ export function JarvisConsole() {
               {j.transcript.length === 0 ? (
                 <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
                   <Sparkles className="h-6 w-6 text-[#ff8b93]" />
-                  <p className="text-sm text-white/55">Ask me anything about your life, or give a command.</p>
-                  <p className="max-w-sm text-xs text-white/35">I reason over your real LifeOS data and can act on it once you unlock Operator access.</p>
+                  <p className="text-sm text-white/55">Ask me anything about your life — or the world.</p>
+                  <p className="max-w-sm text-xs text-white/35">I reason over your real LifeOS data, answer general questions from the web, and can act on your behalf once you unlock Operator access.</p>
                 </div>
               ) : (
                 j.transcript.map((line) => (

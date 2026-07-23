@@ -125,6 +125,21 @@ export function parseCommand(raw: string): JarvisCommand {
     return cmd({ kind: "developer", level: 3, label: "Developer action", intent: "developer.generic", args: { request: raw } });
   }
 
+  /* ---- Web answers (L1) → general knowledge "from online" ---- */
+  const PERSONAL = /\b(my|mine|im|our|schedule|calendar|budget|money|spent|spend|saving|savings|goal|goals|project|projects|kitchen|fridge|pantry|shopping|journal|protein|calorie|nutrition|shift|icsb|dream|milestone|document|reminder|profile|weight|habit)\b/;
+  // Explicit web triggers — the topic (not the phrase) is checked for personal words,
+  // so "tell me about …" isn't blocked by the "me" it contains.
+  if ((m = text.match(/^(?:search(?: the web)?(?: for)?|google|look up|look for|tell me about|explain|what do you know about)\s+(.+)$/))) {
+    if (!PERSONAL.test(m[1]) && !/\b(i|me|we)\b/.test(m[1])) {
+      return cmd({ kind: "read", level: 1, label: "Search the web", intent: "web.query", args: { query: m[1] } });
+    }
+  }
+  // General-knowledge questions that aren't about the user's own LifeOS data.
+  const GENERAL = /^(?:what|whats|who|where|when|why|how|which|define|is|are|does|do|can|was|were)\b/;
+  if (GENERAL.test(text) && !PERSONAL.test(text) && !/\b(i|me|we)\b/.test(text)) {
+    return cmd({ kind: "read", level: 1, label: "Web answer", intent: "web.query", args: { query: raw } });
+  }
+
   /* ---- Reads (L1) → answered from the user's data on the server ---- */
   return cmd({ kind: "read", level: 1, label: "Answer", intent: "read.query", args: { query: raw } });
 }

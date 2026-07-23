@@ -4,42 +4,44 @@ import { useMemo, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { JarvisStatus } from "@/lib/jarvis/types";
+import { orbSignal } from "@/lib/jarvis/orbSignal";
 
 /* ------------------------------------------------------------------
    The Jarvis orb — a red holographic intelligence core.
 
-   A noise-displaced icosahedron (the "energy core") sits inside an
-   additive fresnel glow shell, wrapped by two counter-rotating
-   holographic rings and a ring of orbiting particles. Everything is
-   state-reactive via a single damped `uState`/`uAmp` pair:
+   A noise-displaced icosahedron energy core sits inside an additive
+   fresnel glow shell, wrapped by counter-rotating holographic rings, a
+   cloud of orbiting particles, and — while speaking — expanding
+   "sound-wave" rings that fire on every word boundary. The whole thing
+   is state-reactive:
 
      idle       slow breathing displacement
      waking     quick swell
      listening  rings spin up, tighter shimmer
      thinking   brighter, faster pulse
-     speaking   travelling waves ripple across the surface
-     denied     colour shifts toward a hard warning red
+     speaking   travelling plasma ripples + per-word energy pulses that
+                ride the real speech-synthesis word boundaries
+     denied     colour snaps toward a hard warning red
 
-   All hand-written GLSL; no textures, so it's cheap enough to run
-   several instances at once (landing + dashboard).
+   Speech energy comes from `orbSignal`, written by the speech engine
+   outside React, so the mouth-movement never triggers re-renders. All
+   hand-written GLSL — cheap enough to run several instances at once.
 ------------------------------------------------------------------ */
 
 const STATE_INDEX: Record<JarvisStatus, number> = {
-  idle: 0,
-  waking: 1,
-  listening: 2,
-  thinking: 3,
-  speaking: 4,
-  denied: 5,
+  idle: 0, waking: 1, listening: 2, thinking: 3, speaking: 4, denied: 5,
 };
 
 const coreVertex = /* glsl */ `
   uniform float uTime;
   uniform float uAmp;
   uniform float uState;
+  uniform float uSpeak;
+  uniform float uPulse;
   varying vec3 vNormal;
   varying vec3 vWorldPos;
   varying float vDisp;
+  varying float vRipple;
 
   vec3 mod289(vec3 x){return x-floor(x*(1.0/289.0))*289.0;}
   vec4 mod289(vec4 x){return x-floor(x*(1.0/289.0))*289.0;}
@@ -69,13 +71,20 @@ const coreVertex = /* glsl */ `
 
   void main(){
     vNormal = normalize(normalMatrix * normal);
-    float speed = 0.25 + uState * 0.12;
+    float speed = 0.28 + uState * 0.10 + uSpeak * 0.6;
     float n = snoise(normal * 1.7 + uTime * speed);
-    n += 0.5 * snoise(normal * 3.4 + uTime * speed * 0.6);
-    // Speaking (state 4): travelling waves rippling top-to-bottom.
-    float wave = sin(normal.y * 9.0 - uTime * 6.0) * step(3.5, uState) * 0.5;
-    vDisp = n + wave;
-    float disp = (n * 0.14 + wave * 0.08) * (0.6 + uAmp);
+    n += 0.5 * snoise(normal * 3.6 + uTime * speed * 0.6);
+    n += 0.25 * snoise(normal * 7.0 - uTime * speed * 0.9);
+
+    // Speaking: concentric plasma waves travelling pole-to-pole, their
+    // amplitude riding the live per-word energy (uSpeak) and pulse (uPulse).
+    float wavePhase = normal.y * 7.0 - uTime * 7.0;
+    float ripple = sin(wavePhase) * (uSpeak * 0.6 + uPulse * 0.7);
+    ripple += sin(normal.x * 9.0 + uTime * 5.0) * uSpeak * 0.25;
+    vRipple = ripple;
+
+    vDisp = n + ripple;
+    float disp = (n * 0.13 + ripple * 0.12) * (0.55 + uAmp) + uPulse * 0.05;
     vec3 displaced = position + normal * disp;
     vec4 wp = modelMatrix * vec4(displaced, 1.0);
     vWorldPos = wp.xyz;
@@ -87,30 +96,41 @@ const coreFragment = /* glsl */ `
   uniform float uTime;
   uniform float uState;
   uniform float uAmp;
+  uniform float uSpeak;
+  uniform float uPulse;
   uniform vec3 uAccent;
   varying vec3 vNormal;
   varying vec3 vWorldPos;
   varying float vDisp;
+  varying float vRipple;
 
   void main(){
     vec3 N = normalize(vNormal);
     vec3 V = normalize(cameraPosition - vWorldPos);
-    float fres = pow(1.0 - max(dot(N, V), 0.0), 2.3);
+    float fres = pow(1.0 - max(dot(N, V), 0.0), 2.2);
 
-    vec3 deep = uAccent * 0.18;
-    vec3 mid  = uAccent * 0.75;
-    vec3 hot  = mix(uAccent, vec3(1.0, 0.85, 0.8), 0.5);
+    vec3 deep = uAccent * 0.14;
+    vec3 mid  = uAccent * 0.8;
+    vec3 hot  = mix(uAccent, vec3(1.0, 0.9, 0.82), 0.6);
 
-    vec3 col = mix(deep, mid, smoothstep(-0.6, 0.6, vDisp));
+    vec3 col = mix(deep, mid, smoothstep(-0.7, 0.7, vDisp));
     col = mix(col, hot, fres);
-    col += hot * fres * (0.5 + uAmp * 0.8);
-    // Denied state (5) pushes toward a hard warning red flash.
+    // Molten energy veins + speaking-ripple highlights.
+    col += hot * fres * (0.5 + uAmp * 0.7 + uSpeak * 0.9);
+    col += hot * max(vRipple, 0.0) * (0.4 + uPulse) * 0.8;
+    col += uAccent * uPulse * 0.6;
+
+    // Denied: hard warning strobe.
     col = mix(col, vec3(1.0, 0.1, 0.12), step(4.5, uState) * (0.5 + 0.5 * sin(uTime * 20.0)));
+
+    // Gentle filmic-ish rolloff so the hot core doesn't clip harshly.
+    col = col / (col + vec3(0.85));
+    col = pow(col, vec3(0.85));
     gl_FragColor = vec4(col, 1.0);
   }
 `;
 
-const glowVertex = /* glsl */ `
+const shellVertex = /* glsl */ `
   varying vec3 vNormal;
   varying vec3 vWorldPos;
   void main(){
@@ -123,14 +143,14 @@ const glowVertex = /* glsl */ `
 
 const glowFragment = /* glsl */ `
   uniform vec3 uAccent;
-  uniform float uAmp;
+  uniform float uEnergy;
   varying vec3 vNormal;
   varying vec3 vWorldPos;
   void main(){
     vec3 N = normalize(vNormal);
     vec3 V = normalize(cameraPosition - vWorldPos);
     float fres = pow(1.0 - max(dot(N, V), 0.0), 3.0);
-    gl_FragColor = vec4(uAccent, fres * (0.75 + uAmp * 0.5));
+    gl_FragColor = vec4(uAccent, fres * (0.7 + uEnergy * 0.9));
   }
 `;
 
@@ -138,24 +158,73 @@ function damp(current: number, target: number, lambda: number, dt: number) {
   return THREE.MathUtils.lerp(current, target, 1 - Math.exp(-lambda * dt));
 }
 
-function Particles({ accent }: { accent: THREE.Color }) {
+/** Expanding "sound-wave" rings — one fires on each spoken word. */
+function SoundWaves({ accent, energyRef }: { accent: THREE.Color; energyRef: React.MutableRefObject<number> }) {
+  const POOL = 5;
+  const meshes = useRef<(THREE.Mesh | null)[]>([]);
+  const ages = useRef<number[]>(Array(POOL).fill(Infinity)); // seconds since spawn
+  const cursor = useRef(0);
+  const lastSeen = useRef(-Infinity);
+
+  useFrame((_, delta) => {
+    const dt = Math.min(delta, 1 / 30);
+    // Spawn a ring when a new word boundary arrives while speaking.
+    if (orbSignal.speaking && orbSignal.lastPulseAt !== lastSeen.current) {
+      lastSeen.current = orbSignal.lastPulseAt;
+      ages.current[cursor.current] = 0;
+      cursor.current = (cursor.current + 1) % POOL;
+    }
+    for (let i = 0; i < POOL; i++) {
+      const mesh = meshes.current[i];
+      if (!mesh) continue;
+      const age = (ages.current[i] += dt);
+      const life = 0.9;
+      if (age > life) {
+        mesh.visible = false;
+        continue;
+      }
+      const k = age / life; // 0..1
+      mesh.visible = true;
+      const scale = 1.45 + k * 1.7;
+      mesh.scale.setScalar(scale);
+      const mat = mesh.material as THREE.MeshBasicMaterial;
+      mat.opacity = (1 - k) * 0.5 * (0.4 + energyRef.current);
+    }
+  });
+
+  return (
+    <group rotation={[Math.PI / 2, 0, 0]}>
+      {Array.from({ length: POOL }).map((_, i) => (
+        <mesh key={i} ref={(m) => { meshes.current[i] = m; }} visible={false}>
+          <torusGeometry args={[1, 0.012, 8, 90]} />
+          <meshBasicMaterial color={accent} transparent opacity={0} blending={THREE.AdditiveBlending} depthWrite={false} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function Particles({ accent, energyRef }: { accent: THREE.Color; energyRef: React.MutableRefObject<number> }) {
   const ref = useRef<THREE.Points>(null);
-  const { positions } = useMemo(() => {
-    const N = 90;
-    const positions = new Float32Array(N * 3);
+  const positions = useMemo(() => {
+    const N = 110;
+    const p = new Float32Array(N * 3);
     for (let i = 0; i < N; i++) {
-      const r = 1.9 + Math.random() * 0.7;
+      const r = 1.85 + Math.random() * 0.8;
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
-      positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-      positions[i * 3 + 1] = r * Math.cos(phi) * 0.5;
-      positions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+      p[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      p[i * 3 + 1] = r * Math.cos(phi) * 0.55;
+      p[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
     }
-    return { positions };
+    return p;
   }, []);
 
   useFrame((_, delta) => {
-    if (ref.current) ref.current.rotation.y += delta * 0.25;
+    if (!ref.current) return;
+    ref.current.rotation.y += delta * (0.22 + energyRef.current * 0.5);
+    const mat = ref.current.material as THREE.PointsMaterial;
+    mat.opacity = 0.55 + energyRef.current * 0.4;
   });
 
   return (
@@ -163,14 +232,7 @@ function Particles({ accent }: { accent: THREE.Color }) {
       <bufferGeometry>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
       </bufferGeometry>
-      <pointsMaterial
-        size={0.05}
-        color={accent}
-        transparent
-        opacity={0.7}
-        blending={THREE.AdditiveBlending}
-        depthWrite={false}
-      />
+      <pointsMaterial size={0.05} color={accent} transparent opacity={0.6} blending={THREE.AdditiveBlending} depthWrite={false} />
     </points>
   );
 }
@@ -183,7 +245,7 @@ function Ring({ radius, tilt, accent, speedRef }: { radius: number; tilt: [numbe
   return (
     <mesh ref={ref} rotation={tilt}>
       <torusGeometry args={[radius, 0.008, 8, 120]} />
-      <meshBasicMaterial color={accent} transparent opacity={0.55} blending={THREE.AdditiveBlending} depthWrite={false} />
+      <meshBasicMaterial color={accent} transparent opacity={0.5} blending={THREE.AdditiveBlending} depthWrite={false} />
     </mesh>
   );
 }
@@ -191,72 +253,88 @@ function Ring({ radius, tilt, accent, speedRef }: { radius: number; tilt: [numbe
 function Orb({ statusRef, accent, reducedMotion }: { statusRef: React.MutableRefObject<number>; accent: THREE.Color; reducedMotion: boolean }) {
   const group = useRef<THREE.Group>(null);
   const ringSpeed = useRef(0.2);
+  const energyRef = useRef(0); // shared speaking energy for satellite effects
   const uniforms = useMemo(
     () => ({
       core: {
-        uTime: { value: 0 },
-        uAmp: { value: 0 },
-        uState: { value: 0 },
-        uAccent: { value: accent.clone() },
+        uTime: { value: 0 }, uAmp: { value: 0 }, uState: { value: 0 },
+        uSpeak: { value: 0 }, uPulse: { value: 0 }, uAccent: { value: accent.clone() },
       },
-      glow: { uAccent: { value: accent.clone() }, uAmp: { value: 0 } },
+      innerGlow: { uAccent: { value: accent.clone().lerp(new THREE.Color(1, 1, 1), 0.35) }, uEnergy: { value: 0 } },
+      glow: { uAccent: { value: accent.clone() }, uEnergy: { value: 0 } },
     }),
     [accent],
   );
   const state = useRef(0);
   const amp = useRef(0);
+  const speak = useRef(0);
+  const pulse = useRef(0);
 
   useFrame((clock, delta) => {
     const dt = Math.min(delta, 1 / 30);
     const t = clock.clock.elapsedTime;
     state.current = damp(state.current, statusRef.current, 6, dt);
 
-    // Target "energy" amplitude per state.
+    // --- Speaking energy from the live signal (word boundaries) ---
+    const nowMs = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const sincePulse = nowMs - orbSignal.lastPulseAt;
+    // A word pulse decays over ~260ms; between words a synthetic shimmer keeps
+    // the mouth "alive" even on browsers that don't emit boundary events.
+    const wordPulse = THREE.MathUtils.clamp(1 - sincePulse / 260, 0, 1);
+    const speakingTarget = orbSignal.speaking || statusRef.current === 4 ? 1 : 0;
+    speak.current = damp(speak.current, speakingTarget, 8, dt);
+    const synthetic = speak.current * (0.35 + 0.35 * (0.5 + 0.5 * Math.sin(t * 9.0) * Math.sin(t * 17.0)));
+    pulse.current = damp(pulse.current, Math.max(wordPulse, synthetic), 14, dt);
+    energyRef.current = speak.current * (0.4 + 0.6 * pulse.current);
+
     const targetAmp =
-      statusRef.current >= 4 ? 0.9 : // speaking
-      statusRef.current === 3 ? 0.7 : // thinking
-      statusRef.current === 2 ? 0.5 : // listening
-      statusRef.current === 1 ? 0.6 : // waking
-      0.15 + Math.sin(t * 1.2) * 0.06; // idle breathing
+      statusRef.current >= 4 ? 0.55 + energyRef.current * 0.6 :
+      statusRef.current === 3 ? 0.7 :
+      statusRef.current === 2 ? 0.5 :
+      statusRef.current === 1 ? 0.6 :
+      0.15 + Math.sin(t * 1.2) * 0.06;
     amp.current = damp(amp.current, reducedMotion ? 0.15 : targetAmp, 4, dt);
 
-    uniforms.core.uTime.value = t;
-    uniforms.core.uState.value = state.current;
-    uniforms.core.uAmp.value = amp.current;
-    uniforms.glow.uAmp.value = amp.current;
+    const c = uniforms.core;
+    c.uTime.value = t;
+    c.uState.value = state.current;
+    c.uAmp.value = amp.current;
+    c.uSpeak.value = reducedMotion ? 0 : speak.current;
+    c.uPulse.value = reducedMotion ? 0 : pulse.current;
+    uniforms.glow.uEnergy.value = energyRef.current;
+    uniforms.innerGlow.uEnergy.value = energyRef.current;
 
-    // Rings spin up while listening/thinking.
-    const targetRing = reducedMotion ? 0.1 : 0.18 + (statusRef.current >= 2 ? statusRef.current * 0.22 : 0);
+    const targetRing = reducedMotion ? 0.1 : 0.18 + (statusRef.current >= 2 ? statusRef.current * 0.22 : 0) + energyRef.current * 0.6;
     ringSpeed.current = damp(ringSpeed.current, targetRing, 3, dt);
 
     if (group.current && !reducedMotion) {
       group.current.rotation.y += dt * 0.2;
-      const s = 1 + Math.sin(t * 0.9) * 0.02 + amp.current * 0.05;
+      const s = 1 + Math.sin(t * 0.9) * 0.02 + amp.current * 0.04 + pulse.current * 0.03;
       group.current.scale.setScalar(s);
     }
   });
 
   return (
     <group ref={group}>
+      {/* Bright inner heart */}
+      <mesh scale={0.55}>
+        <sphereGeometry args={[1, 24, 24]} />
+        <shaderMaterial vertexShader={shellVertex} fragmentShader={glowFragment} uniforms={uniforms.innerGlow} transparent blending={THREE.AdditiveBlending} depthWrite={false} />
+      </mesh>
+      {/* Plasma energy core */}
       <mesh>
         <icosahedronGeometry args={[1.25, 32]} />
         <shaderMaterial vertexShader={coreVertex} fragmentShader={coreFragment} uniforms={uniforms.core} />
       </mesh>
-      <mesh scale={1.4}>
+      {/* Fresnel glow shell */}
+      <mesh scale={1.42}>
         <sphereGeometry args={[1.25, 40, 40]} />
-        <shaderMaterial
-          vertexShader={glowVertex}
-          fragmentShader={glowFragment}
-          uniforms={uniforms.glow}
-          transparent
-          side={THREE.BackSide}
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-        />
+        <shaderMaterial vertexShader={shellVertex} fragmentShader={glowFragment} uniforms={uniforms.glow} transparent side={THREE.BackSide} blending={THREE.AdditiveBlending} depthWrite={false} />
       </mesh>
       <Ring radius={1.7} tilt={[1.3, 0.2, 0]} accent={accent} speedRef={ringSpeed} />
       <Ring radius={1.95} tilt={[1.0, -0.5, 0.4]} accent={accent} speedRef={ringSpeed} />
-      {!reducedMotion && <Particles accent={accent} />}
+      {!reducedMotion && <Particles accent={accent} energyRef={energyRef} />}
+      {!reducedMotion && <SoundWaves accent={accent} energyRef={energyRef} />}
     </group>
   );
 }

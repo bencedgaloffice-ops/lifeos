@@ -337,6 +337,7 @@ function Section({ tab }: { tab: Tab }) {
     case "integrations": {
       const items = [
         { name: "Browser Speech", status: "Active", ok: true },
+        { name: "Web answers · DuckDuckGo + Wikipedia", status: "Active", ok: true },
         { name: "OpenAI TTS / Whisper", status: "Add API key", ok: false },
         { name: "ElevenLabs", status: "Add API key", ok: false },
         { name: "Picovoice Porcupine", status: "Add access key", ok: false },

@@ -30,6 +30,80 @@ export async function jarvisAsk(query: string, locale: Locale = "en"): Promise<s
   return askCompanion(query, locale);
 }
 
+/* ------------------------------------------------------------------ */
+/*  Web answers — general knowledge "from online"                      */
+/* ------------------------------------------------------------------ */
+
+async function fetchJson(url: string, timeoutMs = 6000): Promise<unknown | null> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, {
+      signal: ctrl.signal,
+      headers: { "User-Agent": "LifeOS-Jarvis/1.0 (personal assistant)", Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as unknown;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Trim a long abstract to a couple of clean sentences. */
+function condense(text: string, max = 420): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (clean.length <= max) return clean;
+  const cut = clean.slice(0, max);
+  const lastStop = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf("! "), cut.lastIndexOf("? "));
+  return (lastStop > 120 ? cut.slice(0, lastStop + 1) : cut.trimEnd() + "…");
+}
+
+/**
+ * Level 1 — answer a general-knowledge question from public web sources.
+ *
+ * Uses two keyless providers: DuckDuckGo's Instant Answer API first (fast,
+ * factual snippets), then Wikipedia (search → page summary) as a fallback.
+ * Returns null when nothing useful is found, so the caller can fall back to
+ * the grounded LifeOS answer. A Google/Bing/OpenAI key could be slotted in
+ * here later for broader coverage, but these need no credentials.
+ */
+export async function jarvisWebAnswer(query: string): Promise<string | null> {
+  const q = query.trim();
+  if (!q) return null;
+
+  // 1) DuckDuckGo Instant Answer.
+  const ddg = (await fetchJson(
+    `https://api.duckduckgo.com/?q=${encodeURIComponent(q)}&format=json&no_html=1&skip_disambig=1`,
+  )) as { Answer?: string; AbstractText?: string; Definition?: string; Heading?: string; AbstractURL?: string } | null;
+
+  if (ddg) {
+    const snippet = (ddg.Answer || ddg.AbstractText || ddg.Definition || "").trim();
+    if (snippet) {
+      const src = ddg.AbstractURL ? " (via DuckDuckGo)" : "";
+      return condense(snippet) + src;
+    }
+  }
+
+  // 2) Wikipedia search → summary.
+  const search = (await fetchJson(
+    `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(q)}&format=json&srlimit=1&origin=*`,
+  )) as { query?: { search?: { title?: string }[] } } | null;
+  const title = search?.query?.search?.[0]?.title;
+  if (title) {
+    const summary = (await fetchJson(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
+    )) as { extract?: string; type?: string } | null;
+    if (summary?.extract && summary.type !== "disambiguation") {
+      return condense(summary.extract) + " (via Wikipedia)";
+    }
+  }
+
+  return null;
+}
+
 /** Level 2 — add an item to the shopping list. */
 export async function jarvisAddShopping(name: string): Promise<JarvisActionResult> {
   const { supabase, user } = await requireUser();
