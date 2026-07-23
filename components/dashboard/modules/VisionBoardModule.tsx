@@ -1,13 +1,13 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Image as ImageIcon, Plus, Trash2, X, Calendar, Target } from "lucide-react";
+import { useMemo, useRef, useState, useTransition } from "react";
+import { motion, AnimatePresence, useMotionValue, useSpring } from "framer-motion";
+import { Image as ImageIcon, Plus, Trash2, X, Calendar, Target, LayoutGrid, Move } from "lucide-react";
 import type { VisionCard, Goal, Organization } from "@/lib/types";
 import { formatDate } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
-import { ModuleHeader, Panel, EmptyState, Field, inputClass, Progress } from "@/components/dashboard/ui";
-import { createVisionCard, deleteVisionCard } from "@/app/dashboard/vision/actions";
+import { ModuleHeader, Panel, EmptyState, Field, inputClass, Progress, Segmented } from "@/components/dashboard/ui";
+import { createVisionCard, deleteVisionCard, updateVisionCardPosition } from "@/app/dashboard/vision/actions";
 import { CATEGORY_COLOR_SWATCHES } from "@/lib/icon-registry";
 import { cn } from "@/lib/utils";
 
@@ -18,12 +18,14 @@ type Props = {
 };
 
 type Filter = "all" | "personal" | "business" | string;
+type Mode = "board" | "canvas";
 
 export function VisionBoardModule({ cards, goals, organizations }: Props) {
   const { t, locale } = useLocale();
   const [, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
+  const [mode, setMode] = useState<Mode>("board");
   const [category, setCategory] = useState<"personal" | "business">("personal");
   const [scrub, setScrub] = useState(100);
   const [active, setActive] = useState<VisionCard | null>(null);
@@ -47,9 +49,9 @@ export function VisionBoardModule({ cards, goals, organizations }: Props) {
       if (filter === "personal" && c.category !== "personal") return false;
       if (filter !== "all" && filter !== "personal" && filter !== "business" && c.organization_id !== filter) return false;
       if (hasTimeline && c.target_date) {
-        const t = new Date(c.target_date).getTime();
+        const time = new Date(c.target_date).getTime();
         const cutoff = minDate! + ((maxDate! - minDate!) * scrub) / 100;
-        if (t > cutoff) return false;
+        if (time > cutoff) return false;
       }
       return true;
     });
@@ -69,12 +71,23 @@ export function VisionBoardModule({ cards, goals, organizations }: Props) {
         title={t("nav.vision.label")}
         subtitle={t("vision.subtitle")}
         action={
-          <button
-            onClick={() => setOpen((v) => !v)}
-            className="inline-flex items-center gap-1.5 rounded-full glass px-3 py-1.5 text-xs text-white/70 transition-colors hover:text-white"
-          >
-            <Plus className="h-3.5 w-3.5" /> {t("vision.addCard")}
-          </button>
+          <div className="flex items-center gap-2">
+            <Segmented
+              value={mode}
+              onChange={setMode}
+              options={[
+                { value: "board", label: t("vision.modeBoard") },
+                { value: "canvas", label: t("vision.modeCanvas") },
+              ]}
+              className="vision-mode"
+            />
+            <button
+              onClick={() => setOpen((v) => !v)}
+              className="inline-flex items-center gap-1.5 rounded-full glass px-3 py-1.5 text-xs text-white/70 transition-colors hover:text-white"
+            >
+              <Plus className="h-3.5 w-3.5" /> {t("vision.addCard")}
+            </button>
+          </div>
         }
       />
 
@@ -176,55 +189,30 @@ export function VisionBoardModule({ cards, goals, organizations }: Props) {
 
       {filtered.length === 0 ? (
         <EmptyState icon={ImageIcon} title={t("vision.empty")} hint={t("vision.emptyHint")} />
-      ) : (
+      ) : mode === "board" ? (
         <div className="columns-1 gap-4 sm:columns-2 lg:columns-3 xl:columns-4">
           <AnimatePresence>
-            {filtered.map((card) => {
-              const goal = goalById(card.goal_id);
-              const progress = card.progress_override ?? goal?.progress_percent ?? null;
-              const accent = card.category === "business" ? orgColor(card.organization_id) : "#F5A15E";
-              return (
-                <motion.div
-                  key={card.id}
-                  layout
-                  initial={{ opacity: 0, scale: 0.92 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.92 }}
-                  transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
-                  whileHover={{ y: -4 }}
-                  onClick={() => setActive(card)}
-                  className="group relative mb-4 block w-full cursor-pointer overflow-hidden rounded-3xl border break-inside-avoid"
-                  style={{ borderColor: `${accent}55` }}
-                >
-                  <div
-                    className="relative flex min-h-[180px] w-full items-end overflow-hidden bg-cover bg-center"
-                    style={{
-                      backgroundImage: card.image_url
-                        ? `url(${card.image_url})`
-                        : `linear-gradient(135deg, ${accent}33, rgba(5,5,5,0.9))`,
-                      aspectRatio: card.image_url ? "3 / 4" : undefined,
-                    }}
-                  >
-                    <div
-                      aria-hidden
-                      className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent opacity-90 transition-opacity group-hover:opacity-100"
-                    />
-                    <span className="pointer-events-none absolute right-3 top-3 h-2.5 w-2.5 rounded-full shadow-glow-sm" style={{ backgroundColor: accent }} />
-                    <div className="relative z-10 w-full p-4">
-                      <p className="text-sm font-semibold tracking-tight text-white">{card.title}</p>
-                      {card.target_date && <p className="mt-0.5 text-xs text-white/60">{formatDate(card.target_date, undefined, locale)}</p>}
-                      {progress !== null && (
-                        <div className="mt-2">
-                          <Progress value={progress} />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </motion.div>
-              );
-            })}
+            {filtered.map((card) => (
+              <BoardCard
+                key={card.id}
+                card={card}
+                goal={goalById(card.goal_id)}
+                accent={card.category === "business" ? orgColor(card.organization_id) : "#F5A15E"}
+                locale={locale}
+                onOpen={() => setActive(card)}
+              />
+            ))}
           </AnimatePresence>
         </div>
+      ) : (
+        <CanvasBoard
+          cards={filtered}
+          goalById={goalById}
+          orgColor={orgColor}
+          locale={locale}
+          onOpen={setActive}
+          hint={t("vision.canvasHint")}
+        />
       )}
 
       {/* Expanded detail view */}
@@ -285,5 +273,216 @@ export function VisionBoardModule({ cards, goals, organizations }: Props) {
         )}
       </AnimatePresence>
     </div>
+  );
+}
+
+/** A photo-first masonry card: clean image at rest, details fade/slide in on
+ * hover, with a subtle cursor-driven tilt for a bit of depth. */
+function BoardCard({
+  card,
+  goal,
+  accent,
+  locale,
+  onOpen,
+}: {
+  card: VisionCard;
+  goal: Goal | null;
+  accent: string;
+  locale: "en" | "hu";
+  onOpen: () => void;
+}) {
+  const progress = card.progress_override ?? goal?.progress_percent ?? null;
+  const rotateX = useSpring(0, { stiffness: 300, damping: 25 });
+  const rotateY = useSpring(0, { stiffness: 300, damping: 25 });
+
+  function handleMove(e: React.MouseEvent<HTMLDivElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width - 0.5;
+    const py = (e.clientY - rect.top) / rect.height - 0.5;
+    rotateY.set(px * 8);
+    rotateX.set(-py * 8);
+  }
+  function handleLeave() {
+    rotateX.set(0);
+    rotateY.set(0);
+  }
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.92 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.92 }}
+      transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+      whileHover={{ y: -4 }}
+      onMouseMove={handleMove}
+      onMouseLeave={handleLeave}
+      onClick={onOpen}
+      style={{ rotateX, rotateY, transformPerspective: 800, borderColor: `${accent}55` }}
+      className="group relative mb-4 block w-full cursor-pointer overflow-hidden rounded-3xl border break-inside-avoid"
+    >
+      <div
+        className="relative flex min-h-[180px] w-full items-end overflow-hidden bg-cover bg-center"
+        style={{
+          backgroundImage: card.image_url
+            ? `url(${card.image_url})`
+            : `linear-gradient(135deg, ${accent}33, rgba(5,5,5,0.9))`,
+          aspectRatio: card.image_url ? "3 / 4" : undefined,
+        }}
+      >
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/90 via-black/5 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"
+        />
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black/60 to-transparent transition-opacity duration-300 group-hover:opacity-0"
+        />
+        <span className="pointer-events-none absolute right-3 top-3 h-2.5 w-2.5 rounded-full shadow-glow-sm" style={{ backgroundColor: accent }} />
+        <div className="relative z-10 w-full translate-y-2 p-4 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+          <p className="text-sm font-semibold tracking-tight text-white">{card.title}</p>
+          {card.target_date && <p className="mt-0.5 text-xs text-white/60">{formatDate(card.target_date, undefined, locale)}</p>}
+          {progress !== null && (
+            <div className="mt-2">
+              <Progress value={progress} />
+            </div>
+          )}
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+/** Freeform draggable canvas — cards keep a persisted free position and
+ * layer order; scroll to pan, hold Ctrl/⌘ + scroll (or pinch) to zoom. */
+function CanvasBoard({
+  cards,
+  goalById,
+  orgColor,
+  locale,
+  onOpen,
+  hint,
+}: {
+  cards: VisionCard[];
+  goalById: (id: string | null) => Goal | null;
+  orgColor: (id: string | null) => string;
+  locale: "en" | "hu";
+  onOpen: (card: VisionCard) => void;
+  hint: string;
+}) {
+  const [zoom, setZoom] = useState(1);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [topZ, setTopZ] = useState(cards.length + 1);
+
+  function handleWheel(e: React.WheelEvent) {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    setZoom((z) => Math.min(2, Math.max(0.4, z - e.deltaY * 0.001)));
+  }
+
+  return (
+    <div>
+      <p className="mb-3 flex items-center gap-1.5 text-xs text-white/35">
+        <Move className="h-3.5 w-3.5" /> {hint}
+      </p>
+      <div
+        ref={containerRef}
+        onWheel={handleWheel}
+        className="relative h-[70vh] w-full overflow-auto rounded-3xl border border-hairline bg-white/[0.015]"
+      >
+        <div
+          className="relative"
+          style={{ width: 2400, height: 1600, transform: `scale(${zoom})`, transformOrigin: "0 0" }}
+        >
+          {cards.map((card, i) => (
+            <CanvasCard
+              key={card.id}
+              card={card}
+              index={i}
+              goal={goalById(card.goal_id)}
+              accent={card.category === "business" ? orgColor(card.organization_id) : "#F5A15E"}
+              locale={locale}
+              onOpen={() => onOpen(card)}
+              bringToFront={() => setTopZ((z) => z + 1)}
+              topZ={topZ}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CanvasCard({
+  card,
+  index,
+  goal,
+  accent,
+  locale,
+  onOpen,
+  bringToFront,
+  topZ,
+}: {
+  card: VisionCard;
+  index: number;
+  goal: Goal | null;
+  accent: string;
+  locale: "en" | "hu";
+  onOpen: () => void;
+  bringToFront: () => void;
+  topZ: number;
+}) {
+  const [, startTransition] = useTransition();
+  const progress = card.progress_override ?? goal?.progress_percent ?? null;
+  const hasStoredPosition = card.position_x !== 0 || card.position_y !== 0;
+  const fallbackX = 40 + (index % 5) * 260;
+  const fallbackY = 40 + Math.floor(index / 5) * 240;
+  const x = useMotionValue(hasStoredPosition ? card.position_x : fallbackX);
+  const y = useMotionValue(hasStoredPosition ? card.position_y : fallbackY);
+  const [z, setZ] = useState(card.z_index || index);
+  const [dragging, setDragging] = useState(false);
+
+  function handleDragEnd() {
+    setDragging(false);
+    startTransition(() => updateVisionCardPosition(card.id, x.get(), y.get(), z));
+  }
+
+  return (
+    <motion.div
+      drag
+      dragMomentum
+      dragElastic={0.15}
+      onDragStart={() => {
+        setDragging(true);
+        bringToFront();
+        setZ((v) => v + 1);
+      }}
+      onDragEnd={handleDragEnd}
+      onClick={() => !dragging && onOpen()}
+      style={{ x, y, zIndex: dragging ? topZ + 1 : z, width: card.width || 240, borderColor: `${accent}55` }}
+      whileDrag={{ scale: 1.04 }}
+      className="absolute cursor-grab overflow-hidden rounded-2xl border shadow-glass active:cursor-grabbing"
+    >
+      <div
+        className="relative flex h-[200px] w-full items-end overflow-hidden bg-cover bg-center"
+        style={{
+          backgroundImage: card.image_url
+            ? `url(${card.image_url})`
+            : `linear-gradient(135deg, ${accent}33, rgba(5,5,5,0.9))`,
+        }}
+      >
+        <div aria-hidden className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
+        <span className="pointer-events-none absolute right-3 top-3 h-2.5 w-2.5 rounded-full shadow-glow-sm" style={{ backgroundColor: accent }} />
+        <div className="relative z-10 w-full p-3.5">
+          <p className="text-sm font-semibold tracking-tight text-white">{card.title}</p>
+          {card.target_date && <p className="mt-0.5 text-xs text-white/60">{formatDate(card.target_date, undefined, locale)}</p>}
+          {progress !== null && (
+            <div className="mt-2">
+              <Progress value={progress} />
+            </div>
+          )}
+        </div>
+      </div>
+    </motion.div>
   );
 }

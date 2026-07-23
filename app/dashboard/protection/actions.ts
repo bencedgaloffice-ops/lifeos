@@ -19,6 +19,27 @@ function refresh() {
 
 /* ---------------- Documents ---------------- */
 
+/** Real full-text search over documents.search_vector (title/category/tags,
+ * weighted, GIN-indexed) rather than a client-side substring match. */
+export async function searchDocuments(query: string) {
+  const { supabase } = await requireUser();
+  const clean = query.trim();
+  if (!clean) {
+    const { data } = await supabase
+      .from("documents")
+      .select("*")
+      .order("expires_at", { ascending: true, nullsFirst: false });
+    return data ?? [];
+  }
+
+  const { data } = await supabase
+    .from("documents")
+    .select("*")
+    .textSearch("search_vector", clean, { type: "websearch", config: "simple" })
+    .order("expires_at", { ascending: true, nullsFirst: false });
+  return data ?? [];
+}
+
 export async function createDocument(formData: FormData) {
   const { supabase, user } = await requireUser();
   const title = String(formData.get("title") ?? "").trim();

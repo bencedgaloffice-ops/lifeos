@@ -57,3 +57,13 @@ export async function deleteVisionCard(id: string) {
   await supabase.from("vision_cards").delete().eq("id", id);
   refresh();
 }
+
+/** Persists a card's free position + layer order after a canvas drag. */
+export async function updateVisionCardPosition(id: string, x: number, y: number, zIndex: number) {
+  const { supabase } = await requireUser();
+  await supabase
+    .from("vision_cards")
+    .update({ position_x: x, position_y: y, z_index: zIndex, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  revalidatePath("/dashboard/vision");
+}

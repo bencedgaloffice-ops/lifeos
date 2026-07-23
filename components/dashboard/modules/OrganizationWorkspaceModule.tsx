@@ -328,7 +328,7 @@ function LicensesTab({ organization, licenses, startTransition }: Props & { star
 
 /* ---------------- Beekeeping ---------------- */
 
-function BeekeepingTab({ organization, apiaries, hives, inspections, harvests, startTransition }: Props & { startTransition: React.TransitionStartFunction }) {
+function BeekeepingTab({ organization, apiaries, hives, inspections, harvests, products, startTransition }: Props & { startTransition: React.TransitionStartFunction }) {
   const { t, locale } = useLocale();
   const [openApiary, setOpenApiary] = useState(false);
   const [openHive, setOpenHive] = useState<string | null>(null);
@@ -460,6 +460,16 @@ function BeekeepingTab({ organization, apiaries, hives, inspections, harvests, s
                       <input name="honey_type" placeholder={t("business.formHoneyType")} className={inputClass} />
                       <input type="number" step="0.1" name="quantity_kg" required placeholder={t("business.formQuantityKg")} className={inputClass} />
                       <input type="date" name="harvest_date" className={inputClass} />
+                      {products.length > 0 && (
+                        <>
+                          <p className="mt-1 text-xs text-white/40">{t("business.addToInventoryHint")}</p>
+                          <select name="stock_product_id" className={inputClass} defaultValue="">
+                            <option value="" className="bg-base">{t("business.formProductOptional")}</option>
+                            {products.map((p) => <option key={p.id} value={p.id} className="bg-base">{p.name}</option>)}
+                          </select>
+                          <input type="number" name="stock_units" placeholder={t("business.formStockUnits")} className={inputClass} />
+                        </>
+                      )}
                       <button type="submit" className="rounded-full bg-accent px-4 py-2 text-xs font-medium text-white">{t("business.save")}</button>
                     </form>
                   )}

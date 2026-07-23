@@ -199,6 +199,25 @@ export async function createHarvest(orgId: string, apiaryId: string, formData: F
     quantity_kg,
     notes: String(formData.get("notes") ?? "").trim() || null,
   });
+
+  // Optionally ties this harvest straight into sellable inventory — stock
+  // levels are otherwise disconnected from what was actually produced.
+  const stockProductId = String(formData.get("stock_product_id") ?? "");
+  const stockUnits = Math.abs(Number(formData.get("stock_units") ?? 0));
+  if (stockProductId && stockUnits) {
+    const { data: product } = await supabase
+      .from("products")
+      .select("stock_qty")
+      .eq("id", stockProductId)
+      .maybeSingle();
+    if (product) {
+      await supabase
+        .from("products")
+        .update({ stock_qty: Number(product.stock_qty) + stockUnits })
+        .eq("id", stockProductId);
+    }
+  }
+
   refresh(orgId);
 }
 

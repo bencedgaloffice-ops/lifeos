@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { ShieldCheck, FileText, ListChecks, KeyRound, Plus, Trash2, Check, Search } from "lucide-react";
+import { useEffect, useState, useTransition } from "react";
+import { ShieldCheck, FileText, ListChecks, KeyRound, Plus, Trash2, Check, Search, Loader2 } from "lucide-react";
 import type { Document, Responsibility, SecurityNote, Organization } from "@/lib/types";
 import { formatDate, relativeDays } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
@@ -16,6 +16,7 @@ import {
 import {
   createDocument,
   deleteDocument,
+  searchDocuments,
   createResponsibility,
   toggleResponsibility,
   deleteResponsibility,
@@ -45,17 +46,33 @@ export function ProtectionModule({ documents, responsibilities, notes, organizat
   const [openResp, setOpenResp] = useState(false);
   const [openNote, setOpenNote] = useState(false);
   const [query, setQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Document[] | null>(null);
+  const [searching, setSearching] = useState(false);
 
   const activeResponsibilities = responsibilities.filter((r) => !r.completed);
   const doneResponsibilities = responsibilities.filter((r) => r.completed);
 
-  const filteredDocuments = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return documents;
-    return documents.filter((d) =>
-      [d.title, d.category ?? "", ...(d.tags ?? [])].some((field) => field.toLowerCase().includes(q)),
-    );
-  }, [documents, query]);
+  // Debounced real full-text search (documents.search_vector, GIN-indexed) —
+  // falls back to the server-fetched list once the query is cleared.
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) {
+      setSearchResults(null);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const handle = setTimeout(() => {
+      startTransition(async () => {
+        const results = await searchDocuments(q);
+        setSearchResults(results as Document[]);
+        setSearching(false);
+      });
+    }, 300);
+    return () => clearTimeout(handle);
+  }, [query, startTransition]);
+
+  const filteredDocuments = searchResults ?? documents;
 
   return (
     <div>
@@ -82,8 +99,11 @@ export function ProtectionModule({ documents, responsibilities, notes, organizat
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={t("protection.searchPlaceholder")}
-              className={inputClass + " pl-10"}
+              className={inputClass + " pl-10 pr-10"}
             />
+            {searching && (
+              <Loader2 className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-white/30" />
+            )}
           </div>
 
           {openDoc && (
