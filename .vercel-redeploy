@@ -1,5 +1,5 @@
 # Deploy marker
 
-Production deploys of gal-lifeos.vercel.app are driven by pushes to `main`.
-Fresh push after granting the Vercel GitHub App repository access to lifeos.
-Nonce: 20260724T071419Z
+Production is driven by pushes to `main`. Testing whether the webhook fires
+now that the promote build succeeded and GitHub App access is restored.
+Nonce: 20260724T072509Z
