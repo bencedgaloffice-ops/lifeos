@@ -58,10 +58,19 @@ export function RealLifeMap({ onNavigate }: { onNavigate?: (href: string) => voi
     const map = L.map(containerRef.current, {
       zoomControl: true,
       attributionControl: true,
-      minZoom: 6,
+      minZoom: 5,
       maxZoom: 16,
-    }).setView([47.05, 18.7], 7.4);
+    });
     mapRef.current = map;
+    // Frame the whole operating range — Hungary through Austria to München —
+    // so the Germany import corridor is visible without panning.
+    map.fitBounds(
+      [
+        [45.9, 10.9],
+        [48.8, 22.3],
+      ],
+      { padding: [16, 16] },
+    );
 
     L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", {
       subdomains: "abcd",
