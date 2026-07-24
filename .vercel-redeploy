@@ -1,5 +1,5 @@
-Deployment trigger marker.
+# Deploy marker
 
-This file exists only to nudge the Vercel GitHub integration into
-creating a fresh production deployment of the latest main branch after
-auto-deploys stopped firing. Safe to delete.
+Production deploys of gal-lifeos.vercel.app are driven by pushes to `main`.
+Bumped 2026-07-24 (reconnect verification) to trigger a fresh production build after reconnecting the
+Vercel <-> GitHub integration.
