@@ -2,7 +2,7 @@
 
 import { Component, Suspense, useRef, type ReactNode } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, ContactShadows } from "@react-three/drei";
+import { OrbitControls, ContactShadows, Environment, MeshReflectorMaterial } from "@react-three/drei";
 import { EffectComposer, Bloom } from "@react-three/postprocessing";
 import * as THREE from "three";
 import { VehicleModel } from "./VehicleModel";
@@ -146,23 +146,42 @@ export default function Showroom({ accent = "#9BB0C4", modelUrl }: { accent?: st
       shadows
       dpr={[1, 2]}
       camera={{ position: [6, 3.2, 6], fov: 38 }}
-      gl={{ antialias: true, alpha: true }}
+      gl={{ antialias: true, alpha: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.05 }}
       style={{ touchAction: "none" }}
     >
       <color attach="background" args={["#05070a"]} />
-      <fog attach="fog" args={["#05070a", 10, 26]} />
+      <fog attach="fog" args={["#05070a", 12, 30]} />
 
-      <ambientLight intensity={0.3} />
-      <spotLight position={[6, 9, 4]} angle={0.5} penumbra={1} intensity={140} color="#eaf2ff" castShadow shadow-bias={-0.0004} />
-      <spotLight position={[-6, 8, -3]} angle={0.6} penumbra={1} intensity={90} color={accent} />
-      <pointLight position={[0, 4, 0]} intensity={18} color="#dfe9ff" />
-      <hemisphereLight args={["#9fb4d0", "#05070a", 0.35]} />
+      {/* Image-based lighting for realistic metallic paint reflections. Its
+          own Suspense means a slow/blocked HDRI never delays the vehicle. */}
+      <Suspense fallback={null}>
+        <Environment preset="warehouse" environmentIntensity={0.65} />
+      </Suspense>
+
+      <ambientLight intensity={0.18} />
+      <spotLight position={[6, 9, 4]} angle={0.5} penumbra={1} intensity={150} color="#eaf2ff" castShadow shadow-bias={-0.0004} shadow-mapSize={[2048, 2048]} />
+      <spotLight position={[-6, 8, -3]} angle={0.6} penumbra={1} intensity={95} color={accent} />
+      <spotLight position={[0, 7, -7]} angle={0.7} penumbra={1} intensity={60} color="#ffffff" />
+      <pointLight position={[0, 4, 0]} intensity={14} color="#dfe9ff" />
 
       <Stage accent={accent} modelUrl={modelUrl} />
 
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
-        <planeGeometry args={[60, 60]} />
-        <meshStandardMaterial color="#070a0f" metalness={0.85} roughness={0.42} />
+      {/* Mirror-polished showroom floor with real reflections of the car. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]}>
+        <planeGeometry args={[80, 80]} />
+        <MeshReflectorMaterial
+          resolution={1024}
+          mixBlur={1}
+          mixStrength={45}
+          blur={[300, 90]}
+          roughness={0.65}
+          depthScale={1.1}
+          minDepthThreshold={0.4}
+          maxDepthThreshold={1.3}
+          color="#080b11"
+          metalness={0.7}
+          mirror={0.55}
+        />
       </mesh>
 
       <OrbitControls

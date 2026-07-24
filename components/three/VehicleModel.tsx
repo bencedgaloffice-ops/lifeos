@@ -28,6 +28,13 @@ export function VehicleModel({ url }: { url: string }) {
       if (mesh.isMesh) {
         mesh.castShadow = true;
         mesh.receiveShadow = true;
+        const mat = mesh.material as THREE.MeshStandardMaterial | THREE.MeshStandardMaterial[];
+        for (const m of Array.isArray(mat) ? mat : [mat]) {
+          if (m && "envMapIntensity" in m) {
+            m.envMapIntensity = 1.15;
+            m.needsUpdate = true;
+          }
+        }
       }
     });
     const box = new THREE.Box3().setFromObject(root);
