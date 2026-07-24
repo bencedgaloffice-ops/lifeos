@@ -1,0 +1,5 @@
+Deployment trigger marker.
+
+This file exists only to nudge the Vercel GitHub integration into
+creating a fresh production deployment of the latest main branch after
+auto-deploys stopped firing. Safe to delete.
