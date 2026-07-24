@@ -2,24 +2,37 @@
 
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { RefreshCw, Building, Briefcase, LineChart, Landmark, Gem } from "lucide-react";
+import {
+  RefreshCw,
+  PieChart,
+  Building,
+  Landmark,
+  Users,
+  Briefcase,
+  LineChart as LineIcon,
+  Gem,
+  ShieldCheck,
+  Check,
+  MessageSquare,
+  type LucideIcon,
+} from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 
 /**
- * LifeOS Treasury — a private family-office wealth dashboard modelled on the
- * Signet aesthetic: warm near-black canvas, an editorial serif for headings
- * and monetary figures, restrained champagne-gold with muted green (positive)
- * and rose (liabilities) accents, flat hairline cards (no glassmorphism), a
- * gold-underlined tab row, and the signature gold "KEY INSIGHT" advisory box.
- * Runs entirely on the real finance data the module already loads.
+ * LifeOS Treasury — a private family-office dashboard modelled on Signet:
+ * a left icon rail, an editorial serif for headings and figures, a warm
+ * near-black canvas, champagne gold with muted green/rose accents, flat
+ * hairline cards, a net-worth line chart, the gold KEY INSIGHT box, and an
+ * Advisors ("Financial Director") desk. All from the real finance data.
  */
 
 const GOLD = "#C0A15E";
 const CREAM = "#ECE6D8";
 const GREEN = "#6BA97F";
 const ROSE = "#C88686";
-const GRID = "rgba(236,230,216,0.10)";
+const HAIR = "rgba(236,230,216,0.09)";
+const MUTE = "rgba(236,230,216,0.45)";
 
 type Props = {
   currency: string;
@@ -34,12 +47,12 @@ type Props = {
   trend: { date: string; value: number }[];
 };
 
-type Tab = "networth" | "assets" | "accounts";
+type Section = "portfolio" | "assets" | "accounts" | "advisors";
 
 export function TreasuryDashboard(props: Props) {
   const { t, locale } = useLocale();
   const fc = (n: number) => formatCurrency(n, props.currency, { locale });
-  const [tab, setTab] = useState<Tab>("networth");
+  const [section, setSection] = useState<Section>("portfolio");
 
   const m = useMemo(() => {
     const liabilities = props.accounts
@@ -49,15 +62,12 @@ export function TreasuryDashboard(props: Props) {
     const accountsValue = cash + props.portfolioValue;
     const totalBeforeDebt = props.netWorth + liabilities;
     const otherAssets = Math.max(0, totalBeforeDebt - accountsValue);
-
     const bucket = (c: Props["assets"][number]["category"]) => props.assets.filter((a) => a.category === c).reduce((s, a) => s + a.value, 0);
     const accountsPct = totalBeforeDebt > 0 ? Math.round((accountsValue / totalBeforeDebt) * 100) : 0;
-
     const first = props.trend[0]?.value;
     const last = props.trend[props.trend.length - 1]?.value ?? props.netWorth;
     const yearGrowth = first && first > 0 ? ((last - first) / first) * 100 : null;
 
-    // Key insight — a real, plain-language read on leverage.
     let insight: string;
     if (liabilities <= 0) insight = t("treasury.insightNoDebt");
     else if (cash >= liabilities) insight = t("treasury.insightLight");
@@ -65,14 +75,7 @@ export function TreasuryDashboard(props: Props) {
     else insight = t("treasury.insightWatch");
 
     return {
-      liabilities,
-      cash,
-      accountsValue,
-      otherAssets,
-      totalBeforeDebt,
-      accountsPct,
-      yearGrowth,
-      insight,
+      liabilities, cash, accountsValue, otherAssets, totalBeforeDebt, accountsPct, yearGrowth, insight,
       realEstate: bucket("property"),
       businesses: Math.max(bucket("business"), props.businessNet > 0 ? props.businessNet : 0),
       investments: props.portfolioValue,
@@ -80,184 +83,292 @@ export function TreasuryDashboard(props: Props) {
     };
   }, [props, t]);
 
-  const refreshed = new Intl.DateTimeFormat(locale === "hu" ? "hu-HU" : "en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date());
+  const refreshed = new Intl.DateTimeFormat(locale === "hu" ? "hu-HU" : "en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date());
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: "networth", label: t("treasury.tabNetWorth") },
-    { key: "assets", label: t("treasury.tabAssets") },
-    { key: "accounts", label: t("treasury.tabAccounts") },
+  const rail: { key: Section; label: string; icon: LucideIcon }[] = [
+    { key: "portfolio", label: t("treasury.railPortfolio"), icon: PieChart },
+    { key: "assets", label: t("treasury.railAssets"), icon: Building },
+    { key: "accounts", label: t("treasury.railAccounts"), icon: Landmark },
+    { key: "advisors", label: t("treasury.railAdvisors"), icon: Users },
   ];
 
   return (
-    <div className="rounded-3xl border border-[color:rgba(236,230,216,0.08)] bg-[#0b0b0c] p-6 sm:p-8" style={{ fontFamily: "var(--font-inter)" }}>
-      {/* Entity header */}
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[color:rgba(236,230,216,0.08)] pb-5">
-        <div>
-          <p className="text-[0.6rem] font-semibold uppercase tracking-[0.35em]" style={{ color: GREEN }}>
-            {t("treasury.active")}
-          </p>
-          <h1 className="mt-1 font-serif text-2xl text-[color:#ECE6D8] sm:text-3xl">
-            {props.holderName ? `${props.holderName} ${t("treasury.familyOffice")}` : t("treasury.title")}
-          </h1>
-          <p className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-[color:rgba(236,230,216,0.4)]">
-            <RefreshCw className="h-3 w-3" /> {t("treasury.lastRefreshed")} {refreshed}
-          </p>
+    <div className="flex overflow-hidden rounded-3xl border" style={{ borderColor: HAIR, background: "#0b0b0c" }}>
+      {/* Left icon rail */}
+      <nav className="flex w-16 flex-none flex-col items-center gap-1 border-r py-5 sm:w-20" style={{ borderColor: HAIR }}>
+        <div className="mb-4 grid h-8 w-8 place-items-center rounded" style={{ border: `1px solid ${GOLD}` }}>
+          <span className="font-serif text-sm" style={{ color: GOLD }}>
+            ₲
+          </span>
         </div>
-        <span className="rounded-md border px-3 py-1 font-serif text-sm italic" style={{ borderColor: GRID, color: GOLD }}>
-          {t("treasury.title")}
-        </span>
-      </div>
-
-      {/* Tab row */}
-      <div className="mt-5 flex flex-wrap gap-6 border-b border-[color:rgba(236,230,216,0.08)]">
-        {tabs.map((tb) => {
-          const on = tab === tb.key;
+        {rail.map((r) => {
+          const on = section === r.key;
+          const Icon = r.icon;
           return (
             <button
-              key={tb.key}
-              onClick={() => setTab(tb.key)}
-              className="relative -mb-px pb-3 text-sm transition-colors"
-              style={{ color: on ? CREAM : "rgba(236,230,216,0.45)" }}
+              key={r.key}
+              onClick={() => setSection(r.key)}
+              className="flex w-full flex-col items-center gap-1 rounded-lg py-2.5 transition-colors"
+              style={{ background: on ? "rgba(192,161,94,0.14)" : "transparent", color: on ? GOLD : MUTE }}
             >
-              {tb.label}
-              {on && <span className="absolute inset-x-0 bottom-0 h-px" style={{ background: GOLD }} />}
+              <Icon className="h-4 w-4" />
+              <span className="text-[0.5rem] uppercase tracking-wider">{r.label}</span>
             </button>
           );
         })}
-      </div>
+      </nav>
 
-      {tab === "networth" && (
-        <motion.div key="nw" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="pt-7">
-          <p className="text-[0.6rem] font-semibold uppercase tracking-[0.35em]" style={{ color: GOLD }}>
-            {t("treasury.portfolioEyebrow")}
-          </p>
-          <h2 className="mt-1 font-serif text-2xl text-[color:#ECE6D8]">{t("treasury.netWorth")}</h2>
-          <p className="text-sm text-[color:rgba(236,230,216,0.45)]">{t("treasury.netWorthSub")}</p>
-
-          <p className="mt-6 text-[0.6rem] uppercase tracking-[0.3em] text-[color:rgba(236,230,216,0.4)]">{t("treasury.totalNetWorth")}</p>
-          <div className="flex flex-wrap items-end gap-3">
-            <span className="font-serif text-4xl leading-none text-[color:#F4EFE3] sm:text-6xl">{fc(props.netWorth)}</span>
-            {m.yearGrowth != null && (
-              <span className="mb-1 text-sm" style={{ color: m.yearGrowth >= 0 ? GREEN : ROSE }}>
-                {m.yearGrowth >= 0 ? "↑" : "↓"} {Math.abs(m.yearGrowth).toFixed(1)}%
-              </span>
-            )}
+      {/* Content */}
+      <div className="min-w-0 flex-1 p-6 sm:p-8">
+        {/* Entity header */}
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b pb-5" style={{ borderColor: HAIR }}>
+          <div>
+            <p className="text-[0.6rem] font-semibold uppercase tracking-[0.35em]" style={{ color: GREEN }}>{t("treasury.active")}</p>
+            <h1 className="mt-1 font-serif text-2xl sm:text-3xl" style={{ color: CREAM }}>
+              {props.holderName ? `${props.holderName} ${t("treasury.familyOffice")}` : t("treasury.title")}
+            </h1>
+            <p className="mt-1.5 inline-flex items-center gap-1.5 text-xs" style={{ color: MUTE }}>
+              <RefreshCw className="h-3 w-3" /> {t("treasury.lastRefreshed")} {refreshed}
+            </p>
           </div>
+          <span className="rounded-md border px-3 py-1 font-serif text-sm italic" style={{ borderColor: HAIR, color: GOLD }}>{t("treasury.title")}</span>
+        </div>
 
-          {/* Three-card balance sheet */}
-          <div className="mt-7 grid gap-3 md:grid-cols-3">
-            <BalanceCard label={t("treasury.accounts")} value={fc(m.accountsValue)} sub={t("treasury.cashInvestments")} />
-            <BalanceCard label={t("treasury.otherAssets")} value={fc(m.otherAssets)} sub={t("treasury.propertyHoldings")} />
-            <BalanceCard label={t("treasury.liabilities")} value={fc(m.liabilities)} sub={t("treasury.loansCredit")} color={ROSE} />
-          </div>
+        {section === "portfolio" && (
+          <motion.div key="p" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="pt-7">
+            <p className="text-[0.6rem] font-semibold uppercase tracking-[0.35em]" style={{ color: GOLD }}>{t("treasury.portfolioEyebrow")}</p>
+            <h2 className="mt-1 font-serif text-2xl" style={{ color: CREAM }}>{t("treasury.netWorth")}</h2>
+            <p className="text-sm" style={{ color: MUTE }}>{t("treasury.netWorthSub")}</p>
 
-          {/* Key insight (AI advisor) */}
-          <div className="mt-4 overflow-hidden rounded-xl border" style={{ borderColor: "rgba(192,161,94,0.45)", background: "linear-gradient(90deg, rgba(192,161,94,0.12), rgba(192,161,94,0.03))" }}>
-            <div className="border-l-2 p-5" style={{ borderColor: GOLD }}>
-              <p className="text-[0.6rem] font-semibold uppercase tracking-[0.3em]" style={{ color: GOLD }}>
-                {t("treasury.keyInsight")}
-              </p>
-              <p className="mt-2 font-serif text-lg text-[color:#ECE6D8]">{m.insight}</p>
-            </div>
-          </div>
-
-          {/* Composition + snapshot */}
-          <div className="mt-6 grid gap-6 lg:grid-cols-2">
-            <div>
-              <p className="text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-[color:rgba(236,230,216,0.5)]">{t("treasury.composition")}</p>
-              <p className="mt-2 text-xs text-[color:rgba(236,230,216,0.45)]">
-                {t("treasury.totalBeforeDebt")} <span className="text-[color:#ECE6D8]">{fc(m.totalBeforeDebt)}</span>
-              </p>
-              <div className="mt-3 flex h-2 overflow-hidden rounded-full" style={{ background: "rgba(236,230,216,0.08)" }}>
-                <div style={{ width: `${m.accountsPct}%`, background: GOLD }} />
-                <div style={{ width: `${100 - m.accountsPct}%`, background: "rgba(236,230,216,0.28)" }} />
-              </div>
-              <div className="mt-2 flex gap-4 text-[0.7rem] text-[color:rgba(236,230,216,0.5)]">
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full" style={{ background: GOLD }} /> {t("treasury.accounts")} {m.accountsPct}%
+            <p className="mt-6 text-[0.6rem] uppercase tracking-[0.3em]" style={{ color: MUTE }}>{t("treasury.totalNetWorth")}</p>
+            <div className="flex flex-wrap items-end gap-3">
+              <span className="font-serif text-4xl leading-none sm:text-6xl" style={{ color: "#F4EFE3" }}>{fc(props.netWorth)}</span>
+              {m.yearGrowth != null && (
+                <span className="mb-1 text-sm" style={{ color: m.yearGrowth >= 0 ? GREEN : ROSE }}>
+                  {m.yearGrowth >= 0 ? "↑" : "↓"} {Math.abs(m.yearGrowth).toFixed(1)}%
                 </span>
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full" style={{ background: "rgba(236,230,216,0.28)" }} /> {t("treasury.other")} {100 - m.accountsPct}%
-                </span>
+              )}
+            </div>
+
+            {/* Balance over time */}
+            <p className="mt-8 text-[0.6rem] font-semibold uppercase tracking-[0.3em]" style={{ color: MUTE }}>{t("treasury.balanceOverTime")}</p>
+            <BalanceChart trend={props.trend} fallback={props.netWorth} locale={locale} />
+
+            {/* Balance sheet */}
+            <div className="mt-7 grid gap-3 md:grid-cols-3">
+              <BalanceCard label={t("treasury.accounts")} value={fc(m.accountsValue)} sub={t("treasury.cashInvestments")} />
+              <BalanceCard label={t("treasury.otherAssets")} value={fc(m.otherAssets)} sub={t("treasury.propertyHoldings")} />
+              <BalanceCard label={t("treasury.liabilities")} value={fc(m.liabilities)} sub={t("treasury.loansCredit")} color={ROSE} />
+            </div>
+
+            {/* Key insight */}
+            <div className="mt-4 overflow-hidden rounded-xl border" style={{ borderColor: "rgba(192,161,94,0.45)", background: "linear-gradient(90deg, rgba(192,161,94,0.12), rgba(192,161,94,0.03))" }}>
+              <div className="border-l-2 p-5" style={{ borderColor: GOLD }}>
+                <p className="text-[0.6rem] font-semibold uppercase tracking-[0.3em]" style={{ color: GOLD }}>{t("treasury.keyInsight")}</p>
+                <p className="mt-2 font-serif text-lg" style={{ color: CREAM }}>{m.insight}</p>
               </div>
             </div>
-            <div>
-              <p className="text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-[color:rgba(236,230,216,0.5)]">{t("treasury.snapshot")}</p>
-              <dl className="mt-3 space-y-2 text-sm">
-                <SnapRow k={t("treasury.cashVsDebt")} v={m.liabilities > 0 ? `${Math.round((m.cash / m.liabilities) * 100)}%` : "∞"} />
-                <SnapRow k={t("treasury.linkedAccounts")} v={`${props.accounts.length}`} />
-                <SnapRow k={t("treasury.holdingsRecorded")} v={`${props.assets.length}`} />
-              </dl>
-            </div>
-          </div>
-        </motion.div>
-      )}
 
-      {tab === "assets" && (
-        <motion.div key="as" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="grid gap-3 pt-7 sm:grid-cols-2 lg:grid-cols-3">
-          {[
-            { key: "realEstate", icon: Building, value: m.realEstate },
-            { key: "businesses", icon: Briefcase, value: m.businesses },
-            { key: "investments", icon: LineChart, value: m.investments },
-            { key: "cashReserves", icon: Landmark, value: m.cash },
-            { key: "valuableAssets", icon: Gem, value: m.valuables },
-          ].map((a) => {
-            const Icon = a.icon;
-            return (
-              <div key={a.key} className="rounded-xl border border-[color:rgba(236,230,216,0.08)] p-5">
-                <Icon className="h-4 w-4" style={{ color: GOLD }} />
-                <p className="mt-3 text-[0.6rem] uppercase tracking-[0.2em] text-[color:rgba(236,230,216,0.45)]">{t(`treasury.${a.key}`)}</p>
-                <p className="mt-1 font-serif text-2xl text-[color:#ECE6D8]">{fc(a.value)}</p>
-              </div>
-            );
-          })}
-        </motion.div>
-      )}
-
-      {tab === "accounts" && (
-        <motion.div key="ac" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="pt-7">
-          <div className="divide-y divide-[color:rgba(236,230,216,0.07)]">
-            {props.accounts.length === 0 && <p className="py-6 text-sm text-[color:rgba(236,230,216,0.4)]">{t("treasury.noAccounts")}</p>}
-            {props.accounts.map((a) => (
-              <div key={a.id} className="flex items-center justify-between py-3">
-                <div>
-                  <p className="text-sm text-[color:#ECE6D8]">{a.name}</p>
-                  <p className="text-[0.65rem] uppercase tracking-wider text-[color:rgba(236,230,216,0.4)]">{a.type}</p>
+            {/* Composition + snapshot */}
+            <div className="mt-6 grid gap-6 lg:grid-cols-2">
+              <div>
+                <p className="text-[0.6rem] font-semibold uppercase tracking-[0.3em]" style={{ color: MUTE }}>{t("treasury.composition")}</p>
+                <p className="mt-2 text-xs" style={{ color: MUTE }}>
+                  {t("treasury.totalBeforeDebt")} <span style={{ color: CREAM }}>{fc(m.totalBeforeDebt)}</span>
+                </p>
+                <div className="mt-3 flex h-2 overflow-hidden rounded-full" style={{ background: "rgba(236,230,216,0.08)" }}>
+                  <div style={{ width: `${m.accountsPct}%`, background: GOLD }} />
+                  <div style={{ width: `${100 - m.accountsPct}%`, background: "rgba(236,230,216,0.28)" }} />
                 </div>
-                <span className="font-serif text-lg" style={{ color: a.balance < 0 ? ROSE : CREAM }}>
-                  {fc(a.balance)}
-                </span>
+                <div className="mt-2 flex gap-4 text-[0.7rem]" style={{ color: MUTE }}>
+                  <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: GOLD }} /> {t("treasury.accounts")} {m.accountsPct}%</span>
+                  <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ background: "rgba(236,230,216,0.28)" }} /> {t("treasury.other")} {100 - m.accountsPct}%</span>
+                </div>
+              </div>
+              <div>
+                <p className="text-[0.6rem] font-semibold uppercase tracking-[0.3em]" style={{ color: MUTE }}>{t("treasury.snapshot")}</p>
+                <dl className="mt-3 space-y-2 text-sm">
+                  <SnapRow k={t("treasury.cashVsDebt")} v={m.liabilities > 0 ? `${Math.round((m.cash / m.liabilities) * 100)}%` : "∞"} />
+                  <SnapRow k={t("treasury.linkedAccounts")} v={`${props.accounts.length}`} />
+                  <SnapRow k={t("treasury.holdingsRecorded")} v={`${props.assets.length}`} />
+                </dl>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
+        {section === "assets" && (
+          <motion.div key="a" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="grid gap-3 pt-7 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              { key: "realEstate", icon: Building, value: m.realEstate },
+              { key: "businesses", icon: Briefcase, value: m.businesses },
+              { key: "investments", icon: LineIcon, value: m.investments },
+              { key: "cashReserves", icon: Landmark, value: m.cash },
+              { key: "valuableAssets", icon: Gem, value: m.valuables },
+            ].map((a) => {
+              const Icon = a.icon;
+              return (
+                <div key={a.key} className="rounded-xl border p-5" style={{ borderColor: HAIR }}>
+                  <Icon className="h-4 w-4" style={{ color: GOLD }} />
+                  <p className="mt-3 text-[0.6rem] uppercase tracking-[0.2em]" style={{ color: MUTE }}>{t(`treasury.${a.key}`)}</p>
+                  <p className="mt-1 font-serif text-2xl" style={{ color: CREAM }}>{fc(a.value)}</p>
+                </div>
+              );
+            })}
+          </motion.div>
+        )}
+
+        {section === "accounts" && (
+          <motion.div key="c" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="pt-7">
+            <div className="divide-y" style={{ borderColor: HAIR }}>
+              {props.accounts.length === 0 && <p className="py-6 text-sm" style={{ color: MUTE }}>{t("treasury.noAccounts")}</p>}
+              {props.accounts.map((a) => (
+                <div key={a.id} className="flex items-center justify-between py-3" style={{ borderColor: HAIR }}>
+                  <div>
+                    <p className="text-sm" style={{ color: CREAM }}>{a.name}</p>
+                    <p className="text-[0.65rem] uppercase tracking-wider" style={{ color: MUTE }}>{a.type}</p>
+                  </div>
+                  <span className="font-serif text-lg" style={{ color: a.balance < 0 ? ROSE : CREAM }}>{fc(a.balance)}</span>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+
+        {section === "advisors" && (
+          <Advisors m={m} fc={fc} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Advisors desk ---------------- */
+function Advisors({ m, fc }: { m: { liabilities: number; cash: number; investments: number }; fc: (n: number) => string }) {
+  const { t } = useLocale();
+  const items: { title: string; sub: string }[] = [];
+  if (m.liabilities > 0) items.push({ title: t("treasury.advLiabTitle"), sub: `${t("treasury.advLiabSub")} ${fc(m.liabilities)}.` });
+  items.push({ title: t("treasury.advValTitle"), sub: t("treasury.advValSub") });
+  if (m.investments <= 0) items.push({ title: t("treasury.advInvestTitle"), sub: t("treasury.advInvestSub") });
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="pt-7">
+      <p className="text-[0.6rem] font-semibold uppercase tracking-[0.35em]" style={{ color: GOLD }}>{t("treasury.railAdvisors")}</p>
+      <h2 className="mt-1 font-serif text-2xl" style={{ color: CREAM }}>{t("treasury.advisorsTitle")}</h2>
+      <p className="text-sm" style={{ color: MUTE }}>{t("treasury.advisorsSub")}</p>
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-[280px_1fr]">
+        {/* Director card */}
+        <div className="rounded-xl border p-5" style={{ borderColor: HAIR }}>
+          <p className="text-[0.6rem] uppercase tracking-[0.2em]" style={{ color: GOLD }}>{t("treasury.directorRole")}</p>
+          <p className="mt-1 font-serif text-xl" style={{ color: CREAM }}>{t("treasury.directorName")}</p>
+          <span className="mt-2 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[0.6rem] uppercase tracking-wider" style={{ background: "rgba(107,169,127,0.15)", color: GREEN }}>
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: GREEN }} /> {t("treasury.active")}
+          </span>
+          <p className="mt-3 text-sm" style={{ color: MUTE }}>{t("treasury.directorLine")}</p>
+        </div>
+
+        {/* Action stream */}
+        <div>
+          <p className="text-[0.6rem] font-semibold uppercase tracking-[0.3em]" style={{ color: MUTE }}>{t("treasury.waitingOnYou")}</p>
+          <div className="mt-3 space-y-3">
+            {items.map((it, i) => (
+              <div key={i} className="rounded-xl border p-4" style={{ borderColor: HAIR }}>
+                <p className="font-serif text-base" style={{ color: CREAM }}>{it.title}</p>
+                <p className="mt-1 text-sm" style={{ color: MUTE }}>{it.sub}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <AdvBtn icon={Check} label={t("treasury.approve")} gold />
+                  <AdvBtn icon={MessageSquare} label={t("treasury.ask")} />
+                  <AdvBtn icon={ShieldCheck} label={t("treasury.letHandle")} />
+                </div>
               </div>
             ))}
           </div>
-        </motion.div>
+        </div>
+      </div>
+    </motion.div>
+  );
+}
+
+function AdvBtn({ icon: Icon, label, gold }: { icon: LucideIcon; label: string; gold?: boolean }) {
+  return (
+    <button
+      className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs uppercase tracking-wider transition-colors"
+      style={{ borderColor: gold ? GOLD : HAIR, color: gold ? GOLD : MUTE }}
+    >
+      <Icon className="h-3 w-3" /> {label}
+    </button>
+  );
+}
+
+/* ---------------- Balance-over-time chart ---------------- */
+function BalanceChart({ trend, fallback, locale }: { trend: { date: string; value: number }[]; fallback: number; locale: string }) {
+  const pts =
+    trend.length >= 2
+      ? trend
+      : Array.from({ length: 8 }, (_, i) => ({ date: "", value: fallback * (0.8 + (i / 7) * 0.2) }));
+  const w = 900;
+  const h = 190;
+  const pad = 6;
+  const vals = pts.map((p) => p.value);
+  const min = Math.min(...vals);
+  const max = Math.max(...vals);
+  const span = max - min || 1;
+  const x = (i: number) => pad + (i / (pts.length - 1)) * (w - pad * 2);
+  const y = (v: number) => pad + (1 - (v - min) / span) * (h - pad * 2);
+  const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(" ");
+  const labels = trend.length >= 2 ? pickLabels(trend, locale) : [];
+
+  return (
+    <div className="mt-3 rounded-xl border p-4" style={{ borderColor: HAIR }}>
+      <svg viewBox={`0 0 ${w} ${h}`} className="w-full" preserveAspectRatio="none" style={{ height: 190 }}>
+        <defs>
+          <linearGradient id="tgv" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={GOLD} stopOpacity="0.28" />
+            <stop offset="100%" stopColor={GOLD} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {[0.25, 0.5, 0.75].map((g) => (
+          <line key={g} x1={pad} x2={w - pad} y1={pad + g * (h - pad * 2)} y2={pad + g * (h - pad * 2)} stroke="rgba(236,230,216,0.06)" strokeWidth="1" />
+        ))}
+        <path d={`${line} L${x(pts.length - 1)},${h - pad} L${x(0)},${h - pad} Z`} fill="url(#tgv)" />
+        <path d={line} fill="none" stroke={GOLD} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      </svg>
+      {labels.length > 0 && (
+        <div className="mt-1 flex justify-between text-[0.6rem]" style={{ color: MUTE }}>
+          {labels.map((l, i) => (
+            <span key={i}>{l}</span>
+          ))}
+        </div>
       )}
     </div>
   );
 }
 
+function pickLabels(trend: { date: string; value: number }[], locale: string): string[] {
+  const fmt = new Intl.DateTimeFormat(locale === "hu" ? "hu-HU" : "en-US", { month: "short", day: "numeric" });
+  const idxs = [0, Math.floor(trend.length / 2), trend.length - 1];
+  return idxs.map((i) => {
+    const d = trend[i]?.date;
+    return d ? fmt.format(new Date(d)) : "";
+  });
+}
+
 function BalanceCard({ label, value, sub, color }: { label: string; value: string; sub: string; color?: string }) {
   return (
-    <div className="rounded-xl border border-[color:rgba(236,230,216,0.08)] p-5">
-      <p className="text-[0.6rem] uppercase tracking-[0.2em] text-[color:rgba(236,230,216,0.4)]">{label}</p>
-      <p className="mt-2 font-serif text-2xl" style={{ color: color ?? "#ECE6D8" }}>
-        {value}
-      </p>
-      <p className="mt-1 text-[0.7rem] text-[color:rgba(236,230,216,0.4)]">{sub}</p>
+    <div className="rounded-xl border p-5" style={{ borderColor: HAIR }}>
+      <p className="text-[0.6rem] uppercase tracking-[0.2em]" style={{ color: MUTE }}>{label}</p>
+      <p className="mt-2 font-serif text-2xl" style={{ color: color ?? CREAM }}>{value}</p>
+      <p className="mt-1 text-[0.7rem]" style={{ color: MUTE }}>{sub}</p>
     </div>
   );
 }
 
 function SnapRow({ k, v }: { k: string; v: string }) {
   return (
-    <div className="flex items-center justify-between border-b border-[color:rgba(236,230,216,0.06)] pb-2">
-      <dt className="text-[color:rgba(236,230,216,0.5)]">{k}</dt>
-      <dd className="text-[color:#ECE6D8]">{v}</dd>
+    <div className="flex items-center justify-between border-b pb-2" style={{ borderColor: "rgba(236,230,216,0.06)" }}>
+      <dt style={{ color: MUTE }}>{k}</dt>
+      <dd style={{ color: CREAM }}>{v}</dd>
     </div>
   );
 }
