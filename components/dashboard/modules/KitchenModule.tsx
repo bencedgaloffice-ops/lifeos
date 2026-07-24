@@ -37,11 +37,10 @@ type Props = {
 
 const locationIcons = { fridge: Refrigerator, pantry: Archive, freezer: Snowflake } as const;
 
-// Drop-in path for an imported GLB kitchen. Commit the file to
-// public/models/modern-kitchen.glb and it renders automatically; until it
-// exists the scene falls back to the hand-built kitchen. Set to null to
-// force the built-in kitchen.
-const KITCHEN_MODEL_URL: string | null = "/models/modern-kitchen.glb";
+// Using the hand-built kitchen (fully animated). To load an imported GLB
+// instead, drop it at public/models/modern-kitchen.glb and set this to that
+// path — the loader + fallback are already wired (see KitchenModel.tsx).
+const KITCHEN_MODEL_URL: string | null = null;
 
 function expiryTone(dateStr: string | null): "amber" | null {
   if (!dateStr) return null;

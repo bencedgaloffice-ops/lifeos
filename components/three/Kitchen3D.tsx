@@ -152,6 +152,158 @@ function Pendant({ x, on }: { x: number; on: boolean }) {
   );
 }
 
+/** Freezer whose drawer slides open (revealing lit baskets) when selected. */
+function Freezer({ selected, onSelect, label }: { selected: boolean; onSelect: (k: KitchenObject) => void; label: string }) {
+  const drawer = useRef<THREE.Group>(null);
+  useFrame(() => {
+    if (drawer.current) drawer.current.position.z = THREE.MathUtils.lerp(drawer.current.position.z, selected ? 0.55 : 0, 0.15);
+  });
+  return (
+    <Hoverable name={label} hint="inspect" onActivate={() => onSelect("freezer")} labelY={0.95}>
+      <group position={[-3.4, 0.35, -1.4]}>
+        <mesh castShadow material={BLACK}>
+          <boxGeometry args={[1.3, 0.7, 1.0]} />
+        </mesh>
+        <mesh position={[0, 0, 0.02]} material={CERAMIC}>
+          <boxGeometry args={[1.15, 0.56, 0.9]} />
+        </mesh>
+        <mesh position={[0, 0, -0.35]}>
+          <planeGeometry args={[1.1, 0.5]} />
+          <meshStandardMaterial color="#eaf6ff" emissive="#bfe4ff" emissiveIntensity={selected ? 0.85 : 0.14} />
+        </mesh>
+        <group ref={drawer}>
+          <mesh position={[0, 0, 0.5]} castShadow material={BLACK}>
+            <boxGeometry args={[1.3, 0.7, 0.06]} />
+          </mesh>
+          <Handle position={[0, 0.14, 0.54]} length={0.7} />
+          <mesh position={[0, -0.12, 0.22]} material={STEEL}>
+            <boxGeometry args={[1.0, 0.32, 0.55]} />
+          </mesh>
+          {[
+            ["#cfe4ff", -0.3],
+            ["#e8d8c0", 0],
+            ["#d9c0c0", 0.3],
+          ].map(([c, x], i) => (
+            <mesh key={i} position={[x as number, -0.04, 0.24]}>
+              <boxGeometry args={[0.22, 0.18, 0.32]} />
+              <meshStandardMaterial color={c as string} roughness={0.6} />
+            </mesh>
+          ))}
+        </group>
+      </group>
+    </Hoverable>
+  );
+}
+
+/** Pantry whose twin doors swing open (revealing lit, stocked shelves). */
+function Pantry({ selected, onSelect, label }: { selected: boolean; onSelect: (k: KitchenObject) => void; label: string }) {
+  const l = useRef<THREE.Group>(null);
+  const r = useRef<THREE.Group>(null);
+  useFrame(() => {
+    const t = selected ? 1 : 0;
+    if (l.current) l.current.rotation.y = THREE.MathUtils.lerp(l.current.rotation.y, t * 2.0, 0.12);
+    if (r.current) r.current.rotation.y = THREE.MathUtils.lerp(r.current.rotation.y, -t * 2.0, 0.12);
+  });
+  return (
+    <Hoverable name={label} hint="inspect" onActivate={() => onSelect("pantry")} labelY={2.4}>
+      <group position={[4.9, 1.1, -2.4]}>
+        <mesh material={BLACK}>
+          <boxGeometry args={[1.0, 2.2, 0.7]} />
+        </mesh>
+        <mesh position={[0, 0, -0.02]} material={CERAMIC}>
+          <boxGeometry args={[0.9, 2.05, 0.62]} />
+        </mesh>
+        <mesh position={[0, 0, -0.32]}>
+          <planeGeometry args={[0.86, 2.0]} />
+          <meshStandardMaterial color="#fff" emissive="#ffe6b0" emissiveIntensity={selected ? 0.7 : 0.12} />
+        </mesh>
+        {[-0.7, -0.2, 0.3, 0.75].map((y) => (
+          <mesh key={y} position={[0, y, 0.02]} material={STEEL}>
+            <boxGeometry args={[0.86, 0.03, 0.55]} />
+          </mesh>
+        ))}
+        {[
+          [-0.25, -0.5, "#b5854f"],
+          [0.22, -0.5, "#7a9c5a"],
+          [-0.2, 0, "#c0655a"],
+          [0.22, 0.03, "#d8b26a"],
+          [0, 0.55, "#8a6f4a"],
+        ].map(([x, y, c], i) => (
+          <mesh key={i} position={[x as number, y as number, 0.12]}>
+            <boxGeometry args={[0.2, 0.28, 0.18]} />
+            <meshStandardMaterial color={c as string} roughness={0.7} />
+          </mesh>
+        ))}
+        <group ref={l} position={[-0.5, 0, 0.35]}>
+          <mesh position={[0.25, 0, 0]} castShadow material={BLACK}>
+            <boxGeometry args={[0.5, 2.2, 0.06]} />
+          </mesh>
+          <Handle position={[0.44, 0, 0.06]} length={1.4} vertical />
+        </group>
+        <group ref={r} position={[0.5, 0, 0.35]}>
+          <mesh position={[-0.25, 0, 0]} castShadow material={BLACK}>
+            <boxGeometry args={[0.5, 2.2, 0.06]} />
+          </mesh>
+          <Handle position={[-0.44, 0, 0.06]} length={1.4} vertical />
+        </group>
+      </group>
+    </Hoverable>
+  );
+}
+
+/** Faceted island with a bronze waterfall top and a front drawer that opens. */
+function Island({ selected, onSelect, label, geo, mat }: { selected: boolean; onSelect: (k: KitchenObject) => void; label: string; geo: THREE.BufferGeometry; mat: THREE.Material }) {
+  const drawer = useRef<THREE.Group>(null);
+  useFrame(() => {
+    if (drawer.current) drawer.current.position.z = THREE.MathUtils.lerp(drawer.current.position.z, selected ? 1.28 : 0.78, 0.15);
+  });
+  return (
+    <Hoverable name={label} hint="inspect" onActivate={() => onSelect("island")} labelY={1.7}>
+      <group position={[0.4, 0, 0.6]}>
+        <mesh geometry={geo} castShadow receiveShadow material={BLACK} />
+        <mesh position={[0, 0.955, 0]} castShadow material={mat}>
+          <boxGeometry args={[3.0, 0.13, 1.62]} />
+        </mesh>
+        {/* front drawer (slides toward the stools) */}
+        <group ref={drawer} position={[0, 0.62, 0.78]}>
+          <mesh castShadow material={BLACK2}>
+            <boxGeometry args={[1.2, 0.26, 0.06]} />
+          </mesh>
+          <Handle position={[0, 0, 0.05]} length={0.5} />
+          <mesh position={[0, -0.02, -0.28]} material={STEEL}>
+            <boxGeometry args={[1.1, 0.2, 0.55]} />
+          </mesh>
+          {[-0.3, -0.1, 0.1, 0.3].map((x) => (
+            <mesh key={x} position={[x, 0.03, -0.28]} material={STEEL}>
+              <boxGeometry args={[0.03, 0.02, 0.4]} />
+            </mesh>
+          ))}
+        </group>
+        {/* styling props on top */}
+        <group position={[0.8, 1.03, 0.1]}>
+          <mesh material={CERAMIC}>
+            <cylinderGeometry args={[0.2, 0.11, 0.1, 20]} />
+          </mesh>
+          {[
+            ["#7d1f2b", -0.06, 0.04],
+            ["#9c4a1e", 0.06, 0.02],
+            ["#3a5f2a", 0, -0.06],
+          ].map(([c, x, z], i) => (
+            <mesh key={i} position={[x as number, 0.11, z as number]}>
+              <sphereGeometry args={[0.06, 16, 16]} />
+              <meshStandardMaterial color={c as string} roughness={0.55} />
+            </mesh>
+          ))}
+        </group>
+        <mesh position={[-0.7, 1.03, 0.15]} rotation={[0, 0.3, 0]} castShadow>
+          <boxGeometry args={[0.5, 0.03, 0.32]} />
+          <meshStandardMaterial color="#5a3d24" roughness={0.7} />
+        </mesh>
+      </group>
+    </Hoverable>
+  );
+}
+
 /** Round-pedestal bar stool with a curved black seat. */
 function Stool({ x }: { x: number }) {
   return (
@@ -584,57 +736,15 @@ function Scene({
         </group>
       </Hoverable>
 
-      {/* Pantry (integrated black) */}
-      <Hoverable name={labels.pantry} hint="inspect" onActivate={() => onSelect("pantry")} labelY={2.4}>
-        <group position={[4.9, 1.1, -2.4]}>
-          <mesh castShadow material={BLACK}>
-            <boxGeometry args={[1.0, 2.2, 0.7]} />
-          </mesh>
-          <Handle position={[-0.42, 0, 0.37]} length={1.4} vertical />
-        </group>
-      </Hoverable>
+      {/* Pantry — twin doors swing open when selected */}
+      <Pantry selected={selected === "pantry"} onSelect={onSelect} label={labels.pantry} />
 
-      {/* Fridge + freezer (integrated black) */}
+      {/* Fridge (doors open) + freezer (drawer slides out) */}
       <Fridge selected={selected === "fridge"} onSelect={onSelect} label={labels.fridge} lightsOn={lightsOn} />
-      <Hoverable name={labels.freezer} hint="inspect" onActivate={() => onSelect("freezer")} labelY={0.9}>
-        <group position={[-3.4, 0.35, -1.4]}>
-          <mesh castShadow material={BLACK}>
-            <boxGeometry args={[1.3, 0.7, 1.0]} />
-          </mesh>
-          <Handle position={[0, 0.12, 0.52]} length={0.7} />
-        </group>
-      </Hoverable>
+      <Freezer selected={selected === "freezer"} onSelect={onSelect} label={labels.freezer} />
 
-      {/* Faceted angular island + bronze waterfall top */}
-      <Hoverable name={labels.island} hint="inspect" onActivate={() => onSelect("island")} labelY={1.7}>
-        <group position={[0.4, 0, 0.6]}>
-          <mesh geometry={islandGeo} castShadow receiveShadow material={BLACK} />
-          {/* thick bronze slab */}
-          <mesh position={[0, 0.955, 0]} castShadow material={bronzeMat}>
-            <boxGeometry args={[3.0, 0.13, 1.62]} />
-          </mesh>
-          {/* fruit + board on top */}
-          <group position={[0.8, 1.03, 0.1]}>
-            <mesh material={CERAMIC}>
-              <cylinderGeometry args={[0.2, 0.11, 0.1, 20]} />
-            </mesh>
-            {[
-              ["#7d1f2b", -0.06, 0.04],
-              ["#9c4a1e", 0.06, 0.02],
-              ["#3a5f2a", 0, -0.06],
-            ].map(([c, x, z], i) => (
-              <mesh key={i} position={[x as number, 0.11, z as number]}>
-                <sphereGeometry args={[0.06, 16, 16]} />
-                <meshStandardMaterial color={c as string} roughness={0.55} />
-              </mesh>
-            ))}
-          </group>
-          <mesh position={[-0.7, 1.03, 0.15]} rotation={[0, 0.3, 0]} castShadow>
-            <boxGeometry args={[0.5, 0.03, 0.32]} />
-            <meshStandardMaterial color="#5a3d24" roughness={0.7} />
-          </mesh>
-        </group>
-      </Hoverable>
+      {/* Faceted angular island — front drawer opens when selected */}
+      <Island selected={selected === "island"} onSelect={onSelect} label={labels.island} geo={islandGeo} mat={bronzeMat} />
 
       {/* Black gooseneck faucet + sink in the island — click to run water */}
       <Hoverable name={labels.sink} hint={water ? controls.water + " off" : controls.water} onActivate={onToggleWater} labelY={1.5}>
