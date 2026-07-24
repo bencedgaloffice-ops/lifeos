@@ -24,7 +24,7 @@ import { formatCurrency } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { ShowroomCanvas } from "@/components/three/ShowroomCanvas";
 import { RealLifeMapCanvas } from "@/components/map/RealLifeMapCanvas";
-import { DEMO_CAR_GLB, resolveSpecs } from "@/lib/garage/vehicle-catalog";
+import { DEMO_ESCALADE_SKETCHFAB, resolveSpecs, parseModelSource } from "@/lib/garage/vehicle-catalog";
 
 type ShowStatus = "owned" | "watching" | "importing" | "forsale" | "sold";
 
@@ -137,23 +137,31 @@ export function GarageShowroom({
     return [
       {
         id: "concept",
-        name: t("showroom.conceptName"),
-        brand: t("showroom.conceptBrand"),
-        year: new Date().getFullYear(),
-        mileage: 0,
-        value: 120000,
-        purchase: 92000,
+        name: "Cadillac Escalade ESV",
+        brand: "Cadillac",
+        year: 2015,
+        mileage: 78000,
+        value: 62000,
+        purchase: 48000,
         status: "watching",
-        country: "Germany",
-        accent: "#9BB0C4",
-        modelUrl: DEMO_CAR_GLB,
-        specs: { country: "Germany", fuel: "Electric", transmission: "Automatic", engine: "Dual motor", horsepower: 600 },
+        country: "United States",
+        accent: "#C9A227",
+        modelUrl: DEMO_ESCALADE_SKETCHFAB,
+        specs: {
+          country: "United States",
+          fuel: "Petrol",
+          transmission: "8-speed automatic",
+          engine: "6.2L V8",
+          horsepower: 420,
+          drivetrain: "AWD",
+        },
       },
     ];
   }, [vehicles, deals, dreamVehicles, t]);
 
   const active = showcase[Math.min(idx, showcase.length - 1)];
   const ai = useMemo(() => analyze(active), [active]);
+  const modelSource = parseModelSource(active.modelUrl);
 
   const statusLabel: Record<ShowStatus, string> = {
     owned: t("showroom.statusOwned"),
@@ -216,10 +224,20 @@ export function GarageShowroom({
       <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
         <div className="relative h-[58vh] min-h-[420px] overflow-hidden rounded-3xl border border-white/10 bg-black/50">
           <div className="absolute inset-0">
-            <ShowroomCanvas accent={active.accent} modelUrl={active.modelUrl} />
+            {modelSource.kind === "sketchfab" ? (
+              <iframe
+                title={active.name}
+                src={modelSource.embedUrl}
+                className="h-full w-full border-0"
+                allow="autoplay; fullscreen; xr-spatial-tracking; web-share"
+                allowFullScreen
+              />
+            ) : (
+              <ShowroomCanvas accent={active.accent} modelUrl={modelSource.kind === "glb" ? modelSource.url : undefined} />
+            )}
           </div>
           <span className="pointer-events-none absolute right-4 top-16 rounded-full border border-white/10 bg-black/50 px-2 py-0.5 text-[0.55rem] uppercase tracking-wider text-white/45 backdrop-blur">
-            {active.modelUrl ? t("showroom.model3d") : t("showroom.modelStylized")}
+            {modelSource.kind === "sketchfab" ? t("showroom.modelSketchfab") : modelSource.kind === "glb" ? t("showroom.model3d") : t("showroom.modelStylized")}
           </span>
           {/* Vehicle name + controls */}
           <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-4">

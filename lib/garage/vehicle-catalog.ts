@@ -15,6 +15,38 @@ import type { VehicleSpecs } from "@/lib/types";
 export const DEMO_CAR_GLB =
   "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/ToyCar/glTF-Binary/ToyCar.glb";
 
+/** The 2015 Cadillac Escalade ESV shown on the concept platform. */
+export const DEMO_ESCALADE_SKETCHFAB =
+  "https://sketchfab.com/3d-models/2015-cadillac-escalade-esv-57204780d10648c59ceb3021e6f66116";
+
+/**
+ * A vehicle's 3D model can be either a direct GLB (rendered by our Three.js
+ * showroom engine) or a Sketchfab model page (rendered through Sketchfab's
+ * embedded viewer). This normalizes whatever URL a vehicle carries into one
+ * of those two — or none — so the showroom can pick the right renderer.
+ */
+export type ModelSource =
+  | { kind: "sketchfab"; embedUrl: string }
+  | { kind: "glb"; url: string }
+  | { kind: "none" };
+
+export function parseModelSource(url?: string | null): ModelSource {
+  if (!url) return { kind: "none" };
+  const u = url.trim();
+  if (!u) return { kind: "none" };
+  if (/sketchfab\.com/i.test(u)) {
+    const m = u.match(/([0-9a-f]{32})/i);
+    if (m) {
+      return {
+        kind: "sketchfab",
+        embedUrl: `https://sketchfab.com/models/${m[1]}/embed?autospin=0.3&autostart=1&preload=1&transparent=1&ui_theme=dark&ui_infos=0&ui_watermark=0`,
+      };
+    }
+    return { kind: "none" };
+  }
+  return { kind: "glb", url: u };
+}
+
 type BrandInfo = { country: string };
 
 /** Origin country per European marque — used to prefill the spec panel. */
