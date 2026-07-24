@@ -9,15 +9,16 @@ import * as THREE from "three";
 import { cn } from "@/lib/utils";
 
 /**
- * The Kitchen digital twin — Phase 1 (realism + working appliances).
+ * The Kitchen digital twin — dark-luxury design pass.
  *
- * A premium, explorable modern European kitchen built with React Three Fiber
- * with procedurally-generated wood / marble / tile surfaces, layered lighting,
- * and real, toggleable appliances: kitchen lights, day/night, a running faucet,
- * an induction stove (with a steaming pot), and the oven. Inventory objects
- * (fridge, freezer, pantry, island) stay clickable for their real data; the
- * fridge opens its lit doors when selected. Built from primitives so it needs
- * no downloaded assets; realistic GLB furniture can drop into each group later.
+ * A moody, high-end modern kitchen modelled on the reference interior: matte
+ * black cabinetry, a faceted angular island with a warm bronze-terrazzo
+ * waterfall top, a back-lit onyx splash, a copper-patina hood, sculptural
+ * teardrop pendants and round-pedestal bar stools. Real, toggleable appliances
+ * (lights, day/night, faucet, stove, oven) live in a control column on the
+ * left. Inventory objects (fridge, freezer, pantry, island) stay clickable for
+ * their real data; the fridge opens its lit doors when selected. Built from
+ * primitives so it needs no downloaded assets.
  */
 
 export type KitchenObject = "fridge" | "freezer" | "pantry" | "island" | "oven" | "sink";
@@ -31,17 +32,15 @@ export type KitchenControlLabels = {
   oven: string;
 };
 
-const CAB = new THREE.MeshStandardMaterial({ color: "#1c2027", roughness: 0.5, metalness: 0.18 });
-const CAB_LIGHT = new THREE.MeshStandardMaterial({ color: "#e9e5dc", roughness: 0.45, metalness: 0.08 });
-const WALL = new THREE.MeshStandardMaterial({ color: "#d5cfc5", roughness: 0.96 });
-const STEEL = new THREE.MeshStandardMaterial({ color: "#cdd1d7", roughness: 0.22, metalness: 0.95, envMapIntensity: 1.4 });
-const DARK = new THREE.MeshStandardMaterial({ color: "#0b0d11", roughness: 0.28, metalness: 0.45 });
-const GLASS = new THREE.MeshStandardMaterial({ color: "#0a1a22", roughness: 0.06, metalness: 0.3, transparent: true, opacity: 0.5 });
-const BRASS = new THREE.MeshStandardMaterial({ color: "#c19a5b", roughness: 0.32, metalness: 1, envMapIntensity: 1.5 });
-const CERAMIC = new THREE.MeshStandardMaterial({ color: "#f4f1ea", roughness: 0.35, metalness: 0.05 });
-const WOODMAT = new THREE.MeshStandardMaterial({ color: "#6b4f38", roughness: 0.7, metalness: 0.05 });
+const BLACK = new THREE.MeshStandardMaterial({ color: "#131519", roughness: 0.48, metalness: 0.2 });
+const BLACK2 = new THREE.MeshStandardMaterial({ color: "#17191e", roughness: 0.55, metalness: 0.18 });
+const WALL = new THREE.MeshStandardMaterial({ color: "#b9b5ae", roughness: 0.97 });
+const STEEL = new THREE.MeshStandardMaterial({ color: "#c6cacf", roughness: 0.24, metalness: 0.92, envMapIntensity: 1.4 });
+const DARKMETAL = new THREE.MeshStandardMaterial({ color: "#202329", roughness: 0.35, metalness: 0.8 });
+const GLASS = new THREE.MeshStandardMaterial({ color: "#0a1116", roughness: 0.06, metalness: 0.3, transparent: true, opacity: 0.55 });
+const CERAMIC = new THREE.MeshStandardMaterial({ color: "#efeae0", roughness: 0.4, metalness: 0.05 });
+const LEATHER = new THREE.MeshStandardMaterial({ color: "#0c0d10", roughness: 0.5, metalness: 0.1 });
 
-/** Build a repeating CanvasTexture from a draw routine (client-side only). */
 function makeTexture(draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void, repeat: [number, number] = [1, 1]) {
   const c = document.createElement("canvas");
   c.width = 512;
@@ -100,13 +99,67 @@ function Hoverable({
 
 function Handle({ position, length = 0.6, vertical = false }: { position: [number, number, number]; length?: number; vertical?: boolean }) {
   return (
-    <mesh position={position} material={BRASS} rotation={vertical ? [0, 0, 0] : [0, 0, Math.PI / 2]}>
-      <cylinderGeometry args={[0.018, 0.018, length, 12]} />
+    <mesh position={position} material={DARKMETAL} rotation={vertical ? [0, 0, 0] : [0, 0, Math.PI / 2]}>
+      <cylinderGeometry args={[0.014, 0.014, length, 10]} />
     </mesh>
   );
 }
 
-function Fridge({ selected, onSelect, label, hint, lightsOn }: { selected: boolean; onSelect: (k: KitchenObject) => void; label: string; hint: string; lightsOn: boolean }) {
+/** Sculptural teardrop pendant (Secto-style), dark with a glowing base. */
+function Pendant({ x, on }: { x: number; on: boolean }) {
+  const geo = useMemo(() => {
+    const pts: THREE.Vector2[] = [];
+    const prof: [number, number][] = [
+      [0.17, 0],
+      [0.21, 0.1],
+      [0.22, 0.22],
+      [0.18, 0.34],
+      [0.11, 0.46],
+      [0.07, 0.56],
+      [0.06, 0.66],
+      [0.06, 0.82],
+    ];
+    prof.forEach(([r, y]) => pts.push(new THREE.Vector2(r, y)));
+    return new THREE.LatheGeometry(pts, 28);
+  }, []);
+  return (
+    <group position={[x, 0, 0.6]}>
+      <mesh position={[0, 3.5, 0]} material={DARKMETAL}>
+        <cylinderGeometry args={[0.008, 0.008, 1.0, 8]} />
+      </mesh>
+      <mesh position={[0, 2.35, 0]} geometry={geo}>
+        <meshStandardMaterial color="#1a1c20" roughness={0.5} metalness={0.4} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh position={[0, 2.36, 0]}>
+        <circleGeometry args={[0.15, 24]} />
+        <meshStandardMaterial color="#fff2d2" emissive="#ffcf85" emissiveIntensity={on ? 4 : 0.15} />
+      </mesh>
+      {on && <pointLight position={[0, 2.2, 0]} intensity={4.5} distance={4.5} decay={2} color="#ffdca6" />}
+    </group>
+  );
+}
+
+/** Round-pedestal bar stool with a curved black seat. */
+function Stool({ x }: { x: number }) {
+  return (
+    <group position={[x, 0, 1.75]}>
+      <mesh position={[0, 0.66, 0]} rotation={[0.12, 0, 0]} castShadow material={LEATHER}>
+        <boxGeometry args={[0.4, 0.06, 0.34]} />
+      </mesh>
+      <mesh position={[0, 0.66, -0.18]} rotation={[0.5, 0, 0]} castShadow material={LEATHER}>
+        <boxGeometry args={[0.4, 0.06, 0.16]} />
+      </mesh>
+      <mesh position={[0, 0.34, 0]} material={DARKMETAL}>
+        <cylinderGeometry args={[0.03, 0.035, 0.64, 16]} />
+      </mesh>
+      <mesh position={[0, 0.02, 0]} material={DARKMETAL}>
+        <cylinderGeometry args={[0.2, 0.2, 0.03, 28]} />
+      </mesh>
+    </group>
+  );
+}
+
+function Fridge({ selected, onSelect, label, lightsOn }: { selected: boolean; onSelect: (k: KitchenObject) => void; label: string; lightsOn: boolean }) {
   const left = useRef<THREE.Group>(null);
   const right = useRef<THREE.Group>(null);
   useFrame(() => {
@@ -114,19 +167,18 @@ function Fridge({ selected, onSelect, label, hint, lightsOn }: { selected: boole
     if (left.current) left.current.rotation.y = THREE.MathUtils.lerp(left.current.rotation.y, target * 2.0, 0.12);
     if (right.current) right.current.rotation.y = THREE.MathUtils.lerp(right.current.rotation.y, -target * 2.0, 0.12);
   });
-  const glow = selected ? 3 : 0.35;
   return (
-    <Hoverable name={label} hint={hint} onActivate={() => onSelect("fridge")} labelY={2.5}>
+    <Hoverable name={label} hint="inspect" onActivate={() => onSelect("fridge")} labelY={2.5}>
       <group position={[-3.4, 0, -2.2]}>
-        <mesh position={[0, 1.1, 0]} castShadow material={STEEL}>
+        <mesh position={[0, 1.1, 0]} castShadow material={BLACK}>
           <boxGeometry args={[1.3, 2.2, 1.0]} />
         </mesh>
-        <mesh position={[0, 1.15, 0.05]} material={CAB_LIGHT}>
+        <mesh position={[0, 1.15, 0.05]} material={CERAMIC}>
           <boxGeometry args={[1.15, 1.9, 0.9]} />
         </mesh>
         <mesh position={[0, 1.15, -0.36]}>
           <planeGeometry args={[1.1, 1.85]} />
-          <meshStandardMaterial color="#f4fbff" emissive="#dbeeff" emissiveIntensity={selected ? 0.8 : 0.15} />
+          <meshStandardMaterial color="#f4fbff" emissive="#dbeeff" emissiveIntensity={selected ? 0.8 : 0.12} />
         </mesh>
         {[0.55, 1.15, 1.75].map((y) => (
           <mesh key={y} position={[0, y, 0.1]} material={GLASS}>
@@ -135,54 +187,26 @@ function Fridge({ selected, onSelect, label, hint, lightsOn }: { selected: boole
         ))}
         <mesh position={[0, 2.02, 0.1]}>
           <boxGeometry args={[1.05, 0.03, 0.05]} />
-          <meshStandardMaterial color="#eaf6ff" emissive="#dcefff" emissiveIntensity={glow} />
+          <meshStandardMaterial color="#eaf6ff" emissive="#dcefff" emissiveIntensity={selected ? 3 : 0.3} />
         </mesh>
         <group ref={left} position={[-0.65, 1.1, 0.5]}>
-          <mesh position={[0.325, 0, 0]} castShadow material={STEEL}>
+          <mesh position={[0.325, 0, 0]} castShadow material={BLACK}>
             <boxGeometry args={[0.65, 2.2, 0.08]} />
           </mesh>
-          <mesh position={[0.58, 0, 0.06]} material={BRASS}>
-            <boxGeometry args={[0.04, 1.0, 0.04]} />
-          </mesh>
+          <Handle position={[0.58, 0, 0.08]} length={1.0} vertical />
         </group>
         <group ref={right} position={[0.65, 1.1, 0.5]}>
-          <mesh position={[-0.325, 0, 0]} castShadow material={STEEL}>
+          <mesh position={[-0.325, 0, 0]} castShadow material={BLACK}>
             <boxGeometry args={[0.65, 2.2, 0.08]} />
           </mesh>
-          <mesh position={[-0.58, 0, 0.06]} material={BRASS}>
-            <boxGeometry args={[0.04, 1.0, 0.04]} />
-          </mesh>
+          <Handle position={[-0.58, 0, 0.08]} length={1.0} vertical />
         </group>
-        {/* only glows when open + lights on */}
         {selected && lightsOn && <pointLight position={[0, 1.2, 0.3]} intensity={2} distance={2} color="#eaf6ff" />}
       </group>
     </Hoverable>
   );
 }
 
-function Stool({ x }: { x: number }) {
-  return (
-    <group position={[x, 0, 1.7]}>
-      <mesh position={[0, 0.62, 0]} castShadow material={WOODMAT}>
-        <cylinderGeometry args={[0.22, 0.22, 0.07, 24]} />
-      </mesh>
-      <mesh position={[0, 0.82, -0.19]} rotation={[0.18, 0, 0]} castShadow material={WOODMAT}>
-        <boxGeometry args={[0.36, 0.28, 0.05]} />
-      </mesh>
-      <mesh position={[0, 0.31, 0]} material={STEEL}>
-        <cylinderGeometry args={[0.035, 0.045, 0.6, 16]} />
-      </mesh>
-      <mesh position={[0, 0.18, 0]} material={STEEL}>
-        <torusGeometry args={[0.16, 0.015, 8, 24]} />
-      </mesh>
-      <mesh position={[0, 0.02, 0]} material={STEEL}>
-        <cylinderGeometry args={[0.22, 0.22, 0.03, 24]} />
-      </mesh>
-    </group>
-  );
-}
-
-/** Animated water column falling from the faucet into the sink. */
 function WaterStream({ on }: { on: boolean }) {
   const ref = useRef<THREE.Mesh>(null);
   useFrame((s) => {
@@ -192,14 +216,13 @@ function WaterStream({ on }: { on: boolean }) {
     m.opacity = on ? 0.45 + Math.sin(s.clock.elapsedTime * 22) * 0.12 : 0;
   });
   return (
-    <mesh ref={ref} position={[-0.8, 1.2, -2.17]} visible={false}>
-      <cylinderGeometry args={[0.012, 0.022, 0.52, 10]} />
+    <mesh ref={ref} position={[-0.2, 1.18, 1.0]} visible={false}>
+      <cylinderGeometry args={[0.012, 0.022, 0.5, 10]} />
       <meshStandardMaterial color="#cdeaff" transparent opacity={0} roughness={0.1} metalness={0} />
     </mesh>
   );
 }
 
-/** Rising steam puffs above the pot when the stove is on. */
 function Steam({ on }: { on: boolean }) {
   const g = useRef<THREE.Group>(null);
   useFrame((s) => {
@@ -210,7 +233,7 @@ function Steam({ on }: { on: boolean }) {
       child.position.y = t * 0.5;
       child.scale.setScalar(0.04 + t * 0.12);
       const m = (child as THREE.Mesh).material as THREE.MeshStandardMaterial;
-      m.opacity = on ? (1 - t) * 0.35 : 0;
+      m.opacity = on ? (1 - t) * 0.3 : 0;
     });
   });
   return (
@@ -235,7 +258,6 @@ function Scene({
   water,
   stove,
   oven,
-  onToggleLights,
   onToggleWater,
   onToggleStove,
 }: {
@@ -248,54 +270,79 @@ function Scene({
   water: boolean;
   stove: boolean;
   oven: boolean;
-  onToggleLights: () => void;
   onToggleWater: () => void;
   onToggleStove: () => void;
 }) {
   const wood = useMemo(
     () =>
       makeTexture((ctx, w, h) => {
-        ctx.fillStyle = "#6b4f34";
+        ctx.fillStyle = "#a9855b";
         ctx.fillRect(0, 0, w, h);
         const planks = 6;
         const pw = w / planks;
-        const shades = ["#6e5236", "#63492f", "#725539", "#5c4429", "#6a5034", "#5f4a30"];
+        const shades = ["#ad895e", "#a07c53", "#b28f63", "#9a774f", "#a98457", "#a07d55"];
         for (let i = 0; i < planks; i++) {
           ctx.fillStyle = shades[i % shades.length];
           ctx.fillRect(i * pw, 0, pw - 2, h);
-          ctx.strokeStyle = "rgba(40,28,16,0.22)";
+          ctx.strokeStyle = "rgba(70,50,30,0.18)";
           ctx.lineWidth = 1;
-          for (let gth = 0; gth < 16; gth++) {
+          for (let g = 0; g < 16; g++) {
             const x = i * pw + Math.random() * pw;
             ctx.beginPath();
             ctx.moveTo(x, 0);
             ctx.bezierCurveTo(x + 4, h * 0.33, x - 4, h * 0.66, x, h);
             ctx.stroke();
           }
-          ctx.fillStyle = "rgba(18,11,5,0.6)";
+          ctx.fillStyle = "rgba(50,34,18,0.5)";
           ctx.fillRect(i * pw + pw - 2, 0, 2, h);
         }
-        ctx.fillStyle = "rgba(18,11,5,0.5)";
+        ctx.fillStyle = "rgba(50,34,18,0.4)";
         for (let y = 0; y < h; y += h / 4) ctx.fillRect(0, y, w, 2);
       }, [5, 5]),
     [],
   );
 
-  const marble = useMemo(
+  // Warm bronze terrazzo for the island / counters
+  const bronze = useMemo(
     () =>
       makeTexture((ctx, w, h) => {
-        ctx.fillStyle = "#f2f0ea";
+        ctx.fillStyle = "#5c3f28";
         ctx.fillRect(0, 0, w, h);
-        ctx.strokeStyle = "rgba(150,152,162,0.22)";
-        for (let i = 0; i < 11; i++) {
-          ctx.lineWidth = Math.random() * 2 + 0.4;
+        const cols = ["#b87333", "#d9a441", "#8a5a2b", "#2f2013", "#caa877", "#7a4a22"];
+        for (let i = 0; i < 1400; i++) {
+          ctx.fillStyle = cols[i % cols.length];
+          ctx.globalAlpha = 0.5 + Math.random() * 0.5;
+          const r = 1 + Math.random() * 3.5;
+          ctx.beginPath();
+          ctx.arc(Math.random() * w, Math.random() * h, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }),
+    [],
+  );
+
+  // Back-lit onyx splash — glowing amber marble
+  const onyx = useMemo(
+    () =>
+      makeTexture((ctx, w, h) => {
+        const g = ctx.createLinearGradient(0, 0, w, h);
+        g.addColorStop(0, "#f6e6c4");
+        g.addColorStop(0.4, "#e8c98a");
+        g.addColorStop(0.7, "#caa15a");
+        g.addColorStop(1, "#f2dcb0");
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, w, h);
+        ctx.strokeStyle = "rgba(120,70,30,0.35)";
+        for (let i = 0; i < 14; i++) {
+          ctx.lineWidth = Math.random() * 3 + 0.5;
           ctx.beginPath();
           let x = Math.random() * w;
           let y = 0;
           ctx.moveTo(x, y);
           while (y < h) {
-            x += (Math.random() - 0.5) * 60;
-            y += h / 9;
+            x += (Math.random() - 0.5) * 90;
+            y += h / 7;
             ctx.lineTo(x, y);
           }
           ctx.stroke();
@@ -304,25 +351,55 @@ function Scene({
     [],
   );
 
-  const tile = useMemo(
+  // Copper-patina hood tiles
+  const copper = useMemo(
     () =>
       makeTexture((ctx, w, h) => {
-        ctx.fillStyle = "#c9d2d2";
+        ctx.fillStyle = "#2c1d12";
         ctx.fillRect(0, 0, w, h);
-        const n = 4;
-        const s = w / n;
-        const gap = 8;
-        ctx.fillStyle = "#eef3f3";
-        for (let i = 0; i < n; i++)
-          for (let j = 0; j < n; j++) ctx.fillRect(i * s + gap / 2, j * s + gap / 2, s - gap, s - gap);
-      }, [3, 1.5]),
+        const cols = ["#5a3a1f", "#7a4a24", "#3a2614", "#8a5a2e", "#241610"];
+        for (let i = 0; i < 900; i++) {
+          ctx.fillStyle = cols[i % cols.length];
+          ctx.globalAlpha = 0.35 + Math.random() * 0.4;
+          const r = 4 + Math.random() * 16;
+          ctx.beginPath();
+          ctx.arc(Math.random() * w, Math.random() * h, r, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = "rgba(10,6,3,0.6)";
+        ctx.lineWidth = 2;
+        for (let i = 0; i <= 4; i++) {
+          ctx.beginPath();
+          ctx.moveTo((i * w) / 4, 0);
+          ctx.lineTo((i * w) / 4, h);
+          ctx.moveTo(0, (i * h) / 4);
+          ctx.lineTo(w, (i * h) / 4);
+          ctx.stroke();
+        }
+      }, [2, 1]),
     [],
   );
 
-  const marbleMat = useMemo(() => new THREE.MeshStandardMaterial({ map: marble, roughness: 0.2, metalness: 0.2, envMapIntensity: 1.2 }), [marble]);
-  const tileMat = useMemo(() => new THREE.MeshStandardMaterial({ map: tile, roughness: 0.15, metalness: 0.1, envMapIntensity: 1.1 }), [tile]);
+  const bronzeMat = useMemo(() => new THREE.MeshStandardMaterial({ map: bronze, roughness: 0.35, metalness: 0.45, envMapIntensity: 1.3 }), [bronze]);
+  const copperMat = useMemo(() => new THREE.MeshStandardMaterial({ map: copper, roughness: 0.45, metalness: 0.7, envMapIntensity: 1.2 }), [copper]);
 
-  // Window "view" — daylight meadow or an evening sky depending on time of day.
+  // Faceted angular island base (waterfall wedge)
+  const islandGeo = useMemo(() => {
+    const shape = new THREE.Shape();
+    const topW = 1.4;
+    const botW = 0.82;
+    const hgt = 0.9;
+    shape.moveTo(-topW, hgt);
+    shape.lineTo(topW, hgt);
+    shape.lineTo(botW, 0);
+    shape.lineTo(-botW, 0);
+    shape.closePath();
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: 1.5, bevelEnabled: false });
+    geo.translate(0, 0, -0.75);
+    return geo;
+  }, []);
+
   const windowView = useMemo(() => {
     const c = document.createElement("canvas");
     c.width = 256;
@@ -360,29 +437,27 @@ function Scene({
     return tex;
   }, [night]);
 
-  const ledOn = lightsOn ? 1.8 : 0.04;
-
   return (
     <>
-      {/* Polished wood floor with real reflections */}
+      {/* Warm oak floor with soft reflection */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[18, 16]} />
         <MeshReflectorMaterial
           map={wood}
           resolution={1024}
-          mixBlur={1.2}
-          mixStrength={0.9}
+          mixBlur={1.4}
+          mixStrength={0.7}
           blur={[300, 90]}
-          roughness={0.62}
+          roughness={0.68}
           depthScale={1}
           minDepthThreshold={0.4}
           maxDepthThreshold={1.35}
           color="#ffffff"
-          metalness={0.15}
+          metalness={0.1}
         />
       </mesh>
 
-      {/* Walls */}
+      {/* Grey plaster walls */}
       <mesh position={[0, 2.4, -2.9]} material={WALL} receiveShadow>
         <boxGeometry args={[13, 4.8, 0.2]} />
       </mesh>
@@ -390,93 +465,63 @@ function Scene({
         <boxGeometry args={[0.2, 4.8, 6]} />
       </mesh>
 
-      {/* Window with a live view + frame */}
-      <group position={[2.2, 2.5, -2.79]}>
+      {/* Full-height matte black cabinetry across the back */}
+      <mesh position={[0.6, 2.0, -2.55]} castShadow receiveShadow material={BLACK}>
+        <boxGeometry args={[6.6, 4.0, 0.6]} />
+      </mesh>
+      {/* Tall cabinet seams + slim handles */}
+      {[-1.6, 0.2, 2.0].map((x) => (
+        <mesh key={x} position={[x, 2.0, -2.24]} material={BLACK2}>
+          <boxGeometry args={[0.015, 3.4, 0.02]} />
+        </mesh>
+      ))}
+      {[-1.2, 0.6, 2.4].map((x) => (
+        <Handle key={x} position={[x, 1.9, -2.23]} length={0.8} vertical />
+      ))}
+
+      {/* Copper-patina hood panel */}
+      <mesh position={[0.4, 3.15, -2.5]} castShadow material={copperMat}>
+        <boxGeometry args={[2.3, 1.5, 0.5]} />
+      </mesh>
+
+      {/* Back-lit onyx splash (signature glow) */}
+      <mesh position={[0.4, 1.35, -2.52]}>
+        <planeGeometry args={[2.3, 0.7]} />
+        <meshStandardMaterial map={onyx} emissive="#ffb257" emissiveMap={onyx} emissiveIntensity={2.0} toneMapped={false} />
+      </mesh>
+      <pointLight position={[0.4, 1.35, -2.0]} intensity={2.4} distance={4} decay={2} color="#ffb85f" />
+
+      {/* Base run + slim black counter */}
+      <mesh position={[0.6, 0.45, -2.35]} castShadow receiveShadow material={BLACK}>
+        <boxGeometry args={[6.5, 0.9, 0.7]} />
+      </mesh>
+      <mesh position={[0.6, 0.92, -2.35]} castShadow material={BLACK2}>
+        <boxGeometry args={[6.6, 0.05, 0.78]} />
+      </mesh>
+
+      {/* Window on the left wall */}
+      <group position={[-5.28, 2.5, 0.6]} rotation={[0, Math.PI / 2, 0]}>
         <mesh>
-          <planeGeometry args={[3, 1.8]} />
+          <planeGeometry args={[2.6, 1.6]} />
           <meshBasicMaterial map={windowView} toneMapped={false} />
         </mesh>
-        {[
-          [0, 0.95, 3.2, 0.1],
-          [0, -0.95, 3.2, 0.1],
-        ].map(([x, y, sw, sh], i) => (
-          <mesh key={`h${i}`} position={[x, y, 0.02]} material={CAB_LIGHT}>
-            <boxGeometry args={[sw, sh, 0.1]} />
+        {[0.82, -0.82].map((y) => (
+          <mesh key={y} position={[0, y, 0.02]} material={BLACK2}>
+            <boxGeometry args={[2.8, 0.09, 0.1]} />
           </mesh>
         ))}
-        {[-1.55, 0, 1.55].map((x) => (
-          <mesh key={`v${x}`} position={[x, 0, 0.02]} material={CAB_LIGHT}>
-            <boxGeometry args={[0.08, 1.9, 0.1]} />
+        {[-1.35, 0, 1.35].map((x) => (
+          <mesh key={x} position={[x, 0, 0.02]} material={BLACK2}>
+            <boxGeometry args={[0.08, 1.7, 0.1]} />
           </mesh>
         ))}
       </group>
-      {/* Daylight/moonlight spilling from the window */}
-      <pointLight position={[2.2, 2.6, -1.8]} intensity={night ? 1.2 : 6} distance={9} decay={2} color={night ? "#aab8ff" : "#eaf3ff"} />
+      <pointLight position={[-4.4, 2.6, 0.6]} intensity={night ? 1.0 : 5} distance={9} decay={2} color={night ? "#aab8ff" : "#eaf3ff"} />
 
-      {/* Tile backsplash */}
-      <mesh position={[0.6, 1.75, -2.73]} material={tileMat} receiveShadow>
-        <boxGeometry args={[6.6, 1.5, 0.04]} />
-      </mesh>
-
-      {/* Base cabinets + marble counter */}
-      <mesh position={[0.6, 0.45, -2.35]} castShadow receiveShadow material={CAB}>
-        <boxGeometry args={[6.5, 0.9, 0.7]} />
-      </mesh>
-      <mesh position={[0.6, 0.92, -2.35]} castShadow material={marbleMat}>
-        <boxGeometry args={[6.6, 0.06, 0.78]} />
-      </mesh>
-      {[-1.9, -0.4, 1.1, 2.6].map((x) => (
-        <Handle key={x} position={[x, 0.72, -2.0]} length={0.28} vertical />
-      ))}
-
-      {/* Upper cabinets + under-cabinet LED */}
-      <mesh position={[1.4, 2.9, -2.7]} castShadow material={CAB}>
-        <boxGeometry args={[4.4, 0.8, 0.35]} />
-      </mesh>
-      {[-0.7, 0.75, 2.2].map((x) => (
-        <Handle key={x} position={[x, 2.62, -2.52]} length={0.22} vertical />
-      ))}
-      <mesh position={[1.4, 2.45, -2.5]}>
-        <boxGeometry args={[4.2, 0.03, 0.05]} />
-        <meshStandardMaterial color="#fff2d8" emissive="#ffe6b0" emissiveIntensity={ledOn} />
-      </mesh>
-
-      {/* Wall light switch — click to toggle the kitchen lights */}
-      <Hoverable name={controls.lights} hint={lightsOn ? "off" : "on"} onActivate={onToggleLights} labelY={0.35}>
-        <group position={[-5.28, 1.4, 1.6]} rotation={[0, Math.PI / 2, 0]}>
-          <mesh material={CAB_LIGHT}>
-            <boxGeometry args={[0.22, 0.32, 0.04]} />
-          </mesh>
-          <mesh position={[0, lightsOn ? 0.05 : -0.05, 0.03]}>
-            <boxGeometry args={[0.09, 0.13, 0.03]} />
-            <meshStandardMaterial color={lightsOn ? "#ffe6b0" : "#3a3f47"} emissive={lightsOn ? "#ffcf7a" : "#000000"} emissiveIntensity={lightsOn ? 0.8 : 0} />
-          </mesh>
-        </group>
-      </Hoverable>
-
-      {/* Sink + faucet — click to run the water */}
-      <Hoverable name={labels.sink} hint={water ? controls.water + " off" : controls.water} onActivate={onToggleWater} labelY={1.4}>
-        <group position={[-0.8, 0.93, -2.3]}>
-          <mesh position={[0, -0.02, 0]} material={DARK}>
-            <boxGeometry args={[0.9, 0.12, 0.5]} />
-          </mesh>
-          <mesh position={[0, -0.04, 0]} material={STEEL}>
-            <boxGeometry args={[0.78, 0.06, 0.38]} />
-          </mesh>
-          <mesh position={[0, 0.28, -0.15]} material={STEEL}>
-            <cylinderGeometry args={[0.03, 0.03, 0.55, 12]} />
-          </mesh>
-          <mesh position={[0, 0.52, -0.02]} rotation={[Math.PI / 2, 0, 0]} material={STEEL}>
-            <cylinderGeometry args={[0.03, 0.03, 0.3, 12]} />
-          </mesh>
-        </group>
-      </Hoverable>
-      <WaterStream on={water} />
-
-      {/* Induction cooktop — click to turn the stove on/off */}
+      {/* Induction cooktop — click to toggle the stove */}
       <Hoverable name={controls.stove} hint={stove ? "off" : "on"} onActivate={onToggleStove} labelY={0.6}>
         <group position={[2.6, 0.96, -2.3]}>
-          <mesh material={DARK}>
+          <mesh material={BLACK2}>
             <boxGeometry args={[0.95, 0.04, 0.62]} />
           </mesh>
           {[
@@ -487,230 +532,166 @@ function Scene({
           ].map(([x, z], i) => (
             <mesh key={i} position={[x, 0.025, z]} rotation={[-Math.PI / 2, 0, 0]}>
               <ringGeometry args={[0.06, 0.09, 24]} />
-              <meshStandardMaterial color="#2a2a2e" emissive="#ff4a1c" emissiveIntensity={stove ? 1.6 : 0.08} side={THREE.DoubleSide} />
+              <meshStandardMaterial color="#2a2a2e" emissive="#ff4a1c" emissiveIntensity={stove ? 1.6 : 0.06} side={THREE.DoubleSide} />
             </mesh>
           ))}
         </group>
       </Hoverable>
-      {/* Pot on the front-left burner + steam */}
       <group position={[2.38, 1.02, -2.17]}>
         <mesh castShadow material={STEEL}>
           <cylinderGeometry args={[0.13, 0.11, 0.14, 24]} />
         </mesh>
-        <mesh position={[0.16, 0.02, 0]} rotation={[0, 0, Math.PI / 2]} material={DARK}>
+        <mesh position={[0.16, 0.02, 0]} rotation={[0, 0, Math.PI / 2]} material={DARKMETAL}>
           <cylinderGeometry args={[0.015, 0.015, 0.16, 8]} />
         </mesh>
       </group>
       <Steam on={stove} />
       {stove && <pointLight position={[2.6, 1.05, -2.3]} intensity={0.8} distance={1.6} color="#ff6a2a" />}
 
-      {/* Range hood */}
-      <mesh position={[2.6, 2.55, -2.55]} castShadow material={STEEL}>
-        <boxGeometry args={[1.1, 0.5, 0.5]} />
-      </mesh>
-      <mesh position={[2.6, 2.28, -2.42]} rotation={[0.5, 0, 0]} castShadow material={STEEL}>
-        <boxGeometry args={[1.1, 0.06, 0.4]} />
-      </mesh>
-
-      {/* Oven — click to inspect / meal picks (glows when on) */}
-      <Hoverable name={labels.oven} hint="inspect" onActivate={() => onSelect("oven")} labelY={1.3}>
-        <group position={[2.6, 0.5, -2.15]}>
-          <mesh material={DARK}>
-            <boxGeometry args={[0.9, 0.8, 0.1]} />
-          </mesh>
-          <mesh position={[0, 0.05, 0.06]} material={GLASS}>
-            <boxGeometry args={[0.7, 0.5, 0.02]} />
-          </mesh>
-          <mesh position={[0, 0.05, 0.05]}>
-            <planeGeometry args={[0.66, 0.46]} />
-            <meshStandardMaterial color="#3a1a08" emissive="#ff6a2a" emissiveIntensity={oven ? 1.6 : 0.35} />
-          </mesh>
-          <Handle position={[0, 0.34, 0.08]} length={0.7} />
+      {/* Integrated stainless ovens (stacked) on the right */}
+      <Hoverable name={labels.oven} hint="inspect" onActivate={() => onSelect("oven")} labelY={1.4}>
+        <group position={[3.9, 1.35, -2.24]}>
+          {[0, 0.68].map((dy, i) => (
+            <group key={i} position={[0, dy, 0]}>
+              <mesh material={STEEL}>
+                <boxGeometry args={[0.86, 0.6, 0.08]} />
+              </mesh>
+              <mesh position={[0, 0, 0.05]} material={GLASS}>
+                <boxGeometry args={[0.66, 0.42, 0.02]} />
+              </mesh>
+              <mesh position={[0, 0, 0.045]}>
+                <planeGeometry args={[0.62, 0.38]} />
+                <meshStandardMaterial color="#2a1608" emissive="#ff6a2a" emissiveIntensity={oven ? 1.5 : 0.3} />
+              </mesh>
+              <mesh position={[0, 0.24, 0.06]} material={DARKMETAL}>
+                <boxGeometry args={[0.7, 0.04, 0.04]} />
+              </mesh>
+            </group>
+          ))}
         </group>
       </Hoverable>
 
-      {/* Pantry */}
+      {/* Pantry (integrated black) */}
       <Hoverable name={labels.pantry} hint="inspect" onActivate={() => onSelect("pantry")} labelY={2.4}>
-        <group position={[4.4, 1.1, -2.4]}>
-          <mesh castShadow material={CAB_LIGHT}>
-            <boxGeometry args={[1.3, 2.2, 0.7]} />
+        <group position={[4.9, 1.1, -2.4]}>
+          <mesh castShadow material={BLACK}>
+            <boxGeometry args={[1.0, 2.2, 0.7]} />
           </mesh>
-          <Handle position={[-0.1, 0, 0.37]} length={0.5} vertical />
-          <Handle position={[0.1, 0, 0.37]} length={0.5} vertical />
+          <Handle position={[-0.42, 0, 0.37]} length={1.4} vertical />
         </group>
       </Hoverable>
 
-      {/* Fridge + freezer */}
-      <Fridge selected={selected === "fridge"} onSelect={onSelect} label={labels.fridge} hint="inspect" lightsOn={lightsOn} />
+      {/* Fridge + freezer (integrated black) */}
+      <Fridge selected={selected === "fridge"} onSelect={onSelect} label={labels.fridge} lightsOn={lightsOn} />
       <Hoverable name={labels.freezer} hint="inspect" onActivate={() => onSelect("freezer")} labelY={0.9}>
         <group position={[-3.4, 0.35, -1.4]}>
-          <mesh castShadow material={STEEL}>
+          <mesh castShadow material={BLACK}>
             <boxGeometry args={[1.3, 0.7, 1.0]} />
           </mesh>
           <Handle position={[0, 0.12, 0.52]} length={0.7} />
         </group>
       </Hoverable>
 
-      {/* Island with marble waterfall top */}
-      <Hoverable name={labels.island} hint="inspect" onActivate={() => onSelect("island")} labelY={1.6}>
+      {/* Faceted angular island + bronze waterfall top */}
+      <Hoverable name={labels.island} hint="inspect" onActivate={() => onSelect("island")} labelY={1.7}>
         <group position={[0.4, 0, 0.6]}>
-          <mesh position={[0, 0.45, 0]} castShadow receiveShadow material={CAB}>
-            <boxGeometry args={[2.6, 0.9, 1.3]} />
+          <mesh geometry={islandGeo} castShadow receiveShadow material={BLACK} />
+          {/* thick bronze slab */}
+          <mesh position={[0, 0.955, 0]} castShadow material={bronzeMat}>
+            <boxGeometry args={[3.0, 0.13, 1.62]} />
           </mesh>
-          <mesh position={[0, 0.93, 0]} castShadow material={marbleMat}>
-            <boxGeometry args={[2.8, 0.08, 1.5]} />
-          </mesh>
-          <mesh position={[-1.36, 0.47, 0]} material={marbleMat}>
-            <boxGeometry args={[0.08, 0.9, 1.5]} />
-          </mesh>
-          <mesh position={[1.36, 0.47, 0]} material={marbleMat}>
-            <boxGeometry args={[0.08, 0.9, 1.5]} />
-          </mesh>
-          {[-0.7, 0, 0.7].map((x) => (
-            <Handle key={x} position={[x, 0.45, -0.66]} length={0.3} vertical />
-          ))}
-          <group position={[0.7, 1.0, 0.1]}>
+          {/* fruit + board on top */}
+          <group position={[0.8, 1.03, 0.1]}>
             <mesh material={CERAMIC}>
-              <cylinderGeometry args={[0.22, 0.12, 0.1, 20]} />
+              <cylinderGeometry args={[0.2, 0.11, 0.1, 20]} />
             </mesh>
             {[
-              ["#c0392b", -0.07, 0.05],
-              ["#e67e22", 0.07, 0.02],
-              ["#27ae60", 0, -0.07],
-              ["#c0392b", 0.05, -0.02],
+              ["#7d1f2b", -0.06, 0.04],
+              ["#9c4a1e", 0.06, 0.02],
+              ["#3a5f2a", 0, -0.06],
             ].map(([c, x, z], i) => (
-              <mesh key={i} position={[x as number, 0.12, z as number]}>
-                <sphereGeometry args={[0.07, 16, 16]} />
+              <mesh key={i} position={[x as number, 0.11, z as number]}>
+                <sphereGeometry args={[0.06, 16, 16]} />
                 <meshStandardMaterial color={c as string} roughness={0.55} />
               </mesh>
             ))}
           </group>
-          <mesh position={[-0.7, 0.99, 0.15]} rotation={[0, 0.3, 0]} castShadow material={WOODMAT}>
+          <mesh position={[-0.7, 1.03, 0.15]} rotation={[0, 0.3, 0]} castShadow>
             <boxGeometry args={[0.5, 0.03, 0.32]} />
-          </mesh>
-          <mesh position={[-0.2, 1.06, -0.2]} material={CERAMIC}>
-            <cylinderGeometry args={[0.07, 0.06, 0.18, 16]} />
+            <meshStandardMaterial color="#5a3d24" roughness={0.7} />
           </mesh>
         </group>
       </Hoverable>
 
-      <Stool x={-0.2} />
-      <Stool x={1.0} />
-
-      {/* Pendant lamps over the island */}
-      {[-0.4, 1.2].map((x) => (
-        <group key={x} position={[x, 0, 0.6]}>
-          <mesh position={[0, 3.4, 0]} material={DARK}>
-            <cylinderGeometry args={[0.01, 0.01, 1.2, 8]} />
+      {/* Black gooseneck faucet + sink in the island — click to run water */}
+      <Hoverable name={labels.sink} hint={water ? controls.water + " off" : controls.water} onActivate={onToggleWater} labelY={1.5}>
+        <group position={[-0.2, 1.02, 1.0]}>
+          <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]} material={BLACK2}>
+            <boxGeometry args={[0.5, 0.35, 0.03]} />
           </mesh>
-          <mesh position={[0, 2.75, 0]}>
-            <coneGeometry args={[0.16, 0.22, 24, 1, true]} />
-            <meshStandardMaterial color="#20242b" side={THREE.DoubleSide} roughness={0.4} metalness={0.3} />
+          <mesh position={[0, 0.2, -0.12]} material={DARKMETAL}>
+            <cylinderGeometry args={[0.022, 0.022, 0.4, 12]} />
           </mesh>
-          <mesh position={[0, 2.68, 0]}>
-            <sphereGeometry args={[0.06, 16, 16]} />
-            <meshStandardMaterial color="#fff4d8" emissive="#ffdf9e" emissiveIntensity={lightsOn ? 4 : 0.1} />
+          <mesh position={[0, 0.4, -0.06]} rotation={[Math.PI / 3, 0, 0]} material={DARKMETAL}>
+            <cylinderGeometry args={[0.022, 0.022, 0.22, 12]} />
           </mesh>
-          {lightsOn && <pointLight position={[0, 2.55, 0]} intensity={5} distance={4.5} decay={2} color="#ffe4b0" />}
+          <mesh position={[0, 0.42, 0.03]} material={DARKMETAL}>
+            <cylinderGeometry args={[0.02, 0.02, 0.12, 12]} />
+          </mesh>
         </group>
-      ))}
+      </Hoverable>
+      <WaterStream on={water} />
+
+      <Stool x={-0.5} />
+      <Stool x={0.4} />
+      <Stool x={1.3} />
+
+      {/* Sculptural teardrop pendants */}
+      <Pendant x={-0.5} on={lightsOn} />
+      <Pendant x={0.4} on={lightsOn} />
+      <Pendant x={1.3} on={lightsOn} />
 
       {/* Recessed ceiling downlights */}
       {[
         [-2.5, -1],
         [0.6, -1.2],
         [3.2, -0.6],
-        [0.4, 1.2],
+        [0.4, 1.4],
+        [2.6, 1.4],
       ].map(([x, z], i) => (
         <group key={i} position={[x, 4.55, z]}>
           <mesh>
-            <cylinderGeometry args={[0.09, 0.09, 0.04, 20]} />
-            <meshStandardMaterial color="#fff6e6" emissive="#ffedcf" emissiveIntensity={lightsOn ? 2.4 : 0.06} />
+            <cylinderGeometry args={[0.08, 0.08, 0.04, 20]} />
+            <meshStandardMaterial color="#fff6e6" emissive="#ffedcf" emissiveIntensity={lightsOn ? 2.2 : 0.05} />
           </mesh>
-          {lightsOn && <pointLight position={[0, -0.2, 0]} intensity={3} distance={6} decay={2} color="#ffe9c8" />}
+          {lightsOn && <pointLight position={[0, -0.2, 0]} intensity={2.6} distance={6} decay={2} color="#ffe9c8" />}
         </group>
       ))}
 
-      {/* Coffee station + kettle + wine */}
-      <group position={[-2.4, 0.98, -2.3]}>
-        <mesh castShadow material={DARK}>
-          <boxGeometry args={[0.35, 0.4, 0.3]} />
-        </mesh>
-        <mesh position={[0, 0.22, 0.05]}>
-          <boxGeometry args={[0.2, 0.05, 0.02]} />
-          <meshStandardMaterial color="#0a2a2a" emissive="#12e0c0" emissiveIntensity={1.5} />
-        </mesh>
-        <mesh position={[-0.02, -0.15, 0.2]} material={CERAMIC}>
-          <cylinderGeometry args={[0.06, 0.05, 0.1, 16]} />
-        </mesh>
-      </group>
-      <mesh position={[-1.7, 1.12, -2.3]} castShadow material={STEEL}>
-        <cylinderGeometry args={[0.12, 0.14, 0.3, 20]} />
-      </mesh>
-      {[-2.95, -2.8].map((x, i) => (
-        <mesh key={x} position={[x, 1.13, -2.3]} castShadow>
-          <cylinderGeometry args={[0.05, 0.05, 0.34, 16]} />
-          <meshStandardMaterial color={i === 0 ? "#243b1f" : "#3a1420"} roughness={0.25} metalness={0.1} />
-        </mesh>
-      ))}
-
-      {/* Wall clock */}
-      <group position={[-2.4, 3.35, -2.78]}>
-        <mesh material={CAB_LIGHT} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.28, 0.28, 0.05, 32]} />
-        </mesh>
-        <mesh position={[0, 0, 0.03]}>
-          <circleGeometry args={[0.24, 32]} />
-          <meshStandardMaterial color="#f6f4ee" />
-        </mesh>
-        <mesh position={[0, 0.07, 0.04]} rotation={[0, 0, 0]}>
-          <boxGeometry args={[0.02, 0.16, 0.01]} />
-          <meshStandardMaterial color="#1c2027" />
-        </mesh>
-        <mesh position={[0.06, 0, 0.04]} rotation={[0, 0, Math.PI / 2]}>
-          <boxGeometry args={[0.02, 0.12, 0.01]} />
-          <meshStandardMaterial color="#1c2027" />
-        </mesh>
-      </group>
-
-      {/* Herbs on the windowsill */}
-      {[1.4, 2.2, 3.0].map((x) => (
-        <group key={x} position={[x, 1.65, -2.6]}>
-          <mesh material={CERAMIC}>
-            <cylinderGeometry args={[0.08, 0.06, 0.12, 12]} />
-          </mesh>
-          <mesh position={[0, 0.14, 0]}>
-            <sphereGeometry args={[0.11, 12, 12]} />
-            <meshStandardMaterial color="#4c9350" roughness={0.9} />
-          </mesh>
-        </group>
-      ))}
-
-      {/* Floor plant */}
-      <group position={[3.9, 1.0, 0.2]}>
-        <mesh castShadow material={CERAMIC}>
-          <cylinderGeometry args={[0.17, 0.13, 0.32, 20]} />
+      {/* Tall branch vase on the island end */}
+      <group position={[-1.3, 1.0, 0.4]}>
+        <mesh material={CERAMIC}>
+          <cylinderGeometry args={[0.09, 0.07, 0.34, 16]} />
         </mesh>
         {[
-          [0, 0.34, 0, 0.26],
-          [0.14, 0.42, 0.05, 0.18],
-          [-0.12, 0.4, -0.05, 0.16],
-          [0.04, 0.5, -0.08, 0.14],
-        ].map(([x, y, z, r], i) => (
-          <mesh key={i} position={[x as number, y as number, z as number]}>
-            <sphereGeometry args={[r as number, 16, 16]} />
-            <meshStandardMaterial color={i % 2 ? "#3f7d43" : "#4c9350"} roughness={0.9} />
+          [0, 0.6, 0.1],
+          [0.12, 0.7, -0.05],
+          [-0.1, 0.55, 0.05],
+        ].map(([x, y, z], i) => (
+          <mesh key={i} position={[x as number, y as number, z as number]} rotation={[0, 0, (i - 1) * 0.4]}>
+            <cylinderGeometry args={[0.006, 0.006, 0.5, 6]} />
+            <meshStandardMaterial color="#6b5636" roughness={0.9} />
+          </mesh>
+        ))}
+        {Array.from({ length: 8 }).map((_, i) => (
+          <mesh key={i} position={[(Math.random() - 0.5) * 0.4, 0.55 + Math.random() * 0.35, (Math.random() - 0.5) * 0.3]}>
+            <sphereGeometry args={[0.03, 8, 8]} />
+            <meshStandardMaterial color="#e4c33a" emissive="#caa41f" emissiveIntensity={0.3} />
           </mesh>
         ))}
       </group>
 
-      {/* Area rug */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0.4, 0.012, 1.1]} receiveShadow>
-        <planeGeometry args={[3.6, 2.4]} />
-        <meshStandardMaterial color="#b5a488" roughness={0.98} />
-      </mesh>
-
-      <ContactShadows position={[0, 0.015, 0]} opacity={0.5} scale={20} blur={2.6} far={9} resolution={1024} color="#000000" />
+      <ContactShadows position={[0, 0.015, 0]} opacity={0.55} scale={20} blur={2.6} far={9} resolution={1024} color="#000000" />
     </>
   );
 }
@@ -736,11 +717,11 @@ export default function Kitchen3D({
     <button
       onClick={onClick}
       className={cn(
-        "pointer-events-auto inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-xs font-medium backdrop-blur transition-colors",
-        active ? "border-orange-300/50 bg-orange-400/20 text-orange-100" : "border-white/15 bg-black/50 text-white/60 hover:text-white",
+        "pointer-events-auto inline-flex w-full items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium backdrop-blur transition-colors",
+        active ? "border-amber-300/50 bg-amber-400/20 text-amber-100" : "border-white/15 bg-black/50 text-white/60 hover:text-white",
       )}
     >
-      <Icon className="h-3.5 w-3.5" />
+      <Icon className="h-4 w-4 flex-none" />
       <span>{text}</span>
     </button>
   );
@@ -750,17 +731,17 @@ export default function Kitchen3D({
       <Canvas
         shadows
         dpr={[1, 2]}
-        camera={{ position: [5.8, 3.3, 5.8], fov: 40 }}
-        gl={{ antialias: true, alpha: false, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.02 }}
+        camera={{ position: [5.8, 3.2, 5.8], fov: 40 }}
+        gl={{ antialias: true, alpha: false, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.0 }}
         style={{ touchAction: "none" }}
       >
-        <color attach="background" args={[night ? "#05060a" : "#0a0a0c"]} />
-        <fog attach="fog" args={[night ? "#05060a" : "#0a0a0c", 16, 34]} />
-        <ambientLight intensity={night ? 0.08 : 0.4} />
-        <hemisphereLight args={["#fff2df", "#3a2f28", night ? 0.12 : 0.5]} />
+        <color attach="background" args={[night ? "#050609" : "#0a0a0c"]} />
+        <fog attach="fog" args={[night ? "#050609" : "#0a0a0c", 16, 34]} />
+        <ambientLight intensity={night ? 0.08 : 0.32} />
+        <hemisphereLight args={["#fff2df", "#2a241f", night ? 0.1 : 0.4]} />
         <directionalLight
           position={[4, 7, 3]}
-          intensity={night ? 0.15 : 2.1}
+          intensity={night ? 0.12 : 1.5}
           color={night ? "#9fb4ff" : "#fff2df"}
           castShadow
           shadow-mapSize={[2048, 2048]}
@@ -770,9 +751,9 @@ export default function Kitchen3D({
           shadow-camera-top={8}
           shadow-camera-bottom={-8}
         />
-        <directionalLight position={[-4, 4, -3]} intensity={night ? 0.1 : 0.45} color="#bcd4ff" />
+        <directionalLight position={[-4, 4, -3]} intensity={night ? 0.08 : 0.35} color="#bcd4ff" />
         <Suspense fallback={null}>
-          <Environment preset={night ? "night" : "apartment"} environmentIntensity={night ? 0.2 : 0.55} />
+          <Environment preset={night ? "night" : "apartment"} environmentIntensity={night ? 0.2 : 0.5} />
         </Suspense>
 
         <Scene
@@ -785,7 +766,6 @@ export default function Kitchen3D({
           water={water}
           stove={stove}
           oven={oven}
-          onToggleLights={() => setLightsOn((v) => !v)}
           onToggleWater={() => setWater((v) => !v)}
           onToggleStove={() => setStove((v) => !v)}
         />
@@ -796,18 +776,18 @@ export default function Kitchen3D({
           maxDistance={13}
           minPolarAngle={0.5}
           maxPolarAngle={Math.PI / 2.15}
-          target={[0.3, 1, -0.4]}
+          target={[0.3, 1, -0.2]}
           enableDamping
           dampingFactor={0.08}
         />
         <EffectComposer multisampling={0} enableNormalPass={false}>
-          <Bloom luminanceThreshold={0.72} luminanceSmoothing={0.9} intensity={0.55} mipmapBlur radius={0.65} />
-          <Vignette eskil={false} offset={0.25} darkness={0.6} />
+          <Bloom luminanceThreshold={0.7} luminanceSmoothing={0.9} intensity={0.6} mipmapBlur radius={0.7} />
+          <Vignette eskil={false} offset={0.22} darkness={0.7} />
         </EffectComposer>
       </Canvas>
 
-      {/* Appliance control bar */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-4 z-20 flex flex-wrap items-center justify-center gap-2 px-4">
+      {/* Appliance controls — vertical column on the LEFT */}
+      <div className="pointer-events-none absolute left-4 top-1/2 z-20 flex w-36 -translate-y-1/2 flex-col gap-2">
         {ctrlBtn(lightsOn, () => setLightsOn((v) => !v), lightsOn ? Lightbulb : LightbulbOff, controls.lights)}
         {ctrlBtn(night, () => setNight((v) => !v), night ? Moon : Sun, night ? controls.night : controls.day)}
         {ctrlBtn(water, () => setWater((v) => !v), Droplets, controls.water)}
