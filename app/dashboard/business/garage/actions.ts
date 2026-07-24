@@ -59,6 +59,8 @@ export async function createVehicle(formData: FormData) {
     value: numOrNull(formData.get("value")),
     purchase_price: numOrNull(formData.get("purchase_price")),
     image_url: String(formData.get("image_url") ?? "").trim() || null,
+    model_url: String(formData.get("model_url") ?? "").trim() || null,
+    specs: buildSpecs(formData),
     notes: String(formData.get("notes") ?? "").trim() || null,
     links: parseLinks(formData.get("links")),
   });
@@ -81,12 +83,32 @@ export async function updateVehicle(id: string, formData: FormData) {
       value: numOrNull(formData.get("value")),
       purchase_price: numOrNull(formData.get("purchase_price")),
       image_url: String(formData.get("image_url") ?? "").trim() || null,
+      model_url: String(formData.get("model_url") ?? "").trim() || null,
+      specs: buildSpecs(formData),
       notes: String(formData.get("notes") ?? "").trim() || null,
       links: parseLinks(formData.get("links")),
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
   refresh();
+}
+
+/** Builds the free-form specs bag from the vehicle form (only set keys). */
+function buildSpecs(formData: FormData): Record<string, string | number> {
+  const specs: Record<string, string | number> = {};
+  const str = (k: string) => {
+    const v = String(formData.get(k) ?? "").trim();
+    if (v) specs[k] = v;
+  };
+  str("country");
+  str("fuel");
+  str("transmission");
+  str("engine");
+  str("vin");
+  str("drivetrain");
+  const hp = numOrNull(formData.get("horsepower"));
+  if (hp != null) specs.horsepower = hp;
+  return specs;
 }
 
 export async function deleteVehicle(id: string) {

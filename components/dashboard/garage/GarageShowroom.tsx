@@ -19,11 +19,12 @@ import {
   BadgeCheck,
   Tag,
 } from "lucide-react";
-import type { GarageVehicle, GarageDreamVehicle, GarageImportDeal, GarageDealStage } from "@/lib/types";
+import type { GarageVehicle, GarageDreamVehicle, GarageImportDeal, GarageDealStage, VehicleSpecs } from "@/lib/types";
 import { formatCurrency } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { ShowroomCanvas } from "@/components/three/ShowroomCanvas";
 import { RealLifeMapCanvas } from "@/components/map/RealLifeMapCanvas";
+import { DEMO_CAR_GLB, resolveSpecs } from "@/lib/garage/vehicle-catalog";
 
 type ShowStatus = "owned" | "watching" | "importing" | "forsale" | "sold";
 
@@ -38,6 +39,8 @@ type ShowVehicle = {
   status: ShowStatus;
   country: string;
   accent: string;
+  modelUrl?: string;
+  specs: VehicleSpecs;
 };
 
 const ACCENTS = ["#9BB0C4", "#C9A227", "#E0245E", "#3FA7FF", "#7C5CFF", "#31C48D"];
@@ -75,44 +78,59 @@ export function GarageShowroom({
   const [idx, setIdx] = useState(0);
 
   const showcase: ShowVehicle[] = useMemo(() => {
-    const owned: ShowVehicle[] = vehicles.map((v) => ({
-      id: v.id,
-      name: `${v.brand} ${v.model}`.trim(),
-      brand: v.brand,
-      year: v.year,
-      mileage: v.mileage,
-      value: v.value,
-      purchase: v.purchase_price,
-      status: "owned",
-      country: "Hungary",
-      accent: accentFor(v.brand + v.model),
-    }));
+    const owned: ShowVehicle[] = vehicles.map((v) => {
+      const specs = resolveSpecs(v.brand, v.specs);
+      return {
+        id: v.id,
+        name: `${v.brand} ${v.model}`.trim(),
+        brand: v.brand,
+        year: v.year,
+        mileage: v.mileage,
+        value: v.value,
+        purchase: v.purchase_price,
+        status: "owned",
+        country: specs.country ?? "Hungary",
+        accent: accentFor(v.brand + v.model),
+        modelUrl: v.model_url ?? undefined,
+        specs,
+      };
+    });
     const importing: ShowVehicle[] = deals
       .filter((d) => d.stage !== "sold")
-      .map((d) => ({
+      .map((d) => {
+        const specs = resolveSpecs(d.brand, null);
+        return {
+          id: d.id,
+          name: `${d.brand} ${d.model}`.trim(),
+          brand: d.brand,
+          year: d.year,
+          mileage: null,
+          value: d.expected_selling_price,
+          purchase: d.purchase_price,
+          status: "importing",
+          country: specs.country ?? "Germany",
+          accent: accentFor(d.brand + d.model),
+          modelUrl: d.model_url ?? undefined,
+          specs,
+        };
+      });
+    const watching: ShowVehicle[] = dreamVehicles.map((d) => {
+      const specs = resolveSpecs(d.brand, null);
+      return {
         id: d.id,
         name: `${d.brand} ${d.model}`.trim(),
         brand: d.brand,
         year: d.year,
         mileage: null,
-        value: d.expected_selling_price,
-        purchase: d.purchase_price,
-        status: "importing",
-        country: "Germany",
+        value: d.estimated_price,
+        purchase: null,
+        status: "watching",
+        country: specs.country ?? "—",
         accent: accentFor(d.brand + d.model),
-      }));
-    const watching: ShowVehicle[] = dreamVehicles.map((d) => ({
-      id: d.id,
-      name: `${d.brand} ${d.model}`.trim(),
-      brand: d.brand,
-      year: d.year,
-      mileage: null,
-      value: d.estimated_price,
-      purchase: null,
-      status: "watching",
-      country: "—",
-      accent: accentFor(d.brand + d.model),
-    }));
+        modelUrl: d.model_url ?? undefined,
+        specs,
+      };
+    });
     const merged = [...owned, ...importing, ...watching];
     if (merged.length) return merged;
     // A concept placeholder so the stage is never empty.
@@ -128,6 +146,8 @@ export function GarageShowroom({
         status: "watching",
         country: "Germany",
         accent: "#9BB0C4",
+        modelUrl: DEMO_CAR_GLB,
+        specs: { country: "Germany", fuel: "Electric", transmission: "Automatic", engine: "Dual motor", horsepower: 600 },
       },
     ];
   }, [vehicles, deals, dreamVehicles, t]);
@@ -196,8 +216,11 @@ export function GarageShowroom({
       <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
         <div className="relative h-[58vh] min-h-[420px] overflow-hidden rounded-3xl border border-white/10 bg-black/50">
           <div className="absolute inset-0">
-            <ShowroomCanvas accent={active.accent} />
+            <ShowroomCanvas accent={active.accent} modelUrl={active.modelUrl} />
           </div>
+          <span className="pointer-events-none absolute right-4 top-16 rounded-full border border-white/10 bg-black/50 px-2 py-0.5 text-[0.55rem] uppercase tracking-wider text-white/45 backdrop-blur">
+            {active.modelUrl ? t("showroom.model3d") : t("showroom.modelStylized")}
+          </span>
           {/* Vehicle name + controls */}
           <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-4">
             <div>
@@ -238,6 +261,11 @@ export function GarageShowroom({
             <Spec label={t("showroom.fYear")} value={active.year != null ? `${active.year}` : "—"} />
             <Spec label={t("showroom.fMileage")} value={active.mileage != null ? `${active.mileage.toLocaleString()} km` : "—"} />
             <Spec label={t("showroom.fCountry")} value={active.country} />
+            <Spec label={t("showroom.fEngine")} value={active.specs.engine ?? "—"} />
+            <Spec label={t("showroom.fHp")} value={active.specs.horsepower != null ? `${active.specs.horsepower} hp` : "—"} />
+            <Spec label={t("showroom.fFuel")} value={active.specs.fuel ?? "—"} />
+            <Spec label={t("showroom.fTransmission")} value={active.specs.transmission ?? "—"} />
+            <Spec label={t("showroom.fVin")} value={active.specs.vin ?? "—"} />
             <Spec label={t("showroom.fPurchase")} value={active.purchase != null ? fc(active.purchase) : "—"} />
             <Spec label={t("showroom.fValue")} value={active.value != null ? fc(active.value) : "—"} accent={active.accent} />
             <Spec label={t("showroom.fImport")} value={ai.estImport != null ? fc(ai.estImport) : "—"} />

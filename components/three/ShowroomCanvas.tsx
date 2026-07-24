@@ -16,6 +16,6 @@ const Showroom = dynamic(() => import("./Showroom"), {
   ),
 });
 
-export function ShowroomCanvas({ accent }: { accent?: string }) {
-  return <Showroom accent={accent} />;
+export function ShowroomCanvas({ accent, modelUrl }: { accent?: string; modelUrl?: string }) {
+  return <Showroom accent={accent} modelUrl={modelUrl} />;
 }

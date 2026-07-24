@@ -166,6 +166,13 @@ export function GarageModule({ currency, vehicles, serviceRecords, dreamVehicles
                   <Field label={t("garage.value")}><input name="value" type="number" className={inputClass} /></Field>
                   <Field label={t("garage.formPurchasePrice")}><input name="purchase_price" type="number" className={inputClass} /></Field>
                   <div className="sm:col-span-2"><Field label={t("garage.formImageUrl")}><input name="image_url" placeholder="https://…" className={inputClass} /></Field></div>
+                  <div className="sm:col-span-2"><Field label={t("garage.formModelUrl")}><input name="model_url" placeholder="https://…/car.glb" className={inputClass} /></Field></div>
+                  <Field label={t("garage.formEngine")}><input name="engine" placeholder="3.0L I6" className={inputClass} /></Field>
+                  <Field label={t("garage.formHorsepower")}><input name="horsepower" type="number" className={inputClass} /></Field>
+                  <Field label={t("garage.formFuel")}><input name="fuel" placeholder="Petrol / Diesel / EV" className={inputClass} /></Field>
+                  <Field label={t("garage.formTransmission")}><input name="transmission" placeholder="Automatic" className={inputClass} /></Field>
+                  <Field label={t("garage.formCountry")}><input name="country" placeholder="Germany" className={inputClass} /></Field>
+                  <Field label={t("garage.formVin")}><input name="vin" className={inputClass} /></Field>
                   <div className="sm:col-span-2"><Field label={t("garage.formLinks")}><textarea name="links" rows={2} placeholder={t("garage.formLinksHint")} className={inputClass + " resize-none"} /></Field></div>
                   <div className="sm:col-span-2"><Field label={t("garage.formNotes")}><textarea name="notes" rows={2} className={inputClass + " resize-none"} /></Field></div>
                   <div className="flex gap-3 sm:col-span-2">

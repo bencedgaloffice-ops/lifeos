@@ -584,6 +584,21 @@ export type WeightLogEntry = {
   created_at: string;
 };
 
+/** Free-form, data-driven vehicle specifications. The 3D engine and the
+ * holographic panel read whatever keys are present, so the catalog can grow
+ * to thousands of vehicles with no code change — new fields are just data. */
+export type VehicleSpecs = {
+  country?: string;
+  fuel?: string;
+  transmission?: string;
+  engine?: string;
+  horsepower?: number;
+  vin?: string;
+  drivetrain?: string;
+  color?: string;
+  [key: string]: string | number | undefined;
+};
+
 export type GarageVehicle = {
   id: string;
   user_id: string;
@@ -594,6 +609,9 @@ export type GarageVehicle = {
   value: number | null;
   purchase_price: number | null;
   image_url: string | null;
+  /** URL of a standardized GLB model loaded dynamically by the 3D engine. */
+  model_url: string | null;
+  specs: VehicleSpecs;
   notes: string | null;
   links: string[];
   created_at: string;
@@ -618,6 +636,7 @@ export type GarageDreamVehicle = {
   model: string;
   year: number | null;
   image_url: string | null;
+  model_url: string | null;
   estimated_price: number | null;
   priority_rating: number;
   purchase_goal: string | null;
@@ -636,6 +655,7 @@ export type GarageImportDeal = {
   model: string;
   year: number | null;
   image_url: string | null;
+  model_url: string | null;
   stage: GarageDealStage;
   purchase_price: number;
   transport_cost: number;
