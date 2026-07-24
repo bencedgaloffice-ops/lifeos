@@ -18,7 +18,8 @@ import type { KitchenItem, ShoppingListItem } from "@/lib/types";
 import type { SuggestedMeal } from "@/app/dashboard/kitchen/suggestions";
 import { formatDate } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
-import { ModuleHeader, Panel, Pill, EmptyState, Field, inputClass } from "@/components/dashboard/ui";
+import { ModuleHeader, Panel, Pill, EmptyState, Field, inputClass, Segmented } from "@/components/dashboard/ui";
+import { Kitchen3DCanvas, type KitchenObject } from "@/components/three/Kitchen3DCanvas";
 import {
   createKitchenItem,
   deleteKitchenItem,
@@ -48,6 +49,17 @@ export function KitchenModule({ items, shoppingList, suggestions }: Props) {
   const [openItem, setOpenItem] = useState<null | "fridge" | "pantry" | "freezer">(null);
   const [openList, setOpenList] = useState(false);
   const [logged, setLogged] = useState<Set<string>>(new Set());
+  const [view, setView] = useState<"world" | "manager">("world");
+  const [selected, setSelected] = useState<KitchenObject | null>("fridge");
+
+  const objectLabels: Record<KitchenObject, string> = {
+    fridge: t("kitchen.fridge"),
+    freezer: t("kitchen.freezer"),
+    pantry: t("kitchen.pantry"),
+    island: t("kitchen.objIsland"),
+    oven: t("kitchen.objOven"),
+    sink: t("kitchen.objSink"),
+  };
 
   const grouped = useMemo(() => {
     const g: Record<"fridge" | "pantry" | "freezer", KitchenItem[]> = { fridge: [], pantry: [], freezer: [] };
@@ -73,8 +85,78 @@ export function KitchenModule({ items, shoppingList, suggestions }: Props) {
 
   return (
     <div>
-      <ModuleHeader icon={ChefHat} title={t("kitchen.title")} subtitle={t("kitchen.subtitle")} accent="kitchen" />
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <ModuleHeader icon={ChefHat} title={t("kitchen.title")} subtitle={t("kitchen.subtitle")} accent="kitchen" />
+        <Segmented
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "world", label: t("kitchen.viewWorld") },
+            { value: "manager", label: t("kitchen.viewManager") },
+          ]}
+        />
+      </div>
 
+      {view === "world" ? (
+        <div className="relative mt-2 h-[64vh] min-h-[460px] overflow-hidden rounded-3xl border border-white/10 bg-black/60">
+          <div className="absolute inset-0">
+            <Kitchen3DCanvas selected={selected} onSelect={setSelected} labels={objectLabels} />
+          </div>
+          <p className="pointer-events-none absolute left-4 top-4 z-10 text-[0.6rem] uppercase tracking-[0.25em] text-white/40">
+            {t("kitchen.worldHint")}
+          </p>
+          {selected && (
+            <div className="absolute right-3 top-3 z-20 max-h-[calc(100%-1.5rem)] w-72 overflow-y-auto rounded-2xl border border-white/10 bg-black/80 p-4 backdrop-blur-md">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-sm font-semibold text-white/90">{objectLabels[selected]}</p>
+                <button onClick={() => setSelected(null)} className="text-white/40 hover:text-white">✕</button>
+              </div>
+              {(selected === "fridge" || selected === "freezer" || selected === "pantry") ? (
+                grouped[selected].length === 0 ? (
+                  <p className="text-xs text-white/45">{t("kitchen.noItems")}</p>
+                ) : (
+                  <ul className="space-y-2">
+                    {grouped[selected].map((it) => (
+                      <li key={it.id} className="rounded-xl bg-white/[0.04] p-2.5">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-white/85">{it.name}</span>
+                          {it.quantity && <span className="font-mono text-xs text-white/55">{it.quantity}</span>}
+                        </div>
+                        {it.expires_at && (
+                          <p className="mt-0.5 text-[0.65rem] text-white/40">
+                            {t("kitchen.expiresPrefix")} {formatDate(it.expires_at, undefined, locale)}
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )
+              ) : selected === "island" || selected === "oven" ? (
+                suggestions.length === 0 ? (
+                  <p className="text-xs text-white/45">{t("kitchen.jarvisNoPick")}</p>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="flex items-center gap-1.5 text-[0.65rem] uppercase tracking-wider text-orange-300/80">
+                      <Sparkles className="h-3.5 w-3.5" /> {t("kitchen.jarvisPick")}
+                    </p>
+                    {suggestions.slice(0, 2).map((s) => (
+                      <div key={s.id} className="rounded-xl bg-white/[0.04] p-3">
+                        <p className="text-sm text-white/90">{s.name}</p>
+                        <p className="mt-1 text-[0.7rem] text-white/50">
+                          {s.calories} kcal · {s.proteinG}g {t("kitchen.protein")}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : (
+                <p className="text-xs leading-relaxed text-white/50">{t("kitchen.sinkDesc")}</p>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+      <>
       <div className="grid gap-4 lg:grid-cols-3">
         {(["fridge", "pantry", "freezer"] as const).map((loc) => {
           const Icon = locationIcons[loc];
@@ -284,6 +366,8 @@ export function KitchenModule({ items, shoppingList, suggestions }: Props) {
           )}
         </Panel>
       </div>
+      </>
+      )}
     </div>
   );
 }
