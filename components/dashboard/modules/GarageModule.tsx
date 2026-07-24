@@ -11,6 +11,7 @@ import { carbonWeave, spotlight } from "@/components/dashboard/garage/carbon";
 import { VehicleCard } from "@/components/dashboard/garage/VehicleCard";
 import { DreamCard } from "@/components/dashboard/garage/DreamCard";
 import { PipelineBoard, OpportunityCalculator } from "@/components/dashboard/garage/PipelineBoard";
+import { GarageShowroom } from "@/components/dashboard/garage/GarageShowroom";
 import { createVehicle, createDreamVehicle, createImportDeal } from "@/app/dashboard/business/garage/actions";
 
 const ACCENT = "#9BB0C4";
@@ -30,6 +31,7 @@ export function GarageModule({ currency, vehicles, serviceRecords, dreamVehicles
   const { t, locale } = useLocale();
   const [, startTransition] = useTransition();
   const [tab, setTab] = useState<Tab>("vehicles");
+  const [view, setView] = useState<"showroom" | "manager">("showroom");
   const [addingVehicle, setAddingVehicle] = useState(false);
   const [addingDream, setAddingDream] = useState(false);
   const [addingDeal, setAddingDeal] = useState(false);
@@ -58,6 +60,21 @@ export function GarageModule({ currency, vehicles, serviceRecords, dreamVehicles
 
   return (
     <div>
+      <div className="mb-5 flex items-center justify-end">
+        <Segmented
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "showroom", label: t("garage.viewShowroom") },
+            { value: "manager", label: t("garage.viewManager") },
+          ]}
+        />
+      </div>
+
+      {view === "showroom" ? (
+        <GarageShowroom currency={currency} vehicles={vehicles} dreamVehicles={dreamVehicles} deals={deals} />
+      ) : (
+      <div>
       {/* Cinematic garage homepage header */}
       <div className="relative mb-6 overflow-hidden rounded-3xl border border-hairline">
         <div className="absolute inset-0" style={carbonWeave} />
@@ -238,6 +255,8 @@ export function GarageModule({ currency, vehicles, serviceRecords, dreamVehicles
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
+      )}
     </div>
   );
 }

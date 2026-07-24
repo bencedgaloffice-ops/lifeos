@@ -1,0 +1,177 @@
+"use client";
+
+import { useRef } from "react";
+import { Canvas, useFrame } from "@react-three/fiber";
+import { OrbitControls, ContactShadows } from "@react-three/drei";
+import { EffectComposer, Bloom } from "@react-three/postprocessing";
+import * as THREE from "three";
+
+/**
+ * The luxury showroom stage.
+ *
+ * A cinematic, interactive turntable: a stylized luxury SUV sits on an
+ * illuminated platform under two volumetric spotlights, on a dark polished
+ * floor with soft contact shadows and fog. The user can orbit and zoom
+ * (OrbitControls); the car slowly auto-rotates at rest. Everything is built
+ * from primitives so it needs no downloaded 3D assets — a real GLB model can
+ * be dropped into <Vehicle/> later without touching the rest of the scene.
+ *
+ * `accent` tints the platform rim, spotlights and body sheen so the lighting
+ * changes with the selected vehicle, as the brief asks.
+ */
+
+function Vehicle({ accent }: { accent: string }) {
+  const body = new THREE.MeshStandardMaterial({ color: "#0c0f14", metalness: 0.9, roughness: 0.28 });
+  const trim = new THREE.MeshStandardMaterial({ color: "#c7d2dd", metalness: 1, roughness: 0.2 });
+  const glass = new THREE.MeshStandardMaterial({ color: "#0a1420", metalness: 0.6, roughness: 0.1, transparent: true, opacity: 0.85 });
+  const tire = new THREE.MeshStandardMaterial({ color: "#0a0a0c", metalness: 0.2, roughness: 0.8 });
+  const rim = new THREE.MeshStandardMaterial({ color: "#dfe7ef", metalness: 1, roughness: 0.15 });
+  const head = new THREE.MeshStandardMaterial({ color: "#fdf6d8", emissive: "#fff3c4", emissiveIntensity: 2.2 });
+  const tail = new THREE.MeshStandardMaterial({ color: "#ff2d3f", emissive: "#ff2d3f", emissiveIntensity: 2 });
+  const glow = new THREE.MeshStandardMaterial({ color: accent, emissive: accent, emissiveIntensity: 1.4 });
+
+  const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.32, 24);
+  const rimGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.34, 20);
+
+  const wheelPositions: [number, number, number][] = [
+    [1.35, 0.42, 0.95],
+    [1.35, 0.42, -0.95],
+    [-1.35, 0.42, 0.95],
+    [-1.35, 0.42, -0.95],
+  ];
+
+  return (
+    <group position={[0, 0, 0]}>
+      {/* Lower body */}
+      <mesh position={[0, 0.7, 0]} castShadow material={body}>
+        <boxGeometry args={[4.3, 0.85, 2.0]} />
+      </mesh>
+      {/* Sill / lower cladding */}
+      <mesh position={[0, 0.42, 0]} material={body}>
+        <boxGeometry args={[4.0, 0.4, 1.85]} />
+      </mesh>
+      {/* Cabin / greenhouse */}
+      <mesh position={[-0.15, 1.28, 0]} castShadow material={body}>
+        <boxGeometry args={[2.5, 0.72, 1.82]} />
+      </mesh>
+      {/* Windows */}
+      <mesh position={[-0.15, 1.3, 0.92]} material={glass}>
+        <boxGeometry args={[2.35, 0.62, 0.02]} />
+      </mesh>
+      <mesh position={[-0.15, 1.3, -0.92]} material={glass}>
+        <boxGeometry args={[2.35, 0.62, 0.02]} />
+      </mesh>
+      {/* Windshield */}
+      <mesh position={[1.15, 1.3, 0]} rotation={[0, 0, -0.5]} material={glass}>
+        <boxGeometry args={[0.5, 0.7, 1.78]} />
+      </mesh>
+      {/* Chrome beltline */}
+      <mesh position={[0, 1.05, 0.98]} material={trim}>
+        <boxGeometry args={[3.6, 0.05, 0.04]} />
+      </mesh>
+      <mesh position={[0, 1.05, -0.98]} material={trim}>
+        <boxGeometry args={[3.6, 0.05, 0.04]} />
+      </mesh>
+      {/* Grille + accent bar */}
+      <mesh position={[2.16, 0.75, 0]} material={trim}>
+        <boxGeometry args={[0.06, 0.5, 1.5]} />
+      </mesh>
+      <mesh position={[2.17, 0.62, 0]} material={glow}>
+        <boxGeometry args={[0.04, 0.06, 1.4]} />
+      </mesh>
+      {/* Headlights */}
+      <mesh position={[2.17, 0.9, 0.7]} material={head}>
+        <boxGeometry args={[0.05, 0.14, 0.34]} />
+      </mesh>
+      <mesh position={[2.17, 0.9, -0.7]} material={head}>
+        <boxGeometry args={[0.05, 0.14, 0.34]} />
+      </mesh>
+      {/* Taillights */}
+      <mesh position={[-2.16, 0.95, 0.75]} material={tail}>
+        <boxGeometry args={[0.05, 0.28, 0.22]} />
+      </mesh>
+      <mesh position={[-2.16, 0.95, -0.75]} material={tail}>
+        <boxGeometry args={[0.05, 0.28, 0.22]} />
+      </mesh>
+      {/* Wheels */}
+      {wheelPositions.map((p, i) => (
+        <group key={i} position={p} rotation={[Math.PI / 2, 0, 0]}>
+          <mesh geometry={wheelGeo} material={tire} castShadow />
+          <mesh geometry={rimGeo} material={rim} />
+        </group>
+      ))}
+    </group>
+  );
+}
+
+function Stage({ accent }: { accent: string }) {
+  const group = useRef<THREE.Group>(null);
+  useFrame((_, dt) => {
+    if (group.current) group.current.rotation.y += dt * 0.18;
+  });
+  return (
+    <>
+      {/* Rotating platform + car */}
+      <group ref={group}>
+        <Vehicle accent={accent} />
+        {/* Turntable disc */}
+        <mesh position={[0, 0.02, 0]} receiveShadow>
+          <cylinderGeometry args={[3.1, 3.1, 0.08, 64]} />
+          <meshStandardMaterial color="#0a0d12" metalness={0.8} roughness={0.35} />
+        </mesh>
+        {/* Glowing rim */}
+        <mesh position={[0, 0.06, 0]} rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[3.1, 0.03, 16, 90]} />
+          <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={2.4} />
+        </mesh>
+      </group>
+
+      <ContactShadows position={[0, 0.01, 0]} opacity={0.55} scale={14} blur={2.6} far={6} resolution={512} color="#000000" />
+    </>
+  );
+}
+
+export default function Showroom({ accent = "#9BB0C4" }: { accent?: string }) {
+  return (
+    <Canvas
+      shadows
+      dpr={[1, 2]}
+      camera={{ position: [6, 3.2, 6], fov: 38 }}
+      gl={{ antialias: true, alpha: true }}
+      style={{ touchAction: "none" }}
+    >
+      <color attach="background" args={["#05070a"]} />
+      <fog attach="fog" args={["#05070a", 10, 26]} />
+
+      <ambientLight intensity={0.25} />
+      {/* Two volumetric-feel spotlights, one tinted to the vehicle accent */}
+      <spotLight position={[6, 9, 4]} angle={0.5} penumbra={1} intensity={140} color="#eaf2ff" castShadow shadow-bias={-0.0004} />
+      <spotLight position={[-6, 8, -3]} angle={0.6} penumbra={1} intensity={90} color={accent} />
+      <pointLight position={[0, 4, 0]} intensity={18} color="#dfe9ff" />
+
+      <Stage accent={accent} />
+
+      {/* Polished floor */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
+        <planeGeometry args={[60, 60]} />
+        <meshStandardMaterial color="#070a0f" metalness={0.85} roughness={0.42} />
+      </mesh>
+
+      <OrbitControls
+        enablePan={false}
+        autoRotate={false}
+        minDistance={5}
+        maxDistance={13}
+        minPolarAngle={0.35}
+        maxPolarAngle={Math.PI / 2.15}
+        target={[0, 0.9, 0]}
+        enableDamping
+        dampingFactor={0.08}
+      />
+
+      <EffectComposer multisampling={0} enableNormalPass={false}>
+        <Bloom luminanceThreshold={0.55} luminanceSmoothing={0.9} intensity={0.7} mipmapBlur radius={0.7} />
+      </EffectComposer>
+    </Canvas>
+  );
+}
