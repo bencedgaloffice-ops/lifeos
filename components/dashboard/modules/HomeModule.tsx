@@ -7,8 +7,9 @@ import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { Segmented } from "@/components/dashboard/ui";
 import { OverviewModule, type OverviewData } from "@/components/dashboard/modules/OverviewModule";
 import { LifeMapModule } from "@/components/dashboard/modules/LifeMapModule";
+import { CommandCenter } from "@/components/dashboard/CommandCenter";
 
-type Tab = "map" | "stats";
+type Tab = "command" | "map" | "stats";
 
 type Props = {
   overview: OverviewData;
@@ -26,7 +27,7 @@ type Props = {
  * Mission Control dashboard, not a separate page. */
 export function HomeModule({ overview, mapLocations, mapLifeAreas, mapOrganizations, mapGoals, mapDocuments, mapTransactions }: Props) {
   const { t } = useLocale();
-  const [tab, setTab] = useState<Tab>("map");
+  const [tab, setTab] = useState<Tab>("command");
 
   return (
     <div>
@@ -35,6 +36,7 @@ export function HomeModule({ overview, mapLocations, mapLifeAreas, mapOrganizati
           value={tab}
           onChange={setTab}
           options={[
+            { value: "command", label: t("home.tabCommand") },
             { value: "map", label: t("home.tabMap") },
             { value: "stats", label: t("home.tabStats") },
           ]}
@@ -42,7 +44,11 @@ export function HomeModule({ overview, mapLocations, mapLifeAreas, mapOrganizati
       </div>
 
       <AnimatePresence mode="wait">
-        {tab === "map" ? (
+        {tab === "command" ? (
+          <motion.div key="command" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.25 }}>
+            <CommandCenter data={overview} />
+          </motion.div>
+        ) : tab === "map" ? (
           <motion.div key="map" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.25 }}>
             <LifeMapModule
               locations={mapLocations}
