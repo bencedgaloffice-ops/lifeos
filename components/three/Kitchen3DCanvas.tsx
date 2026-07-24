@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import type { KitchenObject } from "./Kitchen3D";
+import type { KitchenObject, KitchenControlLabels } from "./Kitchen3D";
 
 /** The kitchen scene is heavy (Three.js). Load it only on the client. */
 const Kitchen3D = dynamic(() => import("./Kitchen3D"), {
@@ -21,8 +21,9 @@ export function Kitchen3DCanvas(props: {
   selected: KitchenObject | null;
   onSelect: (k: KitchenObject) => void;
   labels: Record<KitchenObject, string>;
+  controls: KitchenControlLabels;
 }) {
   return <Kitchen3D {...props} />;
 }
 
-export type { KitchenObject };
+export type { KitchenObject, KitchenControlLabels };
