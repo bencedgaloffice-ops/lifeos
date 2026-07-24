@@ -108,13 +108,15 @@ export function TreasuryDashboard(props: Props) {
   const freeCashFlow = Math.round(props.monthIncome + passiveMonthly - props.monthSpending);
 
   return (
-    <div className="flex overflow-hidden rounded-3xl border" style={{ borderColor: HAIR, background: "#0b0b0c" }}>
-      {/* Left icon rail */}
-      <nav className="flex w-16 flex-none flex-col items-center gap-1 border-r py-5 sm:w-20" style={{ borderColor: HAIR }}>
-        <div className="mb-4 grid h-8 w-8 place-items-center rounded" style={{ border: `1px solid ${GOLD}` }}>
-          <span className="font-serif text-sm" style={{ color: GOLD }}>
-            ₲
-          </span>
+    <div className="flex flex-col overflow-hidden rounded-3xl border md:flex-row" style={{ borderColor: HAIR, background: "#0b0b0c" }}>
+      {/* Icon rail — vertical on desktop, a horizontal scroller on mobile */}
+      <nav
+        className="flex flex-row items-center gap-1 overflow-x-auto border-b px-2 py-2 md:w-20 md:flex-none md:flex-col md:border-b-0 md:border-r md:px-0 md:py-5"
+        style={{ borderColor: HAIR }}
+        aria-label="Treasury sections"
+      >
+        <div className="mb-0 hidden h-8 w-8 place-items-center md:mb-4 md:grid" aria-hidden>
+          <Monogram />
         </div>
         {rail.map((r) => {
           const on = section === r.key;
@@ -123,7 +125,10 @@ export function TreasuryDashboard(props: Props) {
             <button
               key={r.key}
               onClick={() => setSection(r.key)}
-              className="flex w-full flex-col items-center gap-1 rounded-lg py-2.5 transition-colors"
+              title={r.label}
+              aria-label={r.label}
+              aria-current={on ? "page" : undefined}
+              className="flex flex-none flex-col items-center gap-1 rounded-lg px-3 py-2 transition-colors md:w-full md:px-0 md:py-2.5"
               style={{ background: on ? "rgba(192,161,94,0.14)" : "transparent", color: on ? GOLD : MUTE }}
             >
               <Icon className="h-4 w-4" />
@@ -203,7 +208,7 @@ export function TreasuryDashboard(props: Props) {
               <div>
                 <p className="text-[0.6rem] font-semibold uppercase tracking-[0.3em]" style={{ color: MUTE }}>{t("treasury.snapshot")}</p>
                 <dl className="mt-3 space-y-2 text-sm">
-                  <SnapRow k={t("treasury.cashVsDebt")} v={m.liabilities > 0 ? `${Math.round((m.cash / m.liabilities) * 100)}%` : "∞"} />
+                  <SnapRow k={t("treasury.cashVsDebt")} v={m.liabilities > 0 ? `${(m.cash / m.liabilities).toFixed(1)}×` : "∞"} />
                   <SnapRow k={t("treasury.linkedAccounts")} v={`${props.accounts.length}`} />
                   <SnapRow k={t("treasury.holdingsRecorded")} v={`${props.assets.length}`} />
                 </dl>
@@ -371,6 +376,8 @@ function AdvBtn({ icon: Icon, label, gold, onClick }: { icon: LucideIcon; label:
   return (
     <button
       onClick={onClick}
+      title={label}
+      aria-label={label}
       className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs uppercase tracking-wider transition-colors hover:opacity-80"
       style={{ borderColor: gold ? GOLD : HAIR, color: gold ? GOLD : MUTE }}
     >
@@ -423,7 +430,22 @@ function BalanceChart({ trend, fallback, locale }: { trend: { date: string; valu
   const span = max - min || 1;
   const x = (i: number) => pad + (i / (pts.length - 1)) * (w - pad * 2);
   const y = (v: number) => pad + (1 - (v - min) / span) * (h - pad * 2);
-  const line = pts.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(" ");
+  // Smooth the line with Catmull-Rom → cubic Bézier for an elegant curve.
+  const P = pts.map((p, i) => [x(i), y(p.value)] as [number, number]);
+  let line = `M${P[0][0].toFixed(1)},${P[0][1].toFixed(1)}`;
+  for (let i = 0; i < P.length - 1; i++) {
+    const p0 = P[i - 1] ?? P[i];
+    const p1 = P[i];
+    const p2 = P[i + 1];
+    const p3 = P[i + 2] ?? p2;
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6;
+    const c1y = p1[1] + (p2[1] - p0[1]) / 6;
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6;
+    const c2y = p2[1] - (p3[1] - p1[1]) / 6;
+    line += ` C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2[0].toFixed(1)},${p2[1].toFixed(1)}`;
+  }
+  const endX = P[P.length - 1][0];
+  const endY = P[P.length - 1][1];
   const labels = trend.length >= 2 ? pickLabels(trend, locale) : [];
 
   return (
@@ -438,8 +460,10 @@ function BalanceChart({ trend, fallback, locale }: { trend: { date: string; valu
         {[0.25, 0.5, 0.75].map((g) => (
           <line key={g} x1={pad} x2={w - pad} y1={pad + g * (h - pad * 2)} y2={pad + g * (h - pad * 2)} stroke="rgba(236,230,216,0.06)" strokeWidth="1" />
         ))}
-        <path d={`${line} L${x(pts.length - 1)},${h - pad} L${x(0)},${h - pad} Z`} fill="url(#tgv)" />
-        <path d={line} fill="none" stroke={GOLD} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        <path d={`${line} L${endX.toFixed(1)},${h - pad} L${P[0][0].toFixed(1)},${h - pad} Z`} fill="url(#tgv)" />
+        <path d={line} fill="none" stroke={GOLD} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        <circle cx={endX} cy={endY} r="4" fill={GOLD} />
+        <circle cx={endX} cy={endY} r="8" fill={GOLD} opacity="0.2" />
       </svg>
       {labels.length > 0 && (
         <div className="mt-1 flex justify-between text-[0.6rem]" style={{ color: MUTE }}>
@@ -459,6 +483,15 @@ function pickLabels(trend: { date: string; value: number }[], locale: string): s
     const d = trend[i]?.date;
     return d ? fmt.format(new Date(d)) : "";
   });
+}
+
+function Monogram() {
+  return (
+    <svg width="26" height="26" viewBox="0 0 26 26" fill="none" aria-hidden>
+      <rect x="3.5" y="3.5" width="12" height="12" stroke={GOLD} strokeWidth="1.1" />
+      <rect x="10.5" y="10.5" width="12" height="12" stroke={GOLD} strokeWidth="1.1" opacity="0.65" />
+    </svg>
+  );
 }
 
 function BalanceCard({ label, value, sub, color }: { label: string; value: string; sub: string; color?: string }) {
