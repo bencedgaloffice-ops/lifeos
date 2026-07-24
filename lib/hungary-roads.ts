@@ -91,4 +91,19 @@ export const ROADS: Road[] = [
       [17.0, 46.45],
     ],
   },
+  {
+    key: "DE",
+    label: "→ München",
+    // The vehicle-import corridor continued past Hungary all the way into
+    // Germany: Hegyeshalom (HU/AT border) → Wien → Linz → Salzburg → München,
+    // following the real A4/A1/A8 autobahn line.
+    path: [
+      [17.13, 47.914],
+      [16.37, 48.21],
+      [14.29, 48.3],
+      [13.05, 47.81],
+      [12.13, 47.86],
+      [11.576, 48.137],
+    ],
+  },
 ];

@@ -23,7 +23,7 @@ export const WAYPOINTS: Record<string, LonLat> = {
   icsb: [19.04, 47.498],
   budapest: [19.0402, 47.4979],
   somogy: [17.797, 46.359],
-  germany: [17.1264, 47.9139],
+  germany: [11.576, 48.137],
 };
 
 /** One continuously-repeating simulated day. A real tracking integration

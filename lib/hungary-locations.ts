@@ -93,8 +93,8 @@ export const LOCATION_CLUSTERS: LocationCluster[] = [
   },
   {
     key: "germany",
-    lon: 17.1264,
-    lat: 47.9139,
+    lon: 11.576,
+    lat: 48.137,
     nameKey: "germany",
     previewKey: "germanyPreview",
     icon: Car,

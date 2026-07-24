@@ -20,6 +20,7 @@ export type LonLat = [number, number];
 
 const M1 = ROADS.find((r) => r.key === "M1")!.path;
 const M7 = ROADS.find((r) => r.key === "M7")!.path;
+const DE = ROADS.find((r) => r.key === "DE")!.path;
 
 export const ROUTES: Record<string, LonLat[]> = {
   // Diósd — just southwest of Budapest — to the ICSB work site, via the M0 ring's western arc into the city.
@@ -51,11 +52,13 @@ export const ROUTES: Record<string, LonLat[]> = {
     [18.9, 47.35],
     ...M7.slice(0, M7.findIndex(([lon, lat]) => lon === 18.0525 && lat === 46.9057) + 1),
   ],
-  // Diósd to the M0's west junction, then the M1 exactly as drawn — through
-  // Tatabánya and Győr to the Hegyeshalom crossing — the route toward Germany.
+  // Diósd → M1 to the Hegyeshalom crossing → on through Austria (Wien, Linz,
+  // Salzburg) to München — the full vehicle-import run into Germany. DE.slice(1)
+  // drops its first point since it duplicates M1's Hegyeshalom endpoint.
   "diosd-germany": [
     [18.868, 47.394],
     ...M1,
+    ...DE.slice(1),
   ],
 };
 
