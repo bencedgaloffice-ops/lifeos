@@ -14,6 +14,9 @@ import {
   ShieldCheck,
   Check,
   MessageSquare,
+  ArrowRightLeft,
+  Plus,
+  CheckCircle2,
   type LucideIcon,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
@@ -42,12 +45,16 @@ type Props = {
   portfolioValue: number;
   businessNet: number;
   savingsRate: number;
+  monthIncome: number;
+  monthSpending: number;
   accounts: { id: string; name: string; type: string; balance: number }[];
   assets: { id: string; name: string; category: "property" | "vehicle" | "business" | "other"; value: number }[];
+  holdings: { id: string; symbol: string; value: number }[];
   trend: { date: string; value: number }[];
+  onManage?: () => void;
 };
 
-type Section = "portfolio" | "assets" | "accounts" | "advisors";
+type Section = "portfolio" | "cashflow" | "investments" | "assets" | "accounts" | "advisors";
 
 export function TreasuryDashboard(props: Props) {
   const { t, locale } = useLocale();
@@ -87,10 +94,18 @@ export function TreasuryDashboard(props: Props) {
 
   const rail: { key: Section; label: string; icon: LucideIcon }[] = [
     { key: "portfolio", label: t("treasury.railPortfolio"), icon: PieChart },
+    { key: "cashflow", label: t("treasury.railCashFlow"), icon: ArrowRightLeft },
+    { key: "investments", label: t("treasury.railInvestments"), icon: LineIcon },
     { key: "assets", label: t("treasury.railAssets"), icon: Building },
     { key: "accounts", label: t("treasury.railAccounts"), icon: Landmark },
     { key: "advisors", label: t("treasury.railAdvisors"), icon: Users },
   ];
+
+  // Cash-flow intelligence (monthly).
+  const passiveMonthly = Math.round((m.realEstate * 0.04 + m.investments * 0.06 + m.valuables * 0) / 12);
+  const businessMonthly = Math.max(0, Math.round(props.businessNet));
+  const activeMonthly = Math.max(0, Math.round(props.monthIncome - businessMonthly));
+  const freeCashFlow = Math.round(props.monthIncome + passiveMonthly - props.monthSpending);
 
   return (
     <div className="flex overflow-hidden rounded-3xl border" style={{ borderColor: HAIR, background: "#0b0b0c" }}>
@@ -197,8 +212,59 @@ export function TreasuryDashboard(props: Props) {
           </motion.div>
         )}
 
+        {section === "cashflow" && (
+          <motion.div key="cf" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="pt-7">
+            <p className="text-[0.6rem] font-semibold uppercase tracking-[0.35em]" style={{ color: GOLD }}>{t("treasury.railCashFlow")}</p>
+            <h2 className="mt-1 font-serif text-2xl" style={{ color: CREAM }}>{t("treasury.cashFlowTitle")}</h2>
+            <p className="text-sm" style={{ color: MUTE }}>{t("treasury.cashFlowSub")}</p>
+
+            {props.monthIncome === 0 && props.monthSpending === 0 ? (
+              <ManageHint text={t("treasury.emptyCashFlow")} cta={t("treasury.manageCta")} onManage={props.onManage} />
+            ) : (
+              <>
+                <div className="mt-6 divide-y" style={{ borderColor: HAIR }}>
+                  <FlowRow label={t("treasury.activeIncome")} value={fc(activeMonthly)} tone="pos" />
+                  <FlowRow label={t("treasury.businessIncome")} value={fc(businessMonthly)} tone="pos" />
+                  <FlowRow label={t("treasury.passiveIncome")} value={fc(passiveMonthly)} tone="pos" hint={t("treasury.est")} />
+                  <FlowRow label={t("treasury.monthlyExpenses")} value={`- ${fc(props.monthSpending)}`} tone="neg" />
+                </div>
+                <div className="mt-4 flex items-center justify-between rounded-xl border p-5" style={{ borderColor: "rgba(192,161,94,0.4)", background: "rgba(192,161,94,0.06)" }}>
+                  <span className="text-[0.65rem] font-semibold uppercase tracking-[0.25em]" style={{ color: GOLD }}>{t("treasury.freeCashFlow")}</span>
+                  <span className="font-serif text-2xl" style={{ color: freeCashFlow >= 0 ? GREEN : ROSE }}>{fc(freeCashFlow)}</span>
+                </div>
+                <p className="mt-2 text-[0.7rem]" style={{ color: MUTE }}>{t("treasury.perMonth")}</p>
+              </>
+            )}
+          </motion.div>
+        )}
+
+        {section === "investments" && (
+          <motion.div key="inv" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="pt-7">
+            <p className="text-[0.6rem] font-semibold uppercase tracking-[0.35em]" style={{ color: GOLD }}>{t("treasury.railInvestments")}</p>
+            <h2 className="mt-1 font-serif text-2xl" style={{ color: CREAM }}>{t("treasury.investments")}</h2>
+            <p className="mt-4 text-[0.6rem] uppercase tracking-[0.3em]" style={{ color: MUTE }}>{t("treasury.portfolioValue")}</p>
+            <p className="font-serif text-4xl" style={{ color: "#F4EFE3" }}>{fc(props.portfolioValue)}</p>
+            {props.holdings.length === 0 ? (
+              <ManageHint text={t("treasury.emptyInvestments")} cta={t("treasury.manageCta")} onManage={props.onManage} />
+            ) : (
+              <div className="mt-5 divide-y" style={{ borderColor: HAIR }}>
+                {props.holdings.map((h) => (
+                  <div key={h.id} className="flex items-center justify-between py-3">
+                    <span className="text-sm" style={{ color: CREAM }}>{h.symbol}</span>
+                    <span className="font-serif text-lg" style={{ color: CREAM }}>{fc(h.value)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+
         {section === "assets" && (
-          <motion.div key="a" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="grid gap-3 pt-7 sm:grid-cols-2 lg:grid-cols-3">
+          <motion.div key="a" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="pt-7">
+            {props.assets.length === 0 && props.accounts.length === 0 && (
+              <ManageHint text={t("treasury.emptyAssets")} cta={t("treasury.manageCta")} onManage={props.onManage} />
+            )}
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {[
               { key: "realEstate", icon: Building, value: m.realEstate },
               { key: "businesses", icon: Briefcase, value: m.businesses },
@@ -215,6 +281,7 @@ export function TreasuryDashboard(props: Props) {
                 </div>
               );
             })}
+            </div>
           </motion.div>
         )}
 
@@ -246,6 +313,7 @@ export function TreasuryDashboard(props: Props) {
 /* ---------------- Advisors desk ---------------- */
 function Advisors({ m, fc }: { m: { liabilities: number; cash: number; investments: number }; fc: (n: number) => string }) {
   const { t } = useLocale();
+  const [resolved, setResolved] = useState<Record<number, string>>({});
   const items: { title: string; sub: string }[] = [];
   if (m.liabilities > 0) items.push({ title: t("treasury.advLiabTitle"), sub: `${t("treasury.advLiabSub")} ${fc(m.liabilities)}.` });
   items.push({ title: t("treasury.advValTitle"), sub: t("treasury.advValSub") });
@@ -272,17 +340,26 @@ function Advisors({ m, fc }: { m: { liabilities: number; cash: number; investmen
         <div>
           <p className="text-[0.6rem] font-semibold uppercase tracking-[0.3em]" style={{ color: MUTE }}>{t("treasury.waitingOnYou")}</p>
           <div className="mt-3 space-y-3">
-            {items.map((it, i) => (
-              <div key={i} className="rounded-xl border p-4" style={{ borderColor: HAIR }}>
-                <p className="font-serif text-base" style={{ color: CREAM }}>{it.title}</p>
-                <p className="mt-1 text-sm" style={{ color: MUTE }}>{it.sub}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <AdvBtn icon={Check} label={t("treasury.approve")} gold />
-                  <AdvBtn icon={MessageSquare} label={t("treasury.ask")} />
-                  <AdvBtn icon={ShieldCheck} label={t("treasury.letHandle")} />
+            {items.map((it, i) => {
+              const state = resolved[i];
+              return (
+                <div key={i} className="rounded-xl border p-4" style={{ borderColor: state ? "rgba(107,169,127,0.4)" : HAIR }}>
+                  <p className="font-serif text-base" style={{ color: CREAM }}>{it.title}</p>
+                  <p className="mt-1 text-sm" style={{ color: MUTE }}>{it.sub}</p>
+                  {state ? (
+                    <p className="mt-3 inline-flex items-center gap-1.5 text-xs" style={{ color: GREEN }}>
+                      <CheckCircle2 className="h-3.5 w-3.5" /> {state}
+                    </p>
+                  ) : (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <AdvBtn icon={Check} label={t("treasury.approve")} gold onClick={() => setResolved((r) => ({ ...r, [i]: t("treasury.approved") }))} />
+                      <AdvBtn icon={MessageSquare} label={t("treasury.ask")} onClick={() => setResolved((r) => ({ ...r, [i]: t("treasury.asked") }))} />
+                      <AdvBtn icon={ShieldCheck} label={t("treasury.letHandle")} onClick={() => setResolved((r) => ({ ...r, [i]: t("treasury.handled") }))} />
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
@@ -290,14 +367,44 @@ function Advisors({ m, fc }: { m: { liabilities: number; cash: number; investmen
   );
 }
 
-function AdvBtn({ icon: Icon, label, gold }: { icon: LucideIcon; label: string; gold?: boolean }) {
+function AdvBtn({ icon: Icon, label, gold, onClick }: { icon: LucideIcon; label: string; gold?: boolean; onClick?: () => void }) {
   return (
     <button
-      className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs uppercase tracking-wider transition-colors"
+      onClick={onClick}
+      className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs uppercase tracking-wider transition-colors hover:opacity-80"
       style={{ borderColor: gold ? GOLD : HAIR, color: gold ? GOLD : MUTE }}
     >
       <Icon className="h-3 w-3" /> {label}
     </button>
+  );
+}
+
+function FlowRow({ label, value, tone, hint }: { label: string; value: string; tone: "pos" | "neg"; hint?: string }) {
+  return (
+    <div className="flex items-center justify-between py-3">
+      <span className="text-sm" style={{ color: MUTE }}>
+        {label}
+        {hint && <span className="ml-1.5 text-[0.65rem]" style={{ color: "rgba(236,230,216,0.3)" }}>· {hint}</span>}
+      </span>
+      <span className="font-serif text-lg" style={{ color: tone === "neg" ? ROSE : CREAM }}>{value}</span>
+    </div>
+  );
+}
+
+function ManageHint({ text, cta, onManage }: { text: string; cta: string; onManage?: () => void }) {
+  return (
+    <div className="mt-5 flex flex-col items-start gap-3 rounded-xl border border-dashed p-5" style={{ borderColor: HAIR }}>
+      <p className="text-sm" style={{ color: MUTE }}>{text}</p>
+      {onManage && (
+        <button
+          onClick={onManage}
+          className="inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs uppercase tracking-wider transition-colors hover:opacity-80"
+          style={{ borderColor: GOLD, color: GOLD }}
+        >
+          <Plus className="h-3 w-3" /> {cta}
+        </button>
+      )}
+    </div>
   );
 }
 

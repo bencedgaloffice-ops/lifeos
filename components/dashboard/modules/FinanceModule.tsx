@@ -119,9 +119,13 @@ export function FinanceModule(props: Props) {
           portfolioValue={props.portfolioValue}
           businessNet={props.businessNet}
           savingsRate={props.savingsRate}
+          monthIncome={props.monthIncome}
+          monthSpending={props.monthSpending}
           accounts={props.accounts}
           assets={props.assets}
+          holdings={props.holdings}
           trend={props.trend}
+          onManage={() => setView("classic")}
         />
       ) : (
       <div>
