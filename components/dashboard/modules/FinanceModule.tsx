@@ -32,7 +32,9 @@ import {
   Field,
   inputClass,
   Numeral,
+  Segmented,
 } from "@/components/dashboard/ui";
+import { TreasuryDashboard } from "@/components/dashboard/finance/TreasuryDashboard";
 import {
   createTransaction,
   deleteTransaction,
@@ -89,6 +91,7 @@ export function FinanceModule(props: Props) {
   const { currency } = props;
   const { t, locale } = useLocale();
   const [openForm, setOpenForm] = useState<null | "tx" | "account" | "asset" | "budget" | "recurring">(null);
+  const [view, setView] = useState<"treasury" | "classic">("treasury");
   const [, startTransition] = useTransition();
   const today = new Date().toISOString().slice(0, 10);
 
@@ -96,6 +99,32 @@ export function FinanceModule(props: Props) {
 
   return (
     <div>
+      <div className="mb-5 flex items-center justify-end">
+        <Segmented
+          value={view}
+          onChange={setView}
+          options={[
+            { value: "treasury", label: t("treasury.viewTreasury") },
+            { value: "classic", label: t("treasury.viewClassic") },
+          ]}
+        />
+      </div>
+
+      {view === "treasury" ? (
+        <TreasuryDashboard
+          currency={props.currency}
+          holderName={props.holderName}
+          netWorth={props.netWorth}
+          accountsTotal={props.accountsTotal}
+          portfolioValue={props.portfolioValue}
+          businessNet={props.businessNet}
+          savingsRate={props.savingsRate}
+          accounts={props.accounts}
+          assets={props.assets}
+          trend={props.trend}
+        />
+      ) : (
+      <div>
       <ModuleHeader
         icon={Wallet}
         title={t("finance.title")}
@@ -622,6 +651,8 @@ export function FinanceModule(props: Props) {
           )}
         </Panel>
       </div>
+      </div>
+      )}
     </div>
   );
 }
