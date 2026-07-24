@@ -1,6 +1,5 @@
 # Deploy marker
 
 Production deploys of gal-lifeos.vercel.app are driven by pushes to `main`.
-Fresh push after the GitHub<->Vercel integration was reconnected a second time,
-to trigger a production build of the current main.
-Nonce: 20260724T070853Z
+Fresh push after granting the Vercel GitHub App repository access to lifeos.
+Nonce: 20260724T071419Z
