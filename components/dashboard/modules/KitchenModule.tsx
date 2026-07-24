@@ -83,30 +83,34 @@ export function KitchenModule({ items, shoppingList, suggestions }: Props) {
     setLogged((prev) => new Set(prev).add(meal.id));
   }
 
-  return (
-    <div>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <ModuleHeader icon={ChefHat} title={t("kitchen.title")} subtitle={t("kitchen.subtitle")} accent="kitchen" />
-        <Segmented
-          value={view}
-          onChange={setView}
-          options={[
-            { value: "world", label: t("kitchen.viewWorld") },
-            { value: "manager", label: t("kitchen.viewManager") },
-          ]}
-        />
-      </div>
+  const toggle = (
+    <Segmented
+      value={view}
+      onChange={setView}
+      options={[
+        { value: "world", label: t("kitchen.viewWorld") },
+        { value: "manager", label: t("kitchen.viewManager") },
+      ]}
+    />
+  );
 
-      {view === "world" ? (
-        <div className="relative mt-2 h-[64vh] min-h-[460px] overflow-hidden rounded-3xl border border-white/10 bg-black/60">
-          <div className="absolute inset-0">
-            <Kitchen3DCanvas selected={selected} onSelect={setSelected} labels={objectLabels} />
+  // World view is a full-bleed, immersive page — it breaks out of the
+  // dashboard's content padding and fills the viewport below the topbar.
+  if (view === "world") {
+    return (
+      <div className="relative -mx-5 -my-7 h-[calc(100dvh-73px)] overflow-hidden bg-black sm:-mx-8 sm:-my-9">
+        <div className="absolute inset-0">
+          <Kitchen3DCanvas selected={selected} onSelect={setSelected} labels={objectLabels} />
+        </div>
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-5 sm:p-6">
+          <div>
+            <h1 className="text-lg font-semibold tracking-tight text-white sm:text-xl">{t("kitchen.title")}</h1>
+            <p className="mt-1 text-[0.6rem] uppercase tracking-[0.25em] text-white/45">{t("kitchen.worldHint")}</p>
           </div>
-          <p className="pointer-events-none absolute left-4 top-4 z-10 text-[0.6rem] uppercase tracking-[0.25em] text-white/40">
-            {t("kitchen.worldHint")}
-          </p>
-          {selected && (
-            <div className="absolute right-3 top-3 z-20 max-h-[calc(100%-1.5rem)] w-72 overflow-y-auto rounded-2xl border border-white/10 bg-black/80 p-4 backdrop-blur-md">
+          <div className="pointer-events-auto">{toggle}</div>
+        </div>
+        {selected && (
+            <div className="absolute right-3 top-24 z-20 max-h-[calc(100%-7rem)] w-72 overflow-y-auto rounded-2xl border border-white/10 bg-black/80 p-4 backdrop-blur-md">
               <div className="mb-3 flex items-center justify-between">
                 <p className="text-sm font-semibold text-white/90">{objectLabels[selected]}</p>
                 <button onClick={() => setSelected(null)} className="text-white/40 hover:text-white">✕</button>
@@ -154,10 +158,18 @@ export function KitchenModule({ items, shoppingList, suggestions }: Props) {
               )}
             </div>
           )}
-        </div>
-      ) : (
-      <>
-      <div className="grid gap-4 lg:grid-cols-3">
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <ModuleHeader icon={ChefHat} title={t("kitchen.title")} subtitle={t("kitchen.subtitle")} accent="kitchen" />
+        {toggle}
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
         {(["fridge", "pantry", "freezer"] as const).map((loc) => {
           const Icon = locationIcons[loc];
           return (
@@ -366,8 +378,6 @@ export function KitchenModule({ items, shoppingList, suggestions }: Props) {
           )}
         </Panel>
       </div>
-      </>
-      )}
     </div>
   );
 }
