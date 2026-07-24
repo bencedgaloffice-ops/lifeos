@@ -43,9 +43,9 @@ const SCHEDULE: MissionLeg[] = [
   { kind: "work", from: "budapest", to: "budapest", routeKey: null, missionKey: "financeMeetings", simSeconds: 50, realMinutes: 0 },
   { kind: "drive", from: "budapest", to: "diosd", routeKey: "diosd-budapest", missionKey: "returningHome", simSeconds: 25, realMinutes: 18 },
   { kind: "wait", from: "diosd", to: "diosd", routeKey: null, missionKey: "atHomeBase", simSeconds: 30, realMinutes: 0 },
-  { kind: "drive", from: "diosd", to: "germany", routeKey: "diosd-germany", missionKey: "importRun", simSeconds: 85, realMinutes: 165 },
+  { kind: "drive", from: "diosd", to: "germany", routeKey: "diosd-germany", missionKey: "importRun", simSeconds: 110, realMinutes: 360 },
   { kind: "work", from: "germany", to: "germany", routeKey: null, missionKey: "importPickup", simSeconds: 60, realMinutes: 0 },
-  { kind: "drive", from: "germany", to: "diosd", routeKey: "diosd-germany", missionKey: "returningHome", simSeconds: 85, realMinutes: 165 },
+  { kind: "drive", from: "germany", to: "diosd", routeKey: "diosd-germany", missionKey: "returningHome", simSeconds: 110, realMinutes: 360 },
   { kind: "wait", from: "diosd", to: "diosd", routeKey: null, missionKey: "atHomeBase", simSeconds: 35, realMinutes: 0 },
 ];
 
