@@ -42,6 +42,8 @@ const config: Config = {
         display: ["var(--font-display)", "var(--font-inter)", "system-ui", "sans-serif"],
         // Numeric/readout face — currency, stats, dates, technical figures.
         mono: ["var(--font-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
+        // Editorial serif — Treasury / private family-office headings & figures.
+        serif: ["var(--font-serif)", "Georgia", "Cambria", "serif"],
       },
       letterSpacing: {
         tightest: "-0.045em",

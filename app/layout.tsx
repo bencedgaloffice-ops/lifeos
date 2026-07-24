@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Space_Grotesk, JetBrains_Mono } from "next/font/google";
+import { Inter, Space_Grotesk, JetBrains_Mono, Fraunces } from "next/font/google";
 import { StructuredData } from "@/components/StructuredData";
 import { LocaleProvider } from "@/lib/i18n/LocaleProvider";
 import { getServerLocale } from "@/lib/i18n/server";
@@ -26,6 +26,16 @@ const jetbrainsMono = JetBrains_Mono({
   display: "swap",
   variable: "--font-mono",
   weight: ["400", "500", "600"],
+});
+
+// Editorial serif — the private-bank / family-office face used by Treasury
+// for headlines and large monetary figures.
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-serif",
+  weight: ["400", "500", "600", "700"],
+  style: ["normal", "italic"],
 });
 
 const siteUrl = "https://lifeos.app";
@@ -84,7 +94,7 @@ export default async function RootLayout({
   const locale = await getServerLocale();
 
   return (
-    <html lang={locale} className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable}`}>
+    <html lang={locale} className={`${inter.variable} ${spaceGrotesk.variable} ${jetbrainsMono.variable} ${fraunces.variable}`}>
       <head>
         <StructuredData />
       </head>

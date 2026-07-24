@@ -1,25 +1,25 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Building, Briefcase, LineChart, Landmark, Gem, ArrowUpRight, ArrowDownRight, ShieldCheck, type LucideIcon } from "lucide-react";
+import { RefreshCw, Building, Briefcase, LineChart, Landmark, Gem } from "lucide-react";
 import { formatCurrency } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 
 /**
- * LifeOS Treasury — Step 1.
- *
- * A private family-office wealth dashboard: a dark-luxury Net Worth hero,
- * the Wealth Overview (assets / liabilities / net worth / health score), and
- * the Asset Portfolio. Runs on the same real data the Finance module already
- * loads; further sections (Cash Flow, Wealth Timeline, AI Advisor) land in
- * later steps. Palette is charcoal glass with gold + white accents.
+ * LifeOS Treasury — a private family-office wealth dashboard modelled on the
+ * Signet aesthetic: warm near-black canvas, an editorial serif for headings
+ * and monetary figures, restrained champagne-gold with muted green (positive)
+ * and rose (liabilities) accents, flat hairline cards (no glassmorphism), a
+ * gold-underlined tab row, and the signature gold "KEY INSIGHT" advisory box.
+ * Runs entirely on the real finance data the module already loads.
  */
 
-const GOLD = "#C9A227";
-const GOLD_SOFT = "#E7C766";
-const POS = "#3FBF8F";
-const NEG = "#E0605E";
+const GOLD = "#C0A15E";
+const CREAM = "#ECE6D8";
+const GREEN = "#6BA97F";
+const ROSE = "#C88686";
+const GRID = "rgba(236,230,216,0.10)";
 
 type Props = {
   currency: string;
@@ -34,213 +34,230 @@ type Props = {
   trend: { date: string; value: number }[];
 };
 
+type Tab = "networth" | "assets" | "accounts";
+
 export function TreasuryDashboard(props: Props) {
   const { t, locale } = useLocale();
   const fc = (n: number) => formatCurrency(n, props.currency, { locale });
-  const fcCompact = (n: number) =>
-    new Intl.NumberFormat(locale === "hu" ? "hu-HU" : "en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n);
+  const [tab, setTab] = useState<Tab>("networth");
 
-  const model = useMemo(() => {
-    const liab = props.accounts
+  const m = useMemo(() => {
+    const liabilities = props.accounts
       .filter((a) => a.balance < 0 || /credit|loan|mortgage|debt/i.test(a.type))
       .reduce((s, a) => s + Math.abs(a.balance), 0);
-    const totalAssets = props.netWorth + liab;
-
-    const bucket = (cat: Props["assets"][number]["category"]) => props.assets.filter((a) => a.category === cat).reduce((s, a) => s + a.value, 0);
-    const realEstate = bucket("property");
-    const businesses = Math.max(bucket("business"), props.businessNet > 0 ? props.businessNet : 0);
-    const investments = props.portfolioValue;
     const cash = props.accounts.filter((a) => a.balance > 0).reduce((s, a) => s + a.balance, 0);
-    const valuables = bucket("vehicle") + bucket("other");
+    const accountsValue = cash + props.portfolioValue;
+    const totalBeforeDebt = props.netWorth + liabilities;
+    const otherAssets = Math.max(0, totalBeforeDebt - accountsValue);
 
-    // Yearly growth from the net-worth snapshot trend.
+    const bucket = (c: Props["assets"][number]["category"]) => props.assets.filter((a) => a.category === c).reduce((s, a) => s + a.value, 0);
+    const accountsPct = totalBeforeDebt > 0 ? Math.round((accountsValue / totalBeforeDebt) * 100) : 0;
+
     const first = props.trend[0]?.value;
     const last = props.trend[props.trend.length - 1]?.value ?? props.netWorth;
     const yearGrowth = first && first > 0 ? ((last - first) / first) * 100 : null;
 
-    // Financial health: solvency + diversification + savings behaviour.
-    const solvency = totalAssets > 0 ? Math.max(0, 1 - liab / totalAssets) : 0;
-    const classes = [realEstate, businesses, investments, cash, valuables].filter((v) => v > 0).length;
-    const diversification = Math.min(1, classes / 4);
-    const savings = Math.max(0, Math.min(1, (props.savingsRate + 20) / 70));
-    const health = Math.round((solvency * 0.5 + diversification * 0.25 + savings * 0.25) * 100);
+    // Key insight — a real, plain-language read on leverage.
+    let insight: string;
+    if (liabilities <= 0) insight = t("treasury.insightNoDebt");
+    else if (cash >= liabilities) insight = t("treasury.insightLight");
+    else if (totalBeforeDebt * 0.4 >= liabilities) insight = t("treasury.insightModerate");
+    else insight = t("treasury.insightWatch");
 
-    return { liab, totalAssets, realEstate, businesses, investments, cash, valuables, yearGrowth, health };
-  }, [props]);
+    return {
+      liabilities,
+      cash,
+      accountsValue,
+      otherAssets,
+      totalBeforeDebt,
+      accountsPct,
+      yearGrowth,
+      insight,
+      realEstate: bucket("property"),
+      businesses: Math.max(bucket("business"), props.businessNet > 0 ? props.businessNet : 0),
+      investments: props.portfolioValue,
+      valuables: bucket("vehicle") + bucket("other"),
+    };
+  }, [props, t]);
 
-  const portfolio: { key: string; icon: LucideIcon; value: number; yield: number }[] = [
-    { key: "realEstate", icon: Building, value: model.realEstate, yield: 0.04 },
-    { key: "businesses", icon: Briefcase, value: model.businesses, yield: 0.16 },
-    { key: "investments", icon: LineChart, value: model.investments, yield: 0.06 },
-    { key: "cashReserves", icon: Landmark, value: model.cash, yield: 0.02 },
-    { key: "valuableAssets", icon: Gem, value: model.valuables, yield: 0 },
+  const refreshed = new Intl.DateTimeFormat(locale === "hu" ? "hu-HU" : "en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date());
+
+  const tabs: { key: Tab; label: string }[] = [
+    { key: "networth", label: t("treasury.tabNetWorth") },
+    { key: "assets", label: t("treasury.tabAssets") },
+    { key: "accounts", label: t("treasury.tabAccounts") },
   ];
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="rounded-3xl border border-[color:rgba(236,230,216,0.08)] bg-[#0b0b0c] p-6 sm:p-8" style={{ fontFamily: "var(--font-inter)" }}>
+      {/* Entity header */}
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[color:rgba(236,230,216,0.08)] pb-5">
         <div>
-          <p className="text-[0.6rem] font-semibold uppercase tracking-[0.4em]" style={{ color: GOLD }}>
-            {t("treasury.eyebrow")}
+          <p className="text-[0.6rem] font-semibold uppercase tracking-[0.35em]" style={{ color: GREEN }}>
+            {t("treasury.active")}
           </p>
-          <h1 className="mt-1 font-display text-3xl tracking-tight text-white">{t("treasury.title")}</h1>
+          <h1 className="mt-1 font-serif text-2xl text-[color:#ECE6D8] sm:text-3xl">
+            {props.holderName ? `${props.holderName} ${t("treasury.familyOffice")}` : t("treasury.title")}
+          </h1>
+          <p className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-[color:rgba(236,230,216,0.4)]">
+            <RefreshCw className="h-3 w-3" /> {t("treasury.lastRefreshed")} {refreshed}
+          </p>
         </div>
-        {props.holderName && (
-          <div className="text-right">
-            <p className="text-[0.55rem] uppercase tracking-[0.3em] text-white/35">{t("treasury.holder")}</p>
-            <p className="font-display text-sm text-white/80">{props.holderName}</p>
-          </div>
-        )}
+        <span className="rounded-md border px-3 py-1 font-serif text-sm italic" style={{ borderColor: GRID, color: GOLD }}>
+          {t("treasury.title")}
+        </span>
       </div>
 
-      {/* Net Worth hero */}
-      <motion.div
-        initial={{ opacity: 0, y: 14 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
-        className="relative overflow-hidden rounded-3xl border p-7 sm:p-9"
-        style={{ borderColor: "rgba(201,162,39,0.25)", background: "linear-gradient(135deg, rgba(201,162,39,0.07), rgba(255,255,255,0.015) 45%, rgba(0,0,0,0.2))" }}
-      >
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -right-16 -top-20 h-64 w-64 rounded-full opacity-40 blur-3xl"
-          style={{ background: "radial-gradient(circle, rgba(201,162,39,0.4), transparent 70%)" }}
-        />
-        <div className="relative flex flex-wrap items-end justify-between gap-6">
-          <div>
-            <p className="flex items-center gap-2 text-[0.6rem] font-semibold uppercase tracking-[0.35em] text-white/45">
-              <span className="h-px w-6" style={{ background: GOLD }} /> {t("treasury.netWorth")}
-            </p>
-            <p className="mt-3 font-display text-4xl leading-none text-white sm:text-6xl">{fc(props.netWorth)}</p>
-            {model.yearGrowth != null && (
-              <p className="mt-3 flex items-center gap-1.5 text-sm" style={{ color: model.yearGrowth >= 0 ? POS : NEG }}>
-                {model.yearGrowth >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
-                {model.yearGrowth >= 0 ? "+" : ""}
-                {model.yearGrowth.toFixed(1)}% <span className="text-white/40">{t("treasury.thisYear")}</span>
-              </p>
+      {/* Tab row */}
+      <div className="mt-5 flex flex-wrap gap-6 border-b border-[color:rgba(236,230,216,0.08)]">
+        {tabs.map((tb) => {
+          const on = tab === tb.key;
+          return (
+            <button
+              key={tb.key}
+              onClick={() => setTab(tb.key)}
+              className="relative -mb-px pb-3 text-sm transition-colors"
+              style={{ color: on ? CREAM : "rgba(236,230,216,0.45)" }}
+            >
+              {tb.label}
+              {on && <span className="absolute inset-x-0 bottom-0 h-px" style={{ background: GOLD }} />}
+            </button>
+          );
+        })}
+      </div>
+
+      {tab === "networth" && (
+        <motion.div key="nw" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="pt-7">
+          <p className="text-[0.6rem] font-semibold uppercase tracking-[0.35em]" style={{ color: GOLD }}>
+            {t("treasury.portfolioEyebrow")}
+          </p>
+          <h2 className="mt-1 font-serif text-2xl text-[color:#ECE6D8]">{t("treasury.netWorth")}</h2>
+          <p className="text-sm text-[color:rgba(236,230,216,0.45)]">{t("treasury.netWorthSub")}</p>
+
+          <p className="mt-6 text-[0.6rem] uppercase tracking-[0.3em] text-[color:rgba(236,230,216,0.4)]">{t("treasury.totalNetWorth")}</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <span className="font-serif text-4xl leading-none text-[color:#F4EFE3] sm:text-6xl">{fc(props.netWorth)}</span>
+            {m.yearGrowth != null && (
+              <span className="mb-1 text-sm" style={{ color: m.yearGrowth >= 0 ? GREEN : ROSE }}>
+                {m.yearGrowth >= 0 ? "↑" : "↓"} {Math.abs(m.yearGrowth).toFixed(1)}%
+              </span>
             )}
           </div>
-          <Sparkline trend={props.trend} fallback={props.netWorth} />
-        </div>
-      </motion.div>
 
-      {/* Wealth Overview */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <OverviewCard label={t("treasury.totalAssets")} value={fc(model.totalAssets)} tone="white" />
-        <OverviewCard label={t("treasury.liabilities")} value={fc(model.liab)} tone="neg" />
-        <OverviewCard label={t("treasury.netWorth")} value={fc(props.netWorth)} tone="gold" />
-        <HealthCard label={t("treasury.healthScore")} score={model.health} />
-      </div>
+          {/* Three-card balance sheet */}
+          <div className="mt-7 grid gap-3 md:grid-cols-3">
+            <BalanceCard label={t("treasury.accounts")} value={fc(m.accountsValue)} sub={t("treasury.cashInvestments")} />
+            <BalanceCard label={t("treasury.otherAssets")} value={fc(m.otherAssets)} sub={t("treasury.propertyHoldings")} />
+            <BalanceCard label={t("treasury.liabilities")} value={fc(m.liabilities)} sub={t("treasury.loansCredit")} color={ROSE} />
+          </div>
 
-      {/* Asset Portfolio */}
-      <div>
-        <p className="mb-3 flex items-center gap-2 text-[0.7rem] font-semibold uppercase tracking-[0.3em] text-white/55">
-          <span className="h-px w-5" style={{ background: GOLD }} /> {t("treasury.portfolio")}
-        </p>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {portfolio.map((p, i) => {
-            const income = p.value * p.yield;
-            const active = p.value > 0;
-            const Icon = p.icon;
+          {/* Key insight (AI advisor) */}
+          <div className="mt-4 overflow-hidden rounded-xl border" style={{ borderColor: "rgba(192,161,94,0.45)", background: "linear-gradient(90deg, rgba(192,161,94,0.12), rgba(192,161,94,0.03))" }}>
+            <div className="border-l-2 p-5" style={{ borderColor: GOLD }}>
+              <p className="text-[0.6rem] font-semibold uppercase tracking-[0.3em]" style={{ color: GOLD }}>
+                {t("treasury.keyInsight")}
+              </p>
+              <p className="mt-2 font-serif text-lg text-[color:#ECE6D8]">{m.insight}</p>
+            </div>
+          </div>
+
+          {/* Composition + snapshot */}
+          <div className="mt-6 grid gap-6 lg:grid-cols-2">
+            <div>
+              <p className="text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-[color:rgba(236,230,216,0.5)]">{t("treasury.composition")}</p>
+              <p className="mt-2 text-xs text-[color:rgba(236,230,216,0.45)]">
+                {t("treasury.totalBeforeDebt")} <span className="text-[color:#ECE6D8]">{fc(m.totalBeforeDebt)}</span>
+              </p>
+              <div className="mt-3 flex h-2 overflow-hidden rounded-full" style={{ background: "rgba(236,230,216,0.08)" }}>
+                <div style={{ width: `${m.accountsPct}%`, background: GOLD }} />
+                <div style={{ width: `${100 - m.accountsPct}%`, background: "rgba(236,230,216,0.28)" }} />
+              </div>
+              <div className="mt-2 flex gap-4 text-[0.7rem] text-[color:rgba(236,230,216,0.5)]">
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full" style={{ background: GOLD }} /> {t("treasury.accounts")} {m.accountsPct}%
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full" style={{ background: "rgba(236,230,216,0.28)" }} /> {t("treasury.other")} {100 - m.accountsPct}%
+                </span>
+              </div>
+            </div>
+            <div>
+              <p className="text-[0.6rem] font-semibold uppercase tracking-[0.3em] text-[color:rgba(236,230,216,0.5)]">{t("treasury.snapshot")}</p>
+              <dl className="mt-3 space-y-2 text-sm">
+                <SnapRow k={t("treasury.cashVsDebt")} v={m.liabilities > 0 ? `${Math.round((m.cash / m.liabilities) * 100)}%` : "∞"} />
+                <SnapRow k={t("treasury.linkedAccounts")} v={`${props.accounts.length}`} />
+                <SnapRow k={t("treasury.holdingsRecorded")} v={`${props.assets.length}`} />
+              </dl>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      {tab === "assets" && (
+        <motion.div key="as" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="grid gap-3 pt-7 sm:grid-cols-2 lg:grid-cols-3">
+          {[
+            { key: "realEstate", icon: Building, value: m.realEstate },
+            { key: "businesses", icon: Briefcase, value: m.businesses },
+            { key: "investments", icon: LineChart, value: m.investments },
+            { key: "cashReserves", icon: Landmark, value: m.cash },
+            { key: "valuableAssets", icon: Gem, value: m.valuables },
+          ].map((a) => {
+            const Icon = a.icon;
             return (
-              <motion.div
-                key={p.key}
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05, duration: 0.5 }}
-                className="group rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 transition-colors hover:border-[color:rgba(201,162,39,0.35)]"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl" style={{ background: "rgba(201,162,39,0.12)", color: GOLD_SOFT }}>
-                    <Icon className="h-4 w-4" />
-                  </span>
-                  <span className="flex items-center gap-1.5 text-[0.6rem] uppercase tracking-wider" style={{ color: active ? POS : "rgba(255,255,255,0.3)" }}>
-                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: active ? POS : "rgba(255,255,255,0.3)" }} />
-                    {active ? t("treasury.active") : t("treasury.dormant")}
-                  </span>
-                </div>
-                <p className="mt-4 text-[0.6rem] uppercase tracking-[0.2em] text-white/40">{t(`treasury.${p.key}`)}</p>
-                <p className="mt-1 font-display text-2xl text-white">{fc(p.value)}</p>
-                {income > 0 && (
-                  <p className="mt-2 text-xs text-white/45">
-                    {t("treasury.income")} ≈ <span style={{ color: GOLD_SOFT }}>{fcCompact(income)}</span>
-                    {t("treasury.perYear")} · {t("treasury.est")}
-                  </p>
-                )}
-              </motion.div>
+              <div key={a.key} className="rounded-xl border border-[color:rgba(236,230,216,0.08)] p-5">
+                <Icon className="h-4 w-4" style={{ color: GOLD }} />
+                <p className="mt-3 text-[0.6rem] uppercase tracking-[0.2em] text-[color:rgba(236,230,216,0.45)]">{t(`treasury.${a.key}`)}</p>
+                <p className="mt-1 font-serif text-2xl text-[color:#ECE6D8]">{fc(a.value)}</p>
+              </div>
             );
           })}
-          {/* Placeholder tile pointing at upcoming steps */}
-          <div className="flex items-center rounded-2xl border border-dashed border-white/10 bg-transparent p-5 text-xs leading-relaxed text-white/35">
-            <span className="flex items-center gap-2">
-              <ShieldCheck className="h-4 w-4 flex-none" style={{ color: GOLD }} /> {t("treasury.soon")}
-            </span>
+        </motion.div>
+      )}
+
+      {tab === "accounts" && (
+        <motion.div key="ac" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="pt-7">
+          <div className="divide-y divide-[color:rgba(236,230,216,0.07)]">
+            {props.accounts.length === 0 && <p className="py-6 text-sm text-[color:rgba(236,230,216,0.4)]">{t("treasury.noAccounts")}</p>}
+            {props.accounts.map((a) => (
+              <div key={a.id} className="flex items-center justify-between py-3">
+                <div>
+                  <p className="text-sm text-[color:#ECE6D8]">{a.name}</p>
+                  <p className="text-[0.65rem] uppercase tracking-wider text-[color:rgba(236,230,216,0.4)]">{a.type}</p>
+                </div>
+                <span className="font-serif text-lg" style={{ color: a.balance < 0 ? ROSE : CREAM }}>
+                  {fc(a.balance)}
+                </span>
+              </div>
+            ))}
           </div>
-        </div>
-      </div>
+        </motion.div>
+      )}
     </div>
   );
 }
 
-function OverviewCard({ label, value, tone }: { label: string; value: string; tone: "white" | "gold" | "neg" }) {
-  const color = tone === "gold" ? GOLD_SOFT : tone === "neg" ? NEG : "#ffffff";
+function BalanceCard({ label, value, sub, color }: { label: string; value: string; sub: string; color?: string }) {
   return (
-    <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-      <p className="text-[0.6rem] uppercase tracking-[0.2em] text-white/40">{label}</p>
-      <p className="mt-2 font-display text-xl sm:text-2xl" style={{ color }}>
+    <div className="rounded-xl border border-[color:rgba(236,230,216,0.08)] p-5">
+      <p className="text-[0.6rem] uppercase tracking-[0.2em] text-[color:rgba(236,230,216,0.4)]">{label}</p>
+      <p className="mt-2 font-serif text-2xl" style={{ color: color ?? "#ECE6D8" }}>
         {value}
       </p>
+      <p className="mt-1 text-[0.7rem] text-[color:rgba(236,230,216,0.4)]">{sub}</p>
     </div>
   );
 }
 
-function HealthCard({ label, score }: { label: string; score: number }) {
-  const r = 22;
-  const c = 2 * Math.PI * r;
-  const dash = (Math.max(0, Math.min(100, score)) / 100) * c;
-  const color = score >= 70 ? POS : score >= 40 ? GOLD : NEG;
+function SnapRow({ k, v }: { k: string; v: string }) {
   return (
-    <div className="flex items-center gap-4 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5">
-      <svg width="58" height="58" viewBox="0 0 58 58" className="flex-none -rotate-90">
-        <circle cx="29" cy="29" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="5" />
-        <circle cx="29" cy="29" r={r} fill="none" stroke={color} strokeWidth="5" strokeLinecap="round" strokeDasharray={`${dash} ${c}`} />
-      </svg>
-      <div>
-        <p className="text-[0.6rem] uppercase tracking-[0.2em] text-white/40">{label}</p>
-        <p className="mt-1 font-display text-2xl text-white">
-          {score}
-          <span className="text-sm text-white/40">/100</span>
-        </p>
-      </div>
+    <div className="flex items-center justify-between border-b border-[color:rgba(236,230,216,0.06)] pb-2">
+      <dt className="text-[color:rgba(236,230,216,0.5)]">{k}</dt>
+      <dd className="text-[color:#ECE6D8]">{v}</dd>
     </div>
-  );
-}
-
-function Sparkline({ trend, fallback }: { trend: { date: string; value: number }[]; fallback: number }) {
-  const pts = trend.length >= 2 ? trend.map((t) => t.value) : [fallback * 0.82, fallback * 0.88, fallback * 0.91, fallback * 0.97, fallback];
-  const w = 220;
-  const h = 64;
-  const min = Math.min(...pts);
-  const max = Math.max(...pts);
-  const span = max - min || 1;
-  const path = pts
-    .map((v, i) => {
-      const x = (i / (pts.length - 1)) * w;
-      const y = h - ((v - min) / span) * h;
-      return `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
-    .join(" ");
-  return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="max-w-full">
-      <defs>
-        <linearGradient id="tg" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={GOLD} stopOpacity="0.35" />
-          <stop offset="100%" stopColor={GOLD} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={`${path} L${w},${h} L0,${h} Z`} fill="url(#tg)" />
-      <path d={path} fill="none" stroke={GOLD_SOFT} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }
