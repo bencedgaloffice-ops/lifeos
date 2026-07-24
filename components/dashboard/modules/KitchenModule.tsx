@@ -37,6 +37,12 @@ type Props = {
 
 const locationIcons = { fridge: Refrigerator, pantry: Archive, freezer: Snowflake } as const;
 
+// Drop-in path for an imported GLB kitchen. Commit the file to
+// public/models/modern-kitchen.glb and it renders automatically; until it
+// exists the scene falls back to the hand-built kitchen. Set to null to
+// force the built-in kitchen.
+const KITCHEN_MODEL_URL: string | null = "/models/modern-kitchen.glb";
+
 function expiryTone(dateStr: string | null): "amber" | null {
   if (!dateStr) return null;
   const days = (new Date(dateStr).getTime() - Date.now()) / 86_400_000;
@@ -109,7 +115,7 @@ export function KitchenModule({ items, shoppingList, suggestions }: Props) {
     return (
       <div className="relative -mx-5 -my-7 h-[calc(100dvh-73px)] overflow-hidden bg-black sm:-mx-8 sm:-my-9">
         <div className="absolute inset-0">
-          <Kitchen3DCanvas selected={selected} onSelect={setSelected} labels={objectLabels} controls={controlLabels} />
+          <Kitchen3DCanvas selected={selected} onSelect={setSelected} labels={objectLabels} controls={controlLabels} modelUrl={KITCHEN_MODEL_URL} />
         </div>
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-between gap-3 p-5 sm:p-6">
           <div>

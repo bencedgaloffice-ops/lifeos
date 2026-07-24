@@ -22,6 +22,7 @@ export function Kitchen3DCanvas(props: {
   onSelect: (k: KitchenObject) => void;
   labels: Record<KitchenObject, string>;
   controls: KitchenControlLabels;
+  modelUrl?: string | null;
 }) {
   return <Kitchen3D {...props} />;
 }

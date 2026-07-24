@@ -1,12 +1,25 @@
 "use client";
 
-import { useRef, useState, useMemo, Suspense } from "react";
+import { useRef, useState, useMemo, Suspense, Component, type ReactNode } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, ContactShadows, Environment, Html, MeshReflectorMaterial } from "@react-three/drei";
 import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import { Lightbulb, LightbulbOff, Sun, Moon, Droplets, Flame, CookingPot } from "lucide-react";
 import * as THREE from "three";
 import { cn } from "@/lib/utils";
+import { KitchenModel } from "./KitchenModel";
+
+/* Error boundary so a missing/bad GLB never crashes the page — it just
+   falls back to the hand-built kitchen scene. */
+class ModelBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
 
 /**
  * The Kitchen digital twin — dark-luxury design pass.
@@ -701,11 +714,13 @@ export default function Kitchen3D({
   onSelect,
   labels,
   controls,
+  modelUrl,
 }: {
   selected: KitchenObject | null;
   onSelect: (k: KitchenObject) => void;
   labels: Record<KitchenObject, string>;
   controls: KitchenControlLabels;
+  modelUrl?: string | null;
 }) {
   const [lightsOn, setLightsOn] = useState(true);
   const [night, setNight] = useState(false);
@@ -756,27 +771,52 @@ export default function Kitchen3D({
           <Environment preset={night ? "night" : "apartment"} environmentIntensity={night ? 0.2 : 0.5} />
         </Suspense>
 
-        <Scene
-          selected={selected}
-          onSelect={onSelect}
-          labels={labels}
-          controls={controls}
-          lightsOn={lightsOn}
-          night={night}
-          water={water}
-          stove={stove}
-          oven={oven}
-          onToggleWater={() => setWater((v) => !v)}
-          onToggleStove={() => setStove((v) => !v)}
-        />
+        {modelUrl ? (
+          <ModelBoundary
+            fallback={
+              <Scene
+                selected={selected}
+                onSelect={onSelect}
+                labels={labels}
+                controls={controls}
+                lightsOn={lightsOn}
+                night={night}
+                water={water}
+                stove={stove}
+                oven={oven}
+                onToggleWater={() => setWater((v) => !v)}
+                onToggleStove={() => setStove((v) => !v)}
+              />
+            }
+          >
+            <Suspense fallback={null}>
+              <KitchenModel url={modelUrl} />
+            </Suspense>
+            <ContactShadows position={[0, 0.01, 0]} opacity={0.5} scale={22} blur={2.6} far={10} resolution={1024} color="#000000" />
+          </ModelBoundary>
+        ) : (
+          <Scene
+            selected={selected}
+            onSelect={onSelect}
+            labels={labels}
+            controls={controls}
+            lightsOn={lightsOn}
+            night={night}
+            water={water}
+            stove={stove}
+            oven={oven}
+            onToggleWater={() => setWater((v) => !v)}
+            onToggleStove={() => setStove((v) => !v)}
+          />
+        )}
 
         <OrbitControls
           enablePan={false}
           minDistance={4}
-          maxDistance={13}
+          maxDistance={14}
           minPolarAngle={0.5}
           maxPolarAngle={Math.PI / 2.15}
-          target={[0.3, 1, -0.2]}
+          target={modelUrl ? [0, 1.2, 0] : [0.3, 1, -0.2]}
           enableDamping
           dampingFactor={0.08}
         />
