@@ -1357,32 +1357,214 @@ function DoorBin({
   );
 }
 
-/* -------------------------------------------------------------- appliances */
+/* --------------------------------------------- refrigeration column */
 
 /**
- * The refrigeration column, built the way the real appliance is built.
+ * The freezer drawer — the bottom section of the refrigeration column.
  *
- * Front to back: an outer steel-and-glass shell, then the insulated wall
- * cavity, then the ABS liner that forms the actual food compartment. The
- * thickness between shell and liner is real geometry, visible at the opening —
- * this is the single biggest reason a 3D fridge reads as a hollow box or as a
- * genuine appliance.
+ * A real French-door fridge puts the freezer underneath as a pull-out drawer,
+ * not in a separate cabinet: one insulated box, one compressor, a mullion
+ * between the two climates. This renders inside the Fridge's cabinet and shares
+ * its shell, so it is a compartment rather than a second appliance.
  *
- * The doors carry their own construction: a glass front panel, an insulated
- * core, a moulded inner liner, a hollow magnetic gasket, retaining bins, and
- * visible hinge hardware at top and bottom. Opening runs handle -> gasket
- * release -> swing, and closing soft-closes into the frame.
+ * The travel is weighted heavier than a door, because a loaded freezer basket
+ * is heavy, and it soft-closes on the last centimetre.
+ */
+function FreezerDrawer({
+  open,
+  onSelect,
+  label,
+  frost,
+  items,
+  /** Cabinet geometry, so the drawer fits the column it lives in. */
+  width,
+  height,
+  depth,
+  wall,
+  y,
+}: {
+  open: boolean;
+  onSelect: (k: KitchenObject) => void;
+  label: string;
+  frost: THREE.Texture;
+  items: FoodItem[];
+  width: number;
+  height: number;
+  depth: number;
+  wall: number;
+  y: number;
+}) {
+  const d = useRef<THREE.Group>(null);
+  const vel = useRef(0);
+  const travel = useRef(0);
+  useApplianceHum(open, "freezer");
+  useEdgeSound(open, (opening) => {
+    playSeal(opening);
+    playRails(0.55);
+  });
+
+  useFrame(() => {
+    if (!d.current) return;
+    d.current.position.z = travel.current;
+  });
+  useFrame((_, dt) => {
+    const step = Math.min(dt, 0.05);
+    // Heavier mass than a door, and soft-close damping as it returns home.
+    const damping = open ? 13 : 13 + (1 - travel.current / 0.46) * 22;
+    vel.current += ((open ? 0.46 : 0) - travel.current) * 52 * step - vel.current * damping * step;
+    travel.current = Math.max(0, travel.current + vel.current * step);
+  });
+
+  const iw = width - wall * 2;
+  const ih = height - wall * 2;
+  const packs = items.slice(0, 4);
+
+  return (
+    <Hoverable name={label} hint="open" onActivate={() => onSelect("freezer")} labelY={y + height / 2 + 0.2}>
+      <group position={[0, y, 0]}>
+        {/* insulated cavity + liner inside the shared cabinet shell */}
+        <mesh position={[0, 0, 0.01]}>
+          <boxGeometry args={[width - 0.02, height - 0.014, depth - 0.03]} />
+          <meshStandardMaterial color="#d8d4cc" roughness={0.95} />
+        </mesh>
+        <mesh position={[0, 0, wall / 2]} material={LINER}>
+          <boxGeometry args={[iw, ih, depth - wall]} />
+        </mesh>
+        <mesh position={[0, 0, -depth / 2 + wall + 0.008]}>
+          <planeGeometry args={[iw - 0.01, ih - 0.01]} />
+          <meshStandardMaterial
+            color="#f2fbff"
+            roughness={0.4}
+            emissive="#bfe4ff"
+            emissiveIntensity={open ? 0.7 : 0.05}
+          />
+        </mesh>
+        {/* the visible cut edge of the insulation around the drawer opening */}
+        {[
+          { p: [0, ih / 2 + wall / 2, depth / 2 - (depth - wall) / 2], a: [iw, wall, depth - wall] },
+          { p: [0, -ih / 2 - wall / 2, depth / 2 - (depth - wall) / 2], a: [iw, wall, depth - wall] },
+          { p: [-width / 2 + wall / 2, 0, depth / 2 - (depth - wall) / 2], a: [wall, ih, depth - wall] },
+          { p: [width / 2 - wall / 2, 0, depth / 2 - (depth - wall) / 2], a: [wall, ih, depth - wall] },
+        ].map((s, i) => (
+          <mesh key={i} position={s.p as [number, number, number]} material={LINER}>
+            <boxGeometry args={s.a as [number, number, number]} />
+          </mesh>
+        ))}
+        <LedStrip position={[0, ih / 2 - 0.05, -depth / 2 + wall + 0.05]} length={iw - 0.16} lit={open ? 1 : 0} colour="#d6efff" />
+        <TempSensor position={[iw / 2 - 0.13, ih / 2 - 0.06, -depth / 2 + wall + 0.06]} lit={open ? 1 : 0} cold />
+        <DrawerRails width={iw - 0.05} depth={depth - wall - 0.1} y={-ih / 2 + 0.06} />
+
+        <group ref={d}>
+          {/* front panel: glass face, insulated core, liner, gasket */}
+          <RoundedBox
+            args={[width, height, 0.026]}
+            radius={0.008}
+            smoothness={3}
+            position={[0, 0, depth / 2 + 0.04]}
+            castShadow
+            material={BLACKGLASS}
+          />
+          <mesh position={[0, 0, depth / 2 + 0.018]}>
+            <boxGeometry args={[width - 0.014, height - 0.014, 0.042]} />
+            <meshStandardMaterial color="#d8d4cc" roughness={0.95} />
+          </mesh>
+          <mesh position={[0, 0, depth / 2 - 0.006]} material={LINER}>
+            <boxGeometry args={[width - 0.02, height - 0.02, 0.012]} />
+          </mesh>
+          <group position={[0, 0, depth / 2 - 0.018]}>
+            <Gasket w={width - 0.05} h={height - 0.05} />
+          </group>
+          <GoldHandle position={[0, height / 2 - 0.11, depth / 2 + 0.08]} length={width * 0.62} vertical={false} />
+
+          {/* wire basket rather than a solid slab */}
+          <group position={[0, -ih / 2 + 0.12, depth / 2 - 0.34]}>
+            <mesh material={RAIL_MAT}>
+              <boxGeometry args={[iw - 0.08, 0.008, depth - wall - 0.14]} />
+            </mesh>
+            {[-(depth - wall - 0.14) / 2, (depth - wall - 0.14) / 2].map((z) => (
+              <mesh key={z} position={[0, 0.11, z]} material={RAIL_MAT}>
+                <boxGeometry args={[iw - 0.08, 0.22, 0.007]} />
+              </mesh>
+            ))}
+            {[-(iw - 0.08) / 2, (iw - 0.08) / 2].map((x) => (
+              <mesh key={x} position={[x, 0.11, 0]} material={RAIL_MAT}>
+                <boxGeometry args={[0.007, 0.22, depth - wall - 0.14]} />
+              </mesh>
+            ))}
+            {Array.from({ length: 11 }).map((_, i) => (
+              <mesh key={i} position={[-(iw - 0.14) / 2 + i * ((iw - 0.14) / 10), 0.005, 0]} material={RAIL_MAT}>
+                <boxGeometry args={[0.005, 0.005, depth - wall - 0.14]} />
+              </mesh>
+            ))}
+          </group>
+
+          {/* frozen goods: printed packs with frost crusted over them */}
+          {packs.map((it, i) => {
+            const p = placeItem(it.id, urgencyOf(it));
+            return (
+              <group
+                key={it.id}
+                position={[
+                  -(iw - 0.5) / 2 + i * ((iw - 0.5) / 3) + p.dx * 0.6,
+                  -ih / 2 + 0.22,
+                  depth / 2 - 0.34 + p.dz * 0.4,
+                ]}
+                rotation={[0, p.ry * 0.5, 0]}
+              >
+                <mesh>
+                  <boxGeometry args={[0.17, 0.17, 0.26]} />
+                  <meshStandardMaterial map={labelTextures()[p.variant % 6]} roughness={0.9} />
+                </mesh>
+                <mesh scale={1.035}>
+                  <boxGeometry args={[0.17, 0.17, 0.26]} />
+                  <meshStandardMaterial map={frost} transparent opacity={0.55} roughness={1} depthWrite={false} />
+                </mesh>
+              </group>
+            );
+          })}
+        </group>
+        <ColdAir position={[0, 0, depth / 2 + 0.12]} on={open} />
+      </group>
+    </Hoverable>
+  );
+}
+
+/**
+ * The refrigeration column: French doors over a freezer drawer, in one cabinet.
+ *
+ * Built the way the real appliance is built. Front to back: an outer
+ * steel-and-glass shell, then the insulated wall cavity, then the ABS liner
+ * forming the actual food compartment. The 75mm between shell and liner is real
+ * geometry and its cut edge is visible all around the opening — that thickness
+ * is the difference between reading as a hollow box and reading as an appliance.
+ *
+ * Top to bottom: fresh-food compartment behind two French doors, an insulated
+ * mullion, then the freezer drawer sharing the same shell.
+ *
+ * Crucially, a lot of the construction detail only shows with the doors open, so
+ * the *closed* cabinet carries its own detail too: recessed shadow gaps between
+ * the doors, a flush control display, an ice and water dispenser recess, a brand
+ * badge, a kickplate and adjustable feet. That is what you actually see standing
+ * back in the room.
  */
 function Fridge({
   selected,
+  freezerOpen,
   onSelect,
   label,
+  freezerLabel,
   items,
+  freezerItems,
+  frost,
 }: {
   selected: boolean;
+  freezerOpen: boolean;
   onSelect: (k: KitchenObject) => void;
   label: string;
+  freezerLabel: string;
   items: FoodItem[];
+  freezerItems: FoodItem[];
+  frost: THREE.Texture;
 }) {
   const l = useRef<THREE.Group>(null);
   const r = useRef<THREE.Group>(null);
@@ -1393,7 +1575,6 @@ function Fridge({
   const { pull, swing } = useDoorMechanics(selected, 30);
 
   useFrame(() => {
-    // Doors swing on their hinge; the handles travel a few millimetres first.
     if (l.current) l.current.rotation.y = swing.current * 2.0;
     if (r.current) r.current.rotation.y = -swing.current * 2.0;
     const travel = pull.current * 0.014 * (1 - swing.current);
@@ -1421,93 +1602,113 @@ function Fridge({
     return b;
   }, [items]);
 
-  const drinks = useMemo(
-    () => items.filter((i) => ["water", "juice"].includes(categorize(i.name))),
-    [items],
-  );
+  const drinks = useMemo(() => items.filter((i) => ["water", "juice"].includes(categorize(i.name))), [items]);
   const fruitC = ["#b8352f", "#d4761f", "#3f7d2f", "#7d3f6a", "#c2452f", "#5d8f2f"];
   const vegC = ["#a83232", "#3f8f45", "#2f7d5a", "#c9761f", "#7d9a3a", "#8f4b2f"];
 
-  /* Shell dimensions, kept as constants so the wall cavity stays consistent. */
+  /* ---- cabinet geometry ---------------------------------------------------
+     One column, split into two climates. Everything below derives from these
+     so the two sections always meet cleanly at the mullion. */
   const W = 1.75;
-  const H = 2.35;
+  const H = 2.42;
   const D = 0.78;
   const WALL = 0.075; // insulated cavity thickness — visible at the opening
+  const PLINTH = 0.09; // kickplate height
+  const FZ_H = 0.66; // freezer drawer section
+  const MULL = 0.05; // insulated divider between the climates
+  const FZ_Y = PLINTH + FZ_H / 2;
+  const FRESH_BOTTOM = PLINTH + FZ_H + MULL;
+  const FRESH_H = H - FRESH_BOTTOM;
+  const FRESH_Y = FRESH_BOTTOM + FRESH_H / 2;
   const IW = W - WALL * 2;
-  const IH = H - WALL * 2;
+  const IH = FRESH_H - WALL * 2;
+  /** Shelf heights in world space, inside the fresh compartment. */
+  const SH = [FRESH_BOTTOM + 0.5, FRESH_BOTTOM + 0.92, FRESH_BOTTOM + 1.32];
 
   return (
-    <Hoverable name={label} hint="open" onActivate={() => onSelect("fridge")} labelY={2.5}>
-      <group position={[-3.1, 0, -3.05]}>
-        {/* ---------- outer shell ---------- */}
+    <group position={[-3.1, 0, -3.05]}>
+      {/* ---------- kickplate + adjustable feet (visible from the room) ------ */}
+      <mesh position={[0, PLINTH / 2, 0.02]}>
+        <boxGeometry args={[W - 0.05, PLINTH, D - 0.06]} />
+        <meshStandardMaterial color="#0a0b0d" roughness={0.6} metalness={0.3} />
+      </mesh>
+      <mesh position={[0, PLINTH - 0.012, D / 2 - 0.01]} material={GOLD_MAT}>
+        <boxGeometry args={[W - 0.05, 0.014, 0.014]} />
+      </mesh>
+      {[-W / 2 + 0.09, W / 2 - 0.09].map((x) =>
+        [D / 2 - 0.09, -D / 2 + 0.09].map((z) => (
+          <mesh key={`${x}${z}`} position={[x, 0.022, z]} material={STEEL}>
+            <cylinderGeometry args={[0.021, 0.024, 0.044, 12]} />
+          </mesh>
+        )),
+      )}
+
+      {/* ---------- outer shell, spanning both climates ---------- */}
+      <Hoverable name={label} hint="open" onActivate={() => onSelect("fridge")} labelY={H + 0.18}>
         <RoundedBox
-          args={[W, H, D]}
+          args={[W, H - PLINTH, D]}
           radius={0.014}
           smoothness={3}
-          position={[0, H / 2, 0]}
+          position={[0, PLINTH + (H - PLINTH) / 2, 0]}
           castShadow
           receiveShadow
         >
           <meshStandardMaterial color="#101216" roughness={0.26} metalness={0.42} envMapIntensity={1.4} />
         </RoundedBox>
 
-        {/* ---------- insulated wall cavity: the foam core between shell and liner.
-             Slightly inset on every face so you read a real wall thickness where
-             the door opening cuts through it. ---------- */}
-        <mesh position={[0, H / 2, 0.01]}>
-          <boxGeometry args={[W - 0.02, H - 0.02, D - 0.03]} />
+        {/* ---------- FRESH FOOD COMPARTMENT ---------- */}
+        {/* insulated wall cavity */}
+        <mesh position={[0, FRESH_Y, 0.01]}>
+          <boxGeometry args={[W - 0.02, FRESH_H - 0.014, D - 0.03]} />
           <meshStandardMaterial color="#d8d4cc" roughness={0.95} metalness={0} />
         </mesh>
-
-        {/* ---------- inner liner: the actual food compartment ---------- */}
-        <mesh position={[0, H / 2, WALL / 2]} material={LINER}>
+        {/* inner liner: the actual food compartment */}
+        <mesh position={[0, FRESH_Y, WALL / 2]} material={LINER}>
           <boxGeometry args={[IW, IH, D - WALL]} />
         </mesh>
-        {/* liner back wall, catching the shelf lighting */}
-        <mesh position={[0, H / 2, -D / 2 + WALL + 0.008]}>
+        <mesh position={[0, FRESH_Y, -D / 2 + WALL + 0.008]}>
           <planeGeometry args={[IW - 0.01, IH - 0.01]} />
-          <meshStandardMaterial color="#f7fafb" roughness={0.36} metalness={0.06} emissive="#e8f4ff" emissiveIntensity={0.04 + lit * 0.55} />
+          <meshStandardMaterial
+            color="#f7fafb"
+            roughness={0.36}
+            metalness={0.06}
+            emissive="#e8f4ff"
+            emissiveIntensity={0.04 + lit * 0.55}
+          />
         </mesh>
-        {/* the visible cut edge of the wall around the opening — this is the
-            detail that makes the interior feel deep rather than painted on */}
+        {/* the visible cut edge of the wall around the opening */}
         {[
-          { p: [0, H - WALL / 2 - 0.01, D / 2 - (D - WALL) / 2] as [number, number, number], a: [IW, WALL, D - WALL] as [number, number, number] },
-          { p: [0, WALL / 2 + 0.01, D / 2 - (D - WALL) / 2] as [number, number, number], a: [IW, WALL, D - WALL] as [number, number, number] },
-          { p: [-W / 2 + WALL / 2, H / 2, D / 2 - (D - WALL) / 2] as [number, number, number], a: [WALL, IH, D - WALL] as [number, number, number] },
-          { p: [W / 2 - WALL / 2, H / 2, D / 2 - (D - WALL) / 2] as [number, number, number], a: [WALL, IH, D - WALL] as [number, number, number] },
+          { p: [0, H - WALL / 2 - 0.007, D / 2 - (D - WALL) / 2], a: [IW, WALL, D - WALL] },
+          { p: [0, FRESH_BOTTOM + WALL / 2 + 0.007, D / 2 - (D - WALL) / 2], a: [IW, WALL, D - WALL] },
+          { p: [-W / 2 + WALL / 2, FRESH_Y, D / 2 - (D - WALL) / 2], a: [WALL, IH, D - WALL] },
+          { p: [W / 2 - WALL / 2, FRESH_Y, D / 2 - (D - WALL) / 2], a: [WALL, IH, D - WALL] },
         ].map((s, i) => (
-          <mesh key={i} position={s.p} material={LINER}>
-            <boxGeometry args={s.a} />
+          <mesh key={i} position={s.p as [number, number, number]} material={LINER}>
+            <boxGeometry args={s.a as [number, number, number]} />
           </mesh>
         ))}
 
         {/* ---------- glass shelves on moulded supports ---------- */}
-        {[0.62, 1.2, 1.78].map((y, si) => (
+        {SH.map((y, si) => (
           <group key={y} position={[0, y, 0.055]}>
-            {/* tempered glass with a real edge */}
-            <mesh material={SHELF_GLASS} castShadow receiveShadow>
+            <mesh material={SHELF_GLASS}>
               <boxGeometry args={[IW - 0.03, 0.014, D - WALL - 0.09]} />
             </mesh>
-            {/* polished trim on the front edge — how shelf glass is actually finished */}
             <mesh position={[0, 0, (D - WALL - 0.09) / 2]} material={GOLD_MAT}>
               <boxGeometry args={[IW - 0.03, 0.02, 0.012]} />
             </mesh>
-            {/* moulded ladder supports the shelf rests on */}
             {[-(IW - 0.03) / 2 + 0.008, (IW - 0.03) / 2 - 0.008].map((x) => (
               <mesh key={x} position={[x, -0.012, 0]} material={LINER}>
                 <boxGeometry args={[0.016, 0.022, D - WALL - 0.1]} />
               </mesh>
             ))}
-            {/* the shelf's own LED channel, tucked under the one above */}
             <LedStrip position={[0, 0.2, -(D - WALL) / 2 + 0.06]} length={IW - 0.16} lit={lit} />
-            {si === 2 && <TempSensor position={[(IW - 0.03) / 2 - 0.1, 0.11, -(D - WALL) / 2 + 0.07]} lit={lit} />}
+            {si === 2 && <TempSensor position={[(IW - 0.03) / 2 - 0.1, 0.13, -(D - WALL) / 2 + 0.07]} lit={lit} />}
           </group>
         ))}
 
         {/* ---------- TOP SHELF: dairy compartment + eggs ---------- */}
-        {/* a walled dairy compartment with its own flap, as on a real door-less
-            top shelf: the butter and soft cheese live inside it */}
-        <group position={[0.44, 1.9, 0.02]}>
+        <group position={[0.44, SH[2] + 0.28, 0.02]}>
           <mesh material={LINER}>
             <boxGeometry args={[0.4, 0.012, 0.2]} />
           </mesh>
@@ -1519,34 +1720,32 @@ function Fridge({
           <mesh position={[0, 0.05, -0.1]} material={LINER}>
             <boxGeometry args={[0.4, 0.1, 0.01]} />
           </mesh>
-          {/* hinged flap, tipped open */}
           <mesh position={[0, 0.09, 0.075]} rotation={[0.62, 0, 0]} material={CLEAR_PLASTIC}>
             <boxGeometry args={[0.4, 0.11, 0.008]} />
           </mesh>
         </group>
 
         {buckets.milk.slice(0, 3).map((it, i) => (
-          <Carton
-            key={it.id}
-            position={[-0.56 + i * 0.17, 1.885, 0.02]}
-            place={placeItem(it.id, urgencyOf(it))}
-          />
+          <Carton key={it.id} position={[-0.56 + i * 0.17, SH[2] + 0.13, 0.02]} place={placeItem(it.id, urgencyOf(it))} />
         ))}
         {buckets.egg.slice(0, 1).map((it) => (
           <EggTray
             key={it.id}
-            position={[-0.06, 1.842, 0.0]}
+            position={[-0.06, SH[2] + 0.087, 0.0]}
             place={placeItem(it.id, urgencyOf(it))}
             count={countFrom(it.quantity, 10)}
           />
         ))}
         {buckets.butter.slice(0, 2).map((it, i) => (
-          <group key={it.id} position={[0.34 + i * 0.14, 1.845, 0.01]} rotation={[0, placeItem(it.id, 0.2).ry * 0.5, 0]}>
-            <mesh castShadow>
+          <group
+            key={it.id}
+            position={[0.34 + i * 0.14, SH[2] + 0.09, 0.01]}
+            rotation={[0, placeItem(it.id, 0.2).ry * 0.5, 0]}
+          >
+            <mesh>
               <boxGeometry args={[0.115, 0.042, 0.07]} />
               <meshStandardMaterial color="#f6e9b8" roughness={0.62} />
             </mesh>
-            {/* foil wrapper folded over one end */}
             <mesh position={[0.048, 0.001, 0]}>
               <boxGeometry args={[0.024, 0.045, 0.073]} />
               <meshStandardMaterial color="#d9c98f" roughness={0.35} metalness={0.5} />
@@ -1558,27 +1757,20 @@ function Fridge({
           return (
             <group
               key={it.id}
-              position={[-0.12 + (i % 2) * 0.11 + p.dx, 1.877, -0.16 + Math.floor(i / 2) * 0.1 + p.dz * 0.4]}
+              position={[-0.12 + (i % 2) * 0.11 + p.dx, SH[2] + 0.122, -0.16 + Math.floor(i / 2) * 0.1 + p.dz * 0.4]}
               rotation={[0, p.ry, 0]}
             >
-              {/* tapered pot */}
-              <mesh castShadow>
+              <mesh>
                 <cylinderGeometry args={[0.049, 0.042, 0.068, 16]} />
                 <meshStandardMaterial color="#eef1f3" roughness={0.48} />
               </mesh>
-              {/* foil lid, slightly domed */}
               <mesh position={[0, 0.036, 0]}>
                 <cylinderGeometry args={[0.05, 0.05, 0.004, 16]} />
                 <meshStandardMaterial color="#c9ccd1" roughness={0.28} metalness={0.72} />
               </mesh>
-              {/* wrap-around sleeve label */}
               <mesh position={[0, -0.004, 0]}>
                 <cylinderGeometry args={[0.0495, 0.0435, 0.05, 16, 1, true]} />
-                <meshStandardMaterial
-                  map={labelTextures()[p.variant % 6]}
-                  roughness={0.7}
-                  side={THREE.DoubleSide}
-                />
+                <meshStandardMaterial map={labelTextures()[p.variant % 6]} roughness={0.7} side={THREE.DoubleSide} />
               </mesh>
             </group>
           );
@@ -1588,7 +1780,7 @@ function Fridge({
         {buckets.meat.slice(0, 2).map((it, i) => (
           <Tray
             key={it.id}
-            position={[-0.4 + i * 0.44, 1.238, 0.02]}
+            position={[-0.4 + i * 0.44, SH[1] + 0.015, 0.02]}
             place={placeItem(it.id, urgencyOf(it))}
             colour="#bc5555"
             fill={fillFrom(it.quantity)}
@@ -1597,7 +1789,7 @@ function Fridge({
         {buckets.fish.slice(0, 1).map((it) => (
           <Tray
             key={it.id}
-            position={[0.46, 1.238, -0.04]}
+            position={[0.46, SH[1] + 0.015, -0.04]}
             place={placeItem(it.id, urgencyOf(it))}
             colour="#d3a09c"
             fill={fillFrom(it.quantity)}
@@ -1608,11 +1800,10 @@ function Fridge({
           return (
             <group
               key={it.id}
-              position={[-0.58 + i * 0.15 + p.dx, 1.262, 0.1 + p.dz * 0.5]}
+              position={[-0.58 + i * 0.15 + p.dx, SH[1] + 0.04, 0.1 + p.dz * 0.5]}
               rotation={[0, p.ry, p.tilt]}
             >
-              {/* wedge, wrapped in waxed paper on two faces */}
-              <mesh castShadow>
+              <mesh>
                 <boxGeometry args={[0.07 + 0.1 * fillFrom(it.quantity), 0.06, 0.11]} />
                 <meshStandardMaterial color="#f0c04a" roughness={0.56} />
               </mesh>
@@ -1626,7 +1817,7 @@ function Fridge({
         {buckets.other.slice(0, 3).map((it, i) => (
           <Jar
             key={it.id}
-            position={[0.0 + i * 0.15, 1.32, -0.14]}
+            position={[0.0 + i * 0.15, SH[1] + 0.1, -0.14]}
             place={placeItem(it.id, urgencyOf(it))}
             colour="#9c6b3f"
             r={0.045}
@@ -1639,16 +1830,15 @@ function Fridge({
         {buckets.fruit.slice(0, 9).map((it, i) => (
           <Produce
             key={it.id}
-            position={[-0.58 + (i % 5) * 0.28, 0.685, -0.08 + Math.floor(i / 5) * 0.19]}
+            position={[-0.58 + (i % 5) * 0.28, SH[0] + 0.062, -0.08 + Math.floor(i / 5) * 0.19]}
             place={placeItem(it.id, urgencyOf(it))}
             colour={fruitC[hashId(it.id) % fruitC.length]}
           />
         ))}
 
         {/* ---------- CRISPER DRAWER on real slides ---------- */}
-        <DrawerRails width={IW - 0.06} depth={D - WALL - 0.1} y={0.44} />
-        <group position={[0, 0.26, 0.06]}>
-          {/* moulded base + clear front, so the vegetables are visible through it */}
+        <DrawerRails width={IW - 0.06} depth={D - WALL - 0.1} y={FRESH_BOTTOM + 0.26} />
+        <group position={[0, FRESH_BOTTOM + 0.1, 0.06]}>
           <mesh material={LINER}>
             <boxGeometry args={[IW - 0.09, 0.012, D - WALL - 0.12]} />
           </mesh>
@@ -1660,11 +1850,9 @@ function Fridge({
               <boxGeometry args={[0.01, 0.19, D - WALL - 0.12]} />
             </mesh>
           ))}
-          {/* recessed pull */}
           <mesh position={[0, 0.15, (D - WALL - 0.12) / 2 + 0.008]} material={GOLD_MAT}>
             <boxGeometry args={[0.3, 0.018, 0.014]} />
           </mesh>
-          {/* humidity slider */}
           <mesh position={[(IW - 0.09) / 2 - 0.16, 0.16, (D - WALL - 0.12) / 2 + 0.008]} material={RAIL_MAT}>
             <boxGeometry args={[0.07, 0.012, 0.008]} />
           </mesh>
@@ -1672,32 +1860,32 @@ function Fridge({
         {buckets.veg.slice(0, 10).map((it, i) => (
           <Produce
             key={it.id}
-            position={[-0.6 + (i % 5) * 0.3, 0.3, -0.06 + Math.floor(i / 5) * 0.18]}
+            position={[-0.6 + (i % 5) * 0.3, FRESH_BOTTOM + 0.14, -0.06 + Math.floor(i / 5) * 0.18]}
             place={placeItem(it.id, urgencyOf(it))}
             colour={vegC[hashId(it.id) % vegC.length]}
             r={0.055}
           />
         ))}
 
-        <ColdAir position={[0, 0.2, 0.45]} on={selected} />
+        <ColdAir position={[0, FRESH_BOTTOM, 0.45]} on={selected} />
         {lit > 0.05 && (
-          <pointLight position={[0, 1.5, 0.24]} intensity={lit * 2.4} distance={2.3} decay={2} color="#eef8ff" />
+          <pointLight position={[0, FRESH_Y, 0.24]} intensity={lit * 2.4} distance={2.3} decay={2} color="#eef8ff" />
         )}
 
-        {/* ---------- hinge hardware ---------- */}
+        {/* ---------- hinge hardware on the fresh-food doors ---------- */}
         {[-W / 2 + 0.02, W / 2 - 0.02].map((x) =>
-          [H - 0.11, 0.11].map((y) => <Hinge key={`${x}${y}`} position={[x, y, D / 2 - 0.02]} />),
+          [H - 0.11, FRESH_BOTTOM + 0.11].map((y) => <Hinge key={`${x}${y}`} position={[x, y, D / 2 - 0.02]} />),
         )}
 
-        {/* ---------- DOORS ---------- */}
+        {/* ---------- FRENCH DOORS ---------- */}
         {[
           { ref: l, handleRef: lHandle, x: -W / 2, s: 1 },
           { ref: r, handleRef: rHandle, x: W / 2, s: -1 },
         ].map((d, di) => (
-          <group key={di} ref={d.ref} position={[d.x, H / 2, D / 2]}>
+          <group key={di} ref={d.ref} position={[d.x, FRESH_Y, D / 2]}>
             {/* outer glass panel */}
             <RoundedBox
-              args={[W / 2, H, 0.026]}
+              args={[W / 2 - 0.006, FRESH_H - 0.008, 0.026]}
               radius={0.008}
               smoothness={3}
               position={[(d.s * W) / 4, 0, 0.049]}
@@ -1706,194 +1894,181 @@ function Fridge({
             />
             {/* insulated core — the door has real thickness */}
             <mesh position={[(d.s * W) / 4, 0, 0.024]}>
-              <boxGeometry args={[W / 2 - 0.012, H - 0.012, 0.046]} />
+              <boxGeometry args={[W / 2 - 0.018, FRESH_H - 0.02, 0.046]} />
               <meshStandardMaterial color="#d8d4cc" roughness={0.95} />
             </mesh>
             {/* moulded inner liner */}
             <mesh position={[(d.s * W) / 4, 0, 0.0]} material={LINER}>
-              <boxGeometry args={[W / 2 - 0.018, H - 0.018, 0.012]} />
+              <boxGeometry args={[W / 2 - 0.024, FRESH_H - 0.026, 0.012]} />
             </mesh>
             {/* magnetic gasket, standing proud of the liner */}
             <group position={[(d.s * W) / 4, 0, -0.012]}>
-              <Gasket w={W / 2 - 0.04} h={H - 0.04} />
+              <Gasket w={W / 2 - 0.045} h={FRESH_H - 0.05} />
             </group>
             {/* handle on mounting posts */}
             <group ref={d.handleRef} position={[0, 0, 0.075]}>
               <group position={[d.s * (W / 2 - 0.055), 0, 0]}>
-                <GoldHandle position={[0, 0, 0]} length={1.5} />
+                <GoldHandle position={[0, 0, 0]} length={FRESH_H * 0.86} />
               </group>
             </group>
 
-            {/* retaining bins, and bottles standing in them (left door only) */}
-            {di === 0 &&
-              [0.66, 0.02, -0.62].map((y, bi) => {
-                const bottle = drinks[bi];
-                return (
-                  <group key={y}>
-                    <DoorBin position={[(d.s * W) / 4, y, 0.008]} width={W / 2 - 0.09} />
-                    {bottle && (
-                      <Bottle
-                        position={[(d.s * W) / 4 - 0.16 + bi * 0.06, y + 0.16, 0.01]}
-                        place={placeItem(bottle.id, urgencyOf(bottle))}
-                        colour={categorize(bottle.name) === "water" ? "#c4e2f7" : "#c8873a"}
-                        fill={fillFrom(bottle.quantity)}
-                        h={0.31}
-                      />
-                    )}
-                  </group>
-                );
-              })}
-            {di === 1 &&
-              [0.66, 0.02, -0.62].map((y) => (
-                <DoorBin key={y} position={[(d.s * W) / 4, y, 0.008]} width={W / 2 - 0.09} />
-              ))}
-          </group>
-        ))}
-      </group>
-    </Hoverable>
-  );
-}
+            {/* --- CLOSED-DOOR EXTERIOR DETAIL, left door only --- */}
+            {di === 0 && (
+              <>
+                {/* flush touch control panel */}
+                <group position={[(d.s * W) / 4 + 0.16, FRESH_H / 2 - 0.3, 0.063]}>
+                  <mesh>
+                    <boxGeometry args={[0.3, 0.13, 0.006]} />
+                    <meshStandardMaterial color="#05070a" roughness={0.16} metalness={0.5} />
+                  </mesh>
+                  {/* temperature readouts, one per climate */}
+                  {[-0.07, 0.07].map((x, k) => (
+                    <group key={x} position={[x, 0.022, 0.005]}>
+                      {[0, 1].map((dg) => (
+                        <group key={dg} position={[-0.012 + dg * 0.024, 0, 0]}>
+                          {[0.014, -0.014].map((sy) => (
+                            <mesh key={sy} position={[0, sy, 0]}>
+                              <planeGeometry args={[0.014, 0.003]} />
+                              <meshStandardMaterial
+                                color={k ? "#8fd8ff" : "#a8e8c0"}
+                                emissive={k ? "#8fd8ff" : "#a8e8c0"}
+                                emissiveIntensity={1.6}
+                              />
+                            </mesh>
+                          ))}
+                          <mesh position={[0.007, 0, 0]}>
+                            <planeGeometry args={[0.003, 0.028]} />
+                            <meshStandardMaterial
+                              color={k ? "#8fd8ff" : "#a8e8c0"}
+                              emissive={k ? "#8fd8ff" : "#a8e8c0"}
+                              emissiveIntensity={1.6}
+                            />
+                          </mesh>
+                        </group>
+                      ))}
+                    </group>
+                  ))}
+                  {/* capacitive touch keys */}
+                  {[-0.1, -0.033, 0.033, 0.1].map((x) => (
+                    <mesh key={x} position={[x, -0.04, 0.005]}>
+                      <circleGeometry args={[0.008, 14]} />
+                      <meshStandardMaterial color="#7f8894" emissive="#5f6a78" emissiveIntensity={0.5} />
+                    </mesh>
+                  ))}
+                </group>
 
-/**
- * Freezer drawer, built as a real drawer: an insulated cabinet with a liner, a
- * wire basket running out on telescoping slides, a gasket around the front
- * panel, and frost building on everything inside.
- *
- * The travel is weighted — heavier than the fridge doors, because a loaded
- * freezer basket is heavy — and it soft-closes on the last centimetre.
- */
-function Freezer({
-  selected,
-  onSelect,
-  label,
-  frost,
-  items,
-}: {
-  selected: boolean;
-  onSelect: (k: KitchenObject) => void;
-  label: string;
-  frost: THREE.Texture;
-  items: FoodItem[];
-}) {
-  const d = useRef<THREE.Group>(null);
-  const vel = useRef(0);
-  const travel = useRef(0);
-  useApplianceHum(selected, "freezer");
-  useEdgeSound(selected, (opening) => {
-    playSeal(opening);
-    playRails(0.55);
-  });
+                {/* ice and water dispenser recess */}
+                <group position={[(d.s * W) / 4 + 0.16, -0.12, 0.05]}>
+                  {/* the recess itself: a lit alcove cut into the door face */}
+                  <mesh position={[0, 0, -0.02]}>
+                    <boxGeometry args={[0.24, 0.3, 0.05]} />
+                    <meshStandardMaterial color="#15181c" roughness={0.5} metalness={0.3} />
+                  </mesh>
+                  <mesh position={[0, 0.13, -0.005]}>
+                    <boxGeometry args={[0.22, 0.02, 0.03]} />
+                    <meshStandardMaterial color="#dff0ff" emissive="#bfe4ff" emissiveIntensity={1.1} />
+                  </mesh>
+                  {/* water spout */}
+                  <mesh position={[-0.05, 0.07, 0.0]} material={STEEL}>
+                    <cylinderGeometry args={[0.011, 0.011, 0.05, 12]} />
+                  </mesh>
+                  {/* ice chute */}
+                  <mesh position={[0.055, 0.075, 0.0]} material={STEEL}>
+                    <cylinderGeometry args={[0.026, 0.026, 0.035, 14]} />
+                  </mesh>
+                  {/* dispenser paddle */}
+                  <mesh position={[0, -0.03, 0.005]} rotation={[0.18, 0, 0]} material={RAIL_MAT}>
+                    <boxGeometry args={[0.17, 0.11, 0.008]} />
+                  </mesh>
+                  {/* drip tray with a grille */}
+                  <mesh position={[0, -0.125, 0.005]} material={RAIL_MAT}>
+                    <boxGeometry args={[0.2, 0.012, 0.05]} />
+                  </mesh>
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <mesh key={i} position={[-0.075 + i * 0.03, -0.118, 0.005]} material={STEEL}>
+                      <boxGeometry args={[0.006, 0.004, 0.05]} />
+                    </mesh>
+                  ))}
+                  {/* gold surround, so the recess reads as designed hardware */}
+                  {[0.155, -0.155].map((y) => (
+                    <mesh key={y} position={[0, y, 0.002]} material={GOLD_MAT}>
+                      <boxGeometry args={[0.26, 0.012, 0.012]} />
+                    </mesh>
+                  ))}
+                  {[-0.125, 0.125].map((x) => (
+                    <mesh key={x} position={[x, 0, 0.002]} material={GOLD_MAT}>
+                      <boxGeometry args={[0.012, 0.32, 0.012]} />
+                    </mesh>
+                  ))}
+                </group>
+              </>
+            )}
 
-  useFrame((_, dt) => {
-    if (!d.current) return;
-    const step = Math.min(dt, 0.05);
-    // Heavier mass than a door, and soft-close damping as it returns home.
-    const damping = selected ? 13 : 13 + (1 - travel.current / 0.5) * 22;
-    vel.current += ((selected ? 0.5 : 0) - travel.current) * 52 * step - vel.current * damping * step;
-    travel.current = Math.max(0, travel.current + vel.current * step);
-    d.current.position.z = travel.current;
-  });
-
-  const packs = items.slice(0, 4);
-  return (
-    <Hoverable name={label} hint="open" onActivate={() => onSelect("freezer")} labelY={0.85}>
-      <group position={[-1.7, 0.3, -3.02]}>
-        {/* cabinet + insulated wall + liner */}
-        <RoundedBox args={[0.9, 0.6, 0.78]} radius={0.01} smoothness={3} castShadow receiveShadow>
-          <meshStandardMaterial color="#101216" roughness={0.28} metalness={0.4} />
-        </RoundedBox>
-        <mesh position={[0, 0, 0.01]}>
-          <boxGeometry args={[0.87, 0.57, 0.75]} />
-          <meshStandardMaterial color="#d8d4cc" roughness={0.95} />
-        </mesh>
-        <mesh position={[0, 0, 0.03]} material={LINER}>
-          <boxGeometry args={[0.79, 0.49, 0.72]} />
-        </mesh>
-        <mesh position={[0, 0, -0.31]}>
-          <planeGeometry args={[0.78, 0.48]} />
-          <meshStandardMaterial
-            color="#f2fbff"
-            roughness={0.4}
-            emissive="#bfe4ff"
-            emissiveIntensity={selected ? 0.75 : 0.06}
-          />
-        </mesh>
-        <LedStrip position={[0, 0.2, -0.24]} length={0.6} lit={selected ? 1 : 0} colour="#d6efff" />
-        <TempSensor position={[0.26, 0.19, -0.26]} lit={selected ? 1 : 0} cold />
-        <DrawerRails width={0.8} depth={0.66} y={-0.2} />
-
-        <group ref={d}>
-          {/* front panel: glass face, insulated core, liner, gasket */}
-          <RoundedBox
-            args={[0.9, 0.6, 0.026]}
-            radius={0.008}
-            smoothness={3}
-            position={[0, 0, 0.42]}
-            castShadow
-            material={BLACKGLASS}
-          />
-          <mesh position={[0, 0, 0.398]}>
-            <boxGeometry args={[0.88, 0.58, 0.042]} />
-            <meshStandardMaterial color="#d8d4cc" roughness={0.95} />
-          </mesh>
-          <mesh position={[0, 0, 0.374]} material={LINER}>
-            <boxGeometry args={[0.86, 0.56, 0.01]} />
-          </mesh>
-          <group position={[0, 0, 0.362]}>
-            <Gasket w={0.82} h={0.52} />
-          </group>
-          <GoldHandle position={[0, 0.14, 0.46]} length={0.6} vertical={false} />
-
-          {/* wire basket rather than a solid steel slab */}
-          <group position={[0, -0.1, 0.14]}>
-            <mesh material={RAIL_MAT}>
-              <boxGeometry args={[0.78, 0.008, 0.5]} />
-            </mesh>
-            {[-0.25, 0.25].map((z) => (
-              <mesh key={z} position={[0, 0.09, z]} material={RAIL_MAT}>
-                <boxGeometry args={[0.78, 0.18, 0.007]} />
-              </mesh>
-            ))}
-            {[-0.39, 0.39].map((x) => (
-              <mesh key={x} position={[x, 0.09, 0]} material={RAIL_MAT}>
-                <boxGeometry args={[0.007, 0.18, 0.5]} />
-              </mesh>
-            ))}
-            {/* basket wires across the floor */}
-            {Array.from({ length: 7 }).map((_, i) => (
-              <mesh key={i} position={[-0.33 + i * 0.11, 0.004, 0]} material={RAIL_MAT}>
-                <boxGeometry args={[0.005, 0.005, 0.5]} />
-              </mesh>
-            ))}
-          </group>
-
-          {/* frozen goods: printed packs with frost crusted over them */}
-          {packs.map((it, i) => {
-            const p = placeItem(it.id, urgencyOf(it));
-            return (
-              <group
-                key={it.id}
-                position={[-0.27 + i * 0.18 + p.dx * 0.6, -0.03, 0.16 + p.dz * 0.4]}
-                rotation={[0, p.ry * 0.5, 0]}
-              >
-                <mesh castShadow>
-                  <boxGeometry args={[0.15, 0.15, 0.24]} />
-                  <meshStandardMaterial map={labelTextures()[p.variant % 6]} roughness={0.9} />
+            {/* brand badge on the right door */}
+            {di === 1 && (
+              <group position={[(d.s * W) / 4, FRESH_H / 2 - 0.16, 0.063]}>
+                <mesh material={GOLD_MAT}>
+                  <boxGeometry args={[0.19, 0.016, 0.005]} />
                 </mesh>
-                {/* frost layer, slightly proud of the pack */}
-                <mesh scale={1.035}>
-                  <boxGeometry args={[0.15, 0.15, 0.24]} />
-                  <meshStandardMaterial map={frost} transparent opacity={0.55} roughness={1} depthWrite={false} />
+                <mesh position={[0, -0.03, 0]} material={GOLD_MAT}>
+                  <boxGeometry args={[0.1, 0.007, 0.004]} />
                 </mesh>
               </group>
-            );
-          })}
-        </group>
-        <ColdAir position={[0, 0, 0.5]} on={selected} />
-      </group>
-    </Hoverable>
+            )}
+
+            {/* retaining bins, and bottles standing in them (left door only) */}
+            {[FRESH_H / 2 - 0.42, 0, -FRESH_H / 2 + 0.42].map((y, bi) => {
+              const bottle = di === 0 ? drinks[bi] : undefined;
+              return (
+                <group key={y}>
+                  <DoorBin position={[(d.s * W) / 4, y, 0.008]} width={W / 2 - 0.09} />
+                  {bottle && (
+                    <Bottle
+                      position={[(d.s * W) / 4 - 0.16 + bi * 0.06, y + 0.16, 0.01]}
+                      place={placeItem(bottle.id, urgencyOf(bottle))}
+                      colour={categorize(bottle.name) === "water" ? "#c4e2f7" : "#c8873a"}
+                      fill={fillFrom(bottle.quantity)}
+                      h={0.31}
+                    />
+                  )}
+                </group>
+              );
+            })}
+          </group>
+        ))}
+
+        {/* ---------- centre mullion between the French doors ---------- */}
+        <mesh position={[0, FRESH_Y, D / 2 + 0.03]} material={STEEL}>
+          <boxGeometry args={[0.012, FRESH_H - 0.03, 0.03]} />
+        </mesh>
+
+        {/* ---------- insulated divider between the two climates ---------- */}
+        <mesh position={[0, PLINTH + FZ_H + MULL / 2, 0.01]}>
+          <boxGeometry args={[W - 0.01, MULL, D - 0.02]} />
+          <meshStandardMaterial color="#0d0f12" roughness={0.35} metalness={0.4} />
+        </mesh>
+        <mesh position={[0, PLINTH + FZ_H + MULL / 2, D / 2 + 0.005]} material={GOLD_MAT}>
+          <boxGeometry args={[W - 0.02, 0.012, 0.012]} />
+        </mesh>
+      </Hoverable>
+
+      {/* ---------- FREEZER DRAWER, in the same cabinet ---------- */}
+      <FreezerDrawer
+        open={freezerOpen}
+        onSelect={onSelect}
+        label={freezerLabel}
+        frost={frost}
+        items={freezerItems}
+        width={W}
+        height={FZ_H}
+        depth={D}
+        wall={WALL}
+        y={FZ_Y}
+      />
+    </group>
   );
 }
+
 
 /**
  * Full-height pantry: a real cabinet carcass with a back panel, solid timber
@@ -2435,16 +2610,56 @@ function Scene({
         </group>
       </Hoverable>
 
-      {/* STORE: refrigeration left, pantry right */}
-      <Fridge selected={selected === "fridge"} onSelect={onSelect} label={labels.fridge} items={inventory.fridge} />
-      <Freezer
-        selected={selected === "freezer"}
+      {/* STORE: refrigeration left, pantry right — the freezer is the bottom
+          drawer of the refrigeration column, not a separate box. */}
+      <Fridge
+        selected={selected === "fridge"}
+        freezerOpen={selected === "freezer"}
         onSelect={onSelect}
-        label={labels.freezer}
+        label={labels.fridge}
+        freezerLabel={labels.freezer}
+        items={inventory.fridge}
+        freezerItems={inventory.freezer}
         frost={frost}
-        items={inventory.freezer}
       />
       <Pantry selected={selected === "pantry"} onSelect={onSelect} label={labels.pantry} items={inventory.pantry} />
+
+      {/* Tall cabinetry flanking each column, filling the run so the back wall
+          reads as integrated joinery rather than two boxes with gaps between
+          them. Mirrored, to keep the villa's symmetry. */}
+      {[-1.635, 1.635].map((x) => (
+        <group key={x} position={[x, 0, -3.05]}>
+          <mesh position={[0, 0.045, 0.02]}>
+            <boxGeometry args={[1.1, 0.09, 0.66]} />
+            <meshStandardMaterial color="#0a0b0d" roughness={0.6} metalness={0.3} />
+          </mesh>
+          <RoundedBox
+            args={[1.15, 2.33, 0.72]}
+            radius={0.012}
+            smoothness={3}
+            position={[0, 1.255, 0]}
+            castShadow
+            receiveShadow
+          >
+            <meshStandardMaterial color="#101216" roughness={0.28} metalness={0.38} envMapIntensity={1.3} />
+          </RoundedBox>
+          {/* two tall doors with a shadow gap between them */}
+          {[-0.29, 0.29].map((dx) => (
+            <group key={dx} position={[dx, 1.255, 0.365]}>
+              <mesh material={BLACKGLASS}>
+                <boxGeometry args={[0.565, 2.31, 0.022]} />
+              </mesh>
+              <GoldHandle position={[dx > 0 ? -0.25 : 0.25, 0, 0.03]} length={1.9} />
+            </group>
+          ))}
+          {/* gold reveal lines at counter and cornice height */}
+          {[0.93, 2.24].map((y) => (
+            <mesh key={y} position={[0, y, 0.38]} material={GOLD_MAT}>
+              <boxGeometry args={[1.15, 0.014, 0.016]} />
+            </mesh>
+          ))}
+        </group>
+      ))}
 
       {/* PREPARE: the island, dead centre */}
       <Hoverable name={labels.island} hint="inspect" onActivate={() => onSelect("island")} labelY={1.6}>
@@ -2576,9 +2791,15 @@ function Scene({
 /* ------------------------------------------------------------------ camera */
 
 const POSES: Record<string, { cam: [number, number, number]; tgt: [number, number, number] }> = {
-  home: { cam: [0.4, 1.62, 5.9], tgt: [0, 1.18, -1.9] },
-  fridge: { cam: [-3.1, 1.6, -0.7], tgt: [-3.1, 1.25, -2.7] },
-  freezer: { cam: [-1.7, 1.1, -1.05], tgt: [-1.7, 0.45, -2.7] },
+  /* Pulled in from 5.9 and swung left. The old pose sat ~9m from the
+     refrigeration column, which reduced every piece of appliance detail to a
+     handful of pixels — the room read as flat boxes no matter how much
+     construction was underneath. This frames the back-wall run properly. */
+  home: { cam: [1.5, 1.58, 4.15], tgt: [-0.9, 1.3, -2.6] },
+  fridge: { cam: [-3.1, 1.78, -1.0], tgt: [-3.1, 1.62, -2.7] },
+  /* The freezer is the bottom drawer of the same column now, so its pose drops
+     low and looks down into the open basket. */
+  freezer: { cam: [-3.1, 1.05, -1.35], tgt: [-3.1, 0.34, -2.75] },
   pantry: { cam: [3.1, 1.6, -0.7], tgt: [3.1, 1.25, -2.7] },
   island: { cam: [0, 1.85, 2.5], tgt: [0, 1.0, -0.3] },
   oven: { cam: [1.9, 1.5, -1.4], tgt: [1.9, 1.2, -3.1] },
@@ -2704,7 +2925,9 @@ export default function Kitchen3D({
       <Canvas
         shadows
         dpr={[1, 1.5]}
-        camera={{ position: [0.4, 1.62, 5.9], fov: 36 }}
+        /* Must match POSES.home, or the first frame renders from the old wide
+           shot and then visibly snaps once CameraRig takes over. */
+        camera={{ position: [1.5, 1.58, 4.15], fov: 40 }}
         gl={{ antialias: true, alpha: false, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 0.92 }}
         style={{ touchAction: "none" }}
         onPointerMissed={() => onDeselect?.()}
