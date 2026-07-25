@@ -42,6 +42,17 @@ const locationIcons = { fridge: Refrigerator, pantry: Archive, freezer: Snowflak
 // path — the loader + fallback are already wired (see KitchenModel.tsx).
 const KITCHEN_MODEL_URL: string | null = null;
 
+/** Soonest-expiring first — mirrors how the 3D shelves are ordered. */
+function byExpiry(items: KitchenItem[]): KitchenItem[] {
+  const d = (s: string | null) => (s ? new Date(s).getTime() : Number.POSITIVE_INFINITY);
+  return [...items].sort((a, b) => d(a.expires_at) - d(b.expires_at));
+}
+
+/** How many items are within 3 days of expiring. */
+function expiringSoon(items: KitchenItem[]): number {
+  return items.filter((i) => i.expires_at && (new Date(i.expires_at).getTime() - Date.now()) / 86_400_000 <= 3).length;
+}
+
 function expiryTone(dateStr: string | null): "amber" | null {
   if (!dateStr) return null;
   const days = (new Date(dateStr).getTime() - Date.now()) / 86_400_000;
@@ -134,7 +145,13 @@ export function KitchenModule({ items, shoppingList, suggestions }: Props) {
                   <p className="text-xs text-white/45">{t("kitchen.noItems")}</p>
                 ) : (
                   <ul className="space-y-2">
-                    {grouped[selected].map((it) => (
+                    {expiringSoon(grouped[selected]) > 0 && (
+                      <li className="mb-1 flex items-start gap-1.5 rounded-xl border border-amber-300/25 bg-amber-400/10 p-2.5 text-[0.7rem] leading-relaxed text-amber-100/90">
+                        <Sparkles className="mt-0.5 h-3.5 w-3.5 flex-none" />
+                        <span>{t("kitchen.jarvisOrganized", { n: expiringSoon(grouped[selected]) })}</span>
+                      </li>
+                    )}
+                    {byExpiry(grouped[selected]).map((it) => (
                       <li key={it.id} className="rounded-xl bg-white/[0.04] p-2.5">
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-white/85">{it.name}</span>

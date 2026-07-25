@@ -1146,6 +1146,7 @@ const en = {
     ctrlWater: "Water",
     ctrlStove: "Stove",
     ctrlOven: "Oven",
+    jarvisOrganized: "I moved {{n}} item(s) expiring soon to the front of the shelf so you see them first.",
   },
   nutrition: {
     title: "Nutrition",
@@ -2527,6 +2528,7 @@ const hu: typeof en = {
     ctrlWater: "Víz",
     ctrlStove: "Tűzhely",
     ctrlOven: "Sütő",
+    jarvisOrganized: "{{n}} hamarosan lejáró tételt előrébb tettem a polcon, hogy elsőként lásd őket.",
   },
   nutrition: {
     title: "Táplálkozás",

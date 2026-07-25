@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useState, useMemo, useEffect, Suspense, Component, type ReactNode } from "react";
+import React, { useRef, useState, useMemo, useEffect, useContext, Suspense, Component, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, ContactShadows, Environment, Html, MeshReflectorMaterial } from "@react-three/drei";
-import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
+import { OrbitControls, ContactShadows, Environment, Html, MeshReflectorMaterial, RoundedBox, SoftShadows } from "@react-three/drei";
+import { EffectComposer, Bloom, Vignette, N8AO } from "@react-three/postprocessing";
 import { Lightbulb, LightbulbOff, Sun, Moon, Droplets, Flame, CookingPot } from "lucide-react";
 import * as THREE from "three";
 import { cn } from "@/lib/utils";
@@ -66,6 +66,104 @@ function makeTexture(draw: (ctx: CanvasRenderingContext2D, w: number, h: number)
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
   return tex;
+}
+
+/** Procedural micro-imperfection map: subtle smudges/grain so no surface reads
+ * as a perfectly uniform CG plane. Used as a roughness map. */
+function microRoughness(base = 128, blotch = 26) {
+  const c = document.createElement("canvas");
+  c.width = c.height = 256;
+  const ctx = c.getContext("2d")!;
+  ctx.fillStyle = `rgb(${base},${base},${base})`;
+  ctx.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 260; i++) {
+    const v = base + (Math.random() - 0.5) * blotch * 2;
+    ctx.fillStyle = `rgba(${v},${v},${v},0.5)`;
+    ctx.beginPath();
+    ctx.arc(Math.random() * 256, Math.random() * 256, 6 + Math.random() * 34, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // fine grain
+  const img = ctx.getImageData(0, 0, 256, 256);
+  for (let i = 0; i < img.data.length; i += 4) {
+    const n = (Math.random() - 0.5) * 12;
+    img.data[i] += n;
+    img.data[i + 1] += n;
+    img.data[i + 2] += n;
+  }
+  ctx.putImageData(img, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(3, 3);
+  return t;
+}
+
+/** Frost / condensation speckle used on cold surfaces and frozen packs. */
+function frostTexture(density = 900, alpha = 0.75) {
+  const c = document.createElement("canvas");
+  c.width = c.height = 256;
+  const ctx = c.getContext("2d")!;
+  ctx.clearRect(0, 0, 256, 256);
+  for (let i = 0; i < density; i++) {
+    const r = Math.random() * 2.6 + 0.4;
+    ctx.fillStyle = `rgba(255,255,255,${Math.random() * alpha})`;
+    ctx.beginPath();
+    ctx.arc(Math.random() * 256, Math.random() * 256, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  return t;
+}
+
+/** Low, continuous compressor hum via WebAudio (no asset). Starts only after a
+ * real user gesture, so it never trips browser autoplay policy. */
+function useApplianceHum(active: boolean) {
+  const ref = useRef<{ ctx: AudioContext; gain: GainNode } | null>(null);
+  useEffect(() => {
+    if (!active) {
+      if (ref.current) ref.current.gain.gain.setTargetAtTime(0, ref.current.ctx.currentTime, 0.25);
+      return;
+    }
+    if (!ref.current) {
+      try {
+        const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+        if (!Ctor) return;
+        const ctx = new Ctor();
+        const osc = ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = 62; // deep compressor tone
+        const osc2 = ctx.createOscillator();
+        osc2.type = "triangle";
+        osc2.frequency.value = 124;
+        const g2 = ctx.createGain();
+        g2.gain.value = 0.25;
+        const lp = ctx.createBiquadFilter();
+        lp.type = "lowpass";
+        lp.frequency.value = 220;
+        const gain = ctx.createGain();
+        gain.gain.value = 0;
+        osc.connect(lp);
+        osc2.connect(g2).connect(lp);
+        lp.connect(gain).connect(ctx.destination);
+        osc.start();
+        osc2.start();
+        ref.current = { ctx, gain };
+      } catch {
+        return;
+      }
+    }
+    const { ctx, gain } = ref.current;
+    if (ctx.state === "suspended") void ctx.resume();
+    gain.gain.setTargetAtTime(0.045, ctx.currentTime, 0.5);
+  }, [active]);
+  useEffect(() => () => void ref.current?.ctx.close().catch(() => {}), []);
+}
+
+/** Days until expiry (null-safe); smaller = more urgent. */
+function daysLeft(iso: string | null): number {
+  if (!iso) return Number.POSITIVE_INFINITY;
+  return (new Date(iso).getTime() - Date.now()) / 86_400_000;
 }
 
 export type FoodItem = { name: string; quantity: string | null; expires_at: string | null };
@@ -273,11 +371,18 @@ function CameraFocus({ controlsRef, focus }: { controlsRef: React.MutableRefObje
 
 /** Organized, inventory-driven refrigerator interior. */
 function FridgeInterior({ items }: { items: FoodItem[] }) {
+  // Smart organization: within every shelf group the soonest-expiring item is
+  // sorted first, and first == front-most position, so what needs eating shows
+  // up at the front of the shelf where you actually see it.
   const buckets = useMemo(() => {
     const b: Record<FoodKind, FoodItem[]> = { milk: [], egg: [], cheese: [], meat: [], fish: [], butter: [], yogurt: [], water: [], juice: [], fruit: [], veg: [], other: [] };
     items.forEach((it) => b[categorize(it.name)].push(it));
+    (Object.keys(b) as FoodKind[]).forEach((k) => b[k].sort((x, y) => daysLeft(x.expires_at) - daysLeft(y.expires_at)));
     return b;
   }, [items]);
+
+  // Condensation film on the cold glass — subtle, only where light catches it.
+  const condensation = useMemo(() => frostTexture(420, 0.22), []);
 
   const fruitColors = ["#c0392b", "#e67e22", "#27ae60", "#8e44ad", "#f1c40f"];
   const vegColors = ["#c0392b", "#2ecc71", "#27ae60", "#e67e22", "#16a085"];
@@ -286,7 +391,7 @@ function FridgeInterior({ items }: { items: FoodItem[] }) {
     <group position={[0, 0, 0.32]}>
       {/* TOP shelf (y≈1.78): milk, eggs, butter, yogurt, drinks */}
       {buckets.milk.slice(0, 2).map((it, i) => (
-        <Bottle key={`m${i}`} position={[-0.36 + i * 0.16, 1.94, 0]} color="#f7f7f2" fill={fillFrom(it.quantity)} />
+        <Bottle key={`m${i}`} position={[-0.36 + i * 0.16, 1.94, 0.15 - i * 0.18]} color="#f7f7f2" fill={fillFrom(it.quantity)} />
       ))}
       {buckets.egg.slice(0, 1).map((it, i) => (
         <EggTray key={`e${i}`} position={[0.12, 1.81, 0]} count={countFrom(it.quantity, 10)} />
@@ -303,7 +408,7 @@ function FridgeInterior({ items }: { items: FoodItem[] }) {
 
       {/* MIDDLE shelf (y≈1.18): meat, fish, cheese, prepared meals */}
       {buckets.meat.slice(0, 2).map((it, i) => (
-        <MeatTray key={`me${i}`} position={[-0.3 + i * 0.36, 1.2, 0]} color="#c65b5b" fill={fillFrom(it.quantity)} />
+        <MeatTray key={`me${i}`} position={[-0.3 + i * 0.36, 1.2, 0.16 - i * 0.22]} color="#c65b5b" fill={fillFrom(it.quantity)} />
       ))}
       {buckets.fish.slice(0, 1).map((it, i) => (
         <MeatTray key={`f${i}`} position={[0.3, 1.2, -0.14]} color="#d6a3a0" fill={fillFrom(it.quantity)} />
@@ -323,10 +428,23 @@ function FridgeInterior({ items }: { items: FoodItem[] }) {
         </mesh>
       ))}
 
+      {/* Condensation film on the cold glass shelves */}
+      {[0.55, 1.15, 1.75].map((y) => (
+        <mesh key={`cond${y}`} position={[0, y - 0.31, -0.02]} rotation={[-Math.PI / 2, 0, 0]}>
+          <planeGeometry args={[1.06, 0.76]} />
+          <meshStandardMaterial map={condensation} transparent opacity={0.3} depthWrite={false} roughness={0.1} />
+        </mesh>
+      ))}
+
       {/* Vegetable drawer (transparent, below bottom shelf) */}
       <mesh position={[0, 0.2, 0.06]}>
         <boxGeometry args={[1.05, 0.34, 0.78]} />
         <meshPhysicalMaterial color="#e6f0f2" roughness={0.15} transmission={0.75} transparent opacity={0.32} />
+      </mesh>
+      {/* condensation on the crisper lid */}
+      <mesh position={[0, 0.375, 0.06]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[1.02, 0.74]} />
+        <meshStandardMaterial map={condensation} transparent opacity={0.34} depthWrite={false} />
       </mesh>
       {buckets.veg.slice(0, 8).map((it, i) => (
         <Produce key={`v${i}`} position={[-0.4 + (i % 4) * 0.26, 0.2, -0.12 + Math.floor(i / 4) * 0.22]} color={vegColors[i % vegColors.length]} r={0.055} />
@@ -334,6 +452,9 @@ function FridgeInterior({ items }: { items: FoodItem[] }) {
     </group>
   );
 }
+
+/** Lets nested parts (e.g. handles) react to their appliance being hovered. */
+const HoverCtx = React.createContext(false);
 
 function Hoverable({
   name,
@@ -365,7 +486,7 @@ function Hoverable({
         onActivate();
       }}
     >
-      {children}
+      <HoverCtx.Provider value={hovered}>{children}</HoverCtx.Provider>
       {hovered && (
         <Html center position={[0, labelY, 0]} distanceFactor={9} zIndexRange={[10, 0]}>
           <div className="pointer-events-none whitespace-nowrap rounded-full border border-white/20 bg-black/75 px-2.5 py-1 text-[11px] font-medium text-white/90 backdrop-blur">
@@ -378,9 +499,19 @@ function Hoverable({
 }
 
 function Handle({ position, length = 0.6, vertical = false }: { position: [number, number, number]; length?: number; vertical?: boolean }) {
+  // Subtly lights up when its appliance is hovered — the "grab me" cue.
+  const hovered = useContext(HoverCtx);
   return (
-    <mesh position={position} material={DARKMETAL} rotation={vertical ? [0, 0, 0] : [0, 0, Math.PI / 2]}>
-      <cylinderGeometry args={[0.014, 0.014, length, 10]} />
+    <mesh position={position} rotation={vertical ? [0, 0, 0] : [0, 0, Math.PI / 2]}>
+      <cylinderGeometry args={[0.014, 0.014, length, 14]} />
+      <meshStandardMaterial
+        color={hovered ? "#e8e2d4" : "#202329"}
+        roughness={0.3}
+        metalness={0.85}
+        emissive="#ffd9a0"
+        emissiveIntensity={hovered ? 0.5 : 0}
+        envMapIntensity={1.3}
+      />
     </mesh>
   );
 }
@@ -422,15 +553,22 @@ function Pendant({ x, on }: { x: number; on: boolean }) {
 /** Freezer whose drawer slides open (revealing lit baskets) when selected. */
 function Freezer({ selected, onSelect, label }: { selected: boolean; onSelect: (k: KitchenObject) => void; label: string }) {
   const drawer = useRef<THREE.Group>(null);
-  useFrame(() => {
-    if (drawer.current) drawer.current.position.z = THREE.MathUtils.lerp(drawer.current.position.z, selected ? 0.55 : 0, 0.15);
+  const vel = useRef(0);
+  const frost = useMemo(() => frostTexture(1100, 0.85), []);
+  // Spring-damped travel: the drawer has mass, so it eases out and settles
+  // instead of snapping — resistance you can feel.
+  useFrame((_, dt) => {
+    if (!drawer.current) return;
+    const target = selected ? 0.55 : 0;
+    const k = 90, c = 15;
+    const step = Math.min(dt, 0.05);
+    vel.current += (target - drawer.current.position.z) * k * step - vel.current * c * step;
+    drawer.current.position.z += vel.current * step;
   });
   return (
     <Hoverable name={label} hint="inspect" onActivate={() => onSelect("freezer")} labelY={0.95}>
       <group position={[-3.4, 0.35, -1.4]}>
-        <mesh castShadow material={BLACK}>
-          <boxGeometry args={[1.3, 0.7, 1.0]} />
-        </mesh>
+        <RoundedBox args={[1.3, 0.7, 1.0]} radius={0.014} smoothness={3} castShadow material={BLACK} />
         <mesh position={[0, 0, 0.02]} material={CERAMIC}>
           <boxGeometry args={[1.15, 0.56, 0.9]} />
         </mesh>
@@ -439,9 +577,7 @@ function Freezer({ selected, onSelect, label }: { selected: boolean; onSelect: (
           <meshStandardMaterial color="#eaf6ff" emissive="#bfe4ff" emissiveIntensity={selected ? 0.85 : 0.14} />
         </mesh>
         <group ref={drawer}>
-          <mesh position={[0, 0, 0.5]} castShadow material={BLACK}>
-            <boxGeometry args={[1.3, 0.7, 0.06]} />
-          </mesh>
+          <RoundedBox args={[1.3, 0.7, 0.06]} radius={0.01} smoothness={3} position={[0, 0, 0.5]} castShadow material={BLACK} />
           <Handle position={[0, 0.14, 0.54]} length={0.7} />
           <mesh position={[0, -0.12, 0.22]} material={STEEL}>
             <boxGeometry args={[1.0, 0.32, 0.55]} />
@@ -451,10 +587,17 @@ function Freezer({ selected, onSelect, label }: { selected: boolean; onSelect: (
             ["#e8d8c0", 0],
             ["#d9c0c0", 0.3],
           ].map(([c, x], i) => (
-            <mesh key={i} position={[x as number, -0.04, 0.24]}>
-              <boxGeometry args={[0.22, 0.18, 0.32]} />
-              <meshStandardMaterial color={c as string} roughness={0.6} />
-            </mesh>
+            <group key={i} position={[x as number, -0.04, 0.24]}>
+              <mesh>
+                <boxGeometry args={[0.22, 0.18, 0.32]} />
+                <meshStandardMaterial color={c as string} roughness={0.85} />
+              </mesh>
+              {/* frost rime on the frozen pack */}
+              <mesh scale={1.03}>
+                <boxGeometry args={[0.22, 0.18, 0.32]} />
+                <meshStandardMaterial map={frost} transparent opacity={0.55} roughness={1} depthWrite={false} />
+              </mesh>
+            </group>
           ))}
         </group>
       </group>
@@ -474,9 +617,7 @@ function Pantry({ selected, onSelect, label }: { selected: boolean; onSelect: (k
   return (
     <Hoverable name={label} hint="inspect" onActivate={() => onSelect("pantry")} labelY={2.4}>
       <group position={[4.9, 1.1, -2.4]}>
-        <mesh material={BLACK}>
-          <boxGeometry args={[1.0, 2.2, 0.7]} />
-        </mesh>
+        <RoundedBox args={[1.0, 2.2, 0.7]} radius={0.014} smoothness={3} castShadow material={BLACK} />
         <mesh position={[0, 0, -0.02]} material={CERAMIC}>
           <boxGeometry args={[0.9, 2.05, 0.62]} />
         </mesh>
@@ -595,13 +736,23 @@ function Fridge({ selected, onSelect, label, items }: { selected: boolean; onSel
   const left = useRef<THREE.Group>(null);
   const right = useRef<THREE.Group>(null);
   const led = useRef(0);
+  const vel = useRef(0);
+  const swing = useRef(0);
   const [ledOn, setLedOn] = useState(0);
-  useFrame(() => {
-    // Doors swing with a soft, physical ease; interior LED fades on after.
+  useApplianceHum(selected);
+  useFrame((_, dt) => {
+    // Spring-damped door swing: a heavy door accelerates slowly, carries
+    // momentum, then settles — rather than a linear snap.
     const target = selected ? 1 : 0;
-    if (left.current) left.current.rotation.y = THREE.MathUtils.lerp(left.current.rotation.y, target * 2.05, 0.09);
-    if (right.current) right.current.rotation.y = THREE.MathUtils.lerp(right.current.rotation.y, -target * 2.05, 0.09);
-    led.current = THREE.MathUtils.lerp(led.current, selected ? 1 : 0, 0.06);
+    const step = Math.min(dt, 0.05);
+    const k = 55, c = 12;
+    vel.current += (target - swing.current) * k * step - vel.current * c * step;
+    swing.current += vel.current * step;
+    if (left.current) left.current.rotation.y = swing.current * 2.05;
+    if (right.current) right.current.rotation.y = -swing.current * 2.05;
+    // Interior LED fades in only once the door is genuinely ajar.
+    const lit = THREE.MathUtils.clamp((swing.current - 0.08) / 0.5, 0, 1);
+    led.current = THREE.MathUtils.lerp(led.current, lit, 0.12);
     if (Math.abs(led.current - ledOn) > 0.01) setLedOn(led.current);
   });
   const doorDrinks = useMemo(() => items.filter((i) => ["water", "juice"].includes(categorize(i.name))), [items]);
@@ -609,9 +760,7 @@ function Fridge({ selected, onSelect, label, items }: { selected: boolean; onSel
     <Hoverable name={label} hint="inspect" onActivate={() => onSelect("fridge")} labelY={2.5}>
       <group position={[-3.4, 0, -2.2]}>
         {/* body + fingerprint-resistant liner */}
-        <mesh position={[0, 1.1, 0]} castShadow material={BLACK}>
-          <boxGeometry args={[1.3, 2.2, 1.0]} />
-        </mesh>
+        <RoundedBox args={[1.3, 2.2, 1.0]} radius={0.014} smoothness={3} position={[0, 1.1, 0]} castShadow material={BLACK} />
         <mesh position={[0, 1.15, 0.05]}>
           <boxGeometry args={[1.16, 1.92, 0.9]} />
           <meshStandardMaterial color="#eef1f3" roughness={0.35} metalness={0.35} envMapIntensity={1.2} />
@@ -642,9 +791,7 @@ function Fridge({ selected, onSelect, label, items }: { selected: boolean; onSel
 
         {/* doors with rubber seals, premium handles, and door-shelf drinks */}
         <group ref={left} position={[-0.65, 1.1, 0.5]}>
-          <mesh position={[0.325, 0, 0]} castShadow material={BLACK}>
-            <boxGeometry args={[0.65, 2.2, 0.08]} />
-          </mesh>
+          <RoundedBox args={[0.65, 2.2, 0.08]} radius={0.01} smoothness={3} position={[0.325, 0, 0]} castShadow material={BLACK} />
           <mesh position={[0.325, 0, -0.045]}>
             <boxGeometry args={[0.58, 2.05, 0.02]} />
             <meshStandardMaterial color="#0a0b0d" roughness={0.9} />
@@ -655,9 +802,7 @@ function Fridge({ selected, onSelect, label, items }: { selected: boolean; onSel
           ))}
         </group>
         <group ref={right} position={[0.65, 1.1, 0.5]}>
-          <mesh position={[-0.325, 0, 0]} castShadow material={BLACK}>
-            <boxGeometry args={[0.65, 2.2, 0.08]} />
-          </mesh>
+          <RoundedBox args={[0.65, 2.2, 0.08]} radius={0.01} smoothness={3} position={[-0.325, 0, 0]} castShadow material={BLACK} />
           <mesh position={[-0.325, 0, -0.045]}>
             <boxGeometry args={[0.58, 2.05, 0.02]} />
             <meshStandardMaterial color="#0a0b0d" roughness={0.9} />
@@ -737,6 +882,19 @@ function Scene({
   onToggleWater: () => void;
   onToggleStove: () => void;
 }) {
+  // Real surfaces are never uniformly rough — vary roughness per-pixel so
+  // reflections break up instead of reading as flat CG.
+  useMemo(() => {
+    const matte = microRoughness(150, 34);
+    const metal = microRoughness(74, 26);
+    BLACK.roughnessMap = matte;
+    BLACK2.roughnessMap = matte;
+    WALL.roughnessMap = microRoughness(210, 22);
+    STEEL.roughnessMap = metal;
+    DARKMETAL.roughnessMap = metal;
+    [BLACK, BLACK2, WALL, STEEL, DARKMETAL].forEach((m) => (m.needsUpdate = true));
+  }, []);
+
   const wood = useMemo(
     () =>
       makeTexture((ctx, w, h) => {
@@ -929,10 +1087,8 @@ function Scene({
         <boxGeometry args={[0.2, 4.8, 6]} />
       </mesh>
 
-      {/* Full-height matte black cabinetry across the back */}
-      <mesh position={[0.6, 2.0, -2.55]} castShadow receiveShadow material={BLACK}>
-        <boxGeometry args={[6.6, 4.0, 0.6]} />
-      </mesh>
+      {/* Full-height matte black cabinetry across the back (bevelled edges) */}
+      <RoundedBox args={[6.6, 4.0, 0.6]} radius={0.012} smoothness={3} position={[0.6, 2.0, -2.55]} castShadow receiveShadow material={BLACK} />
       {/* Tall cabinet seams + slim handles */}
       {[-1.6, 0.2, 2.0].map((x) => (
         <mesh key={x} position={[x, 2.0, -2.24]} material={BLACK2}>
@@ -956,12 +1112,8 @@ function Scene({
       <pointLight position={[0.4, 1.35, -2.0]} intensity={2.4} distance={4} decay={2} color="#ffb85f" />
 
       {/* Base run + slim black counter */}
-      <mesh position={[0.6, 0.45, -2.35]} castShadow receiveShadow material={BLACK}>
-        <boxGeometry args={[6.5, 0.9, 0.7]} />
-      </mesh>
-      <mesh position={[0.6, 0.92, -2.35]} castShadow material={BLACK2}>
-        <boxGeometry args={[6.6, 0.05, 0.78]} />
-      </mesh>
+      <RoundedBox args={[6.5, 0.9, 0.7]} radius={0.012} smoothness={3} position={[0.6, 0.45, -2.35]} castShadow receiveShadow material={BLACK} />
+      <RoundedBox args={[6.6, 0.05, 0.78]} radius={0.008} smoothness={3} position={[0.6, 0.92, -2.35]} castShadow material={BLACK2} />
 
       {/* Window on the left wall */}
       <group position={[-5.28, 2.5, 0.6]} rotation={[0, Math.PI / 2, 0]}>
@@ -1165,6 +1317,9 @@ export default function Kitchen3D({
       >
         <color attach="background" args={[night ? "#050609" : "#0a0a0c"]} />
         <fog attach="fog" args={[night ? "#050609" : "#0a0a0c", 16, 34]} />
+        {/* Contact-hardening soft shadows: sharp where objects touch, diffuse
+            further away — how real shadows actually behave. */}
+        <SoftShadows size={26} samples={12} focus={0.85} />
         <ambientLight intensity={night ? 0.08 : 0.32} />
         <hemisphereLight args={["#fff2df", "#2a241f", night ? 0.1 : 0.4]} />
         <directionalLight
@@ -1239,7 +1394,10 @@ export default function Kitchen3D({
           enableDamping
           dampingFactor={0.08}
         />
-        <EffectComposer multisampling={0} enableNormalPass={false}>
+        <EffectComposer multisampling={4} enableNormalPass>
+          {/* Ambient occlusion — the single biggest realism cue for interiors:
+              it darkens crevices, corners and where objects meet surfaces. */}
+          <N8AO aoRadius={0.55} intensity={2.2} distanceFalloff={0.8} quality="medium" halfRes />
           <Bloom luminanceThreshold={0.7} luminanceSmoothing={0.9} intensity={0.6} mipmapBlur radius={0.7} />
           <Vignette eskil={false} offset={0.22} darkness={0.7} />
         </EffectComposer>
