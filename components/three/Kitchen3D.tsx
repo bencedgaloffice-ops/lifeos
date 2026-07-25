@@ -2,7 +2,7 @@
 
 import React, { useRef, useState, useMemo, useEffect, useContext, Suspense, Component, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls, ContactShadows, Environment, Html, MeshReflectorMaterial, RoundedBox, SoftShadows } from "@react-three/drei";
+import { OrbitControls, ContactShadows, Environment, Html, MeshReflectorMaterial, RoundedBox, PerformanceMonitor, AdaptiveDpr } from "@react-three/drei";
 import { EffectComposer, Bloom, Vignette, N8AO } from "@react-three/postprocessing";
 import { Lightbulb, LightbulbOff, Sun, Moon, Droplets, Flame, CookingPot } from "lucide-react";
 import * as THREE from "three";
@@ -207,7 +207,7 @@ function Bottle({ position, color, fill, r = 0.045, h = 0.3 }: { position: [numb
     <group position={position}>
       <mesh>
         <cylinderGeometry args={[r, r, h, 16]} />
-        <meshPhysicalMaterial color="#cfe6ef" roughness={0.05} metalness={0} transmission={0.9} thickness={0.2} transparent opacity={0.35} />
+        <meshStandardMaterial color="#cfe6ef" roughness={0.08} metalness={0.05} transparent opacity={0.34} />
       </mesh>
       <mesh position={[0, -h / 2 + lh / 2 + 0.02, 0]}>
         <cylinderGeometry args={[r * 0.82, r * 0.82, lh, 16]} />
@@ -255,7 +255,7 @@ function MeatTray({ position, color, fill }: { position: [number, number, number
       </mesh>
       <mesh position={[0, 0.065, 0]}>
         <boxGeometry args={[w + 0.03, 0.005, 0.2]} />
-        <meshPhysicalMaterial color="#ffffff" roughness={0.1} transmission={0.85} transparent opacity={0.25} />
+        <meshStandardMaterial color="#ffffff" roughness={0.12} transparent opacity={0.24} />
       </mesh>
     </group>
   );
@@ -424,7 +424,7 @@ function FridgeInterior({ items }: { items: FoodItem[] }) {
       {buckets.other.slice(0, 3).map((_, i) => (
         <mesh key={`o${i}`} position={[-0.3 + i * 0.3, 0.64, 0.16]}>
           <boxGeometry args={[0.2, 0.12, 0.16]} />
-          <meshPhysicalMaterial color="#dfe6ea" roughness={0.2} transmission={0.6} transparent opacity={0.5} />
+          <meshStandardMaterial color="#dfe6ea" roughness={0.2} transparent opacity={0.45} />
         </mesh>
       ))}
 
@@ -439,7 +439,7 @@ function FridgeInterior({ items }: { items: FoodItem[] }) {
       {/* Vegetable drawer (transparent, below bottom shelf) */}
       <mesh position={[0, 0.2, 0.06]}>
         <boxGeometry args={[1.05, 0.34, 0.78]} />
-        <meshPhysicalMaterial color="#e6f0f2" roughness={0.15} transmission={0.75} transparent opacity={0.32} />
+        <meshStandardMaterial color="#e6f0f2" roughness={0.15} metalness={0.1} transparent opacity={0.3} />
       </mesh>
       {/* condensation on the crisper lid */}
       <mesh position={[0, 0.375, 0.06]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -1066,7 +1066,7 @@ function Scene({
         <planeGeometry args={[18, 16]} />
         <MeshReflectorMaterial
           map={wood}
-          resolution={1024}
+          resolution={256}
           mixBlur={1.4}
           mixStrength={0.7}
           blur={[300, 90]}
@@ -1287,6 +1287,10 @@ export default function Kitchen3D({
 }) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const controlsRef = useRef<any>(null);
+  // Adaptive quality: if the machine can't hold a smooth framerate we drop the
+  // heavy post-processing rather than letting the whole scene stutter. A smooth
+  // 60fps scene reads as far more "real" than a pretty one running at 15fps.
+  const [heavyFx, setHeavyFx] = useState(true);
   const [lightsOn, setLightsOn] = useState(true);
   const [night, setNight] = useState(false);
   const [water, setWater] = useState(false);
@@ -1310,16 +1314,13 @@ export default function Kitchen3D({
     <>
       <Canvas
         shadows
-        dpr={[1, 2]}
+        dpr={[1, 1.5]}
         camera={{ position: [5.8, 3.2, 5.8], fov: 40 }}
         gl={{ antialias: true, alpha: false, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.0 }}
         style={{ touchAction: "none" }}
       >
         <color attach="background" args={[night ? "#050609" : "#0a0a0c"]} />
         <fog attach="fog" args={[night ? "#050609" : "#0a0a0c", 16, 34]} />
-        {/* Contact-hardening soft shadows: sharp where objects touch, diffuse
-            further away — how real shadows actually behave. */}
-        <SoftShadows size={26} samples={12} focus={0.85} />
         <ambientLight intensity={night ? 0.08 : 0.32} />
         <hemisphereLight args={["#fff2df", "#2a241f", night ? 0.1 : 0.4]} />
         <directionalLight
@@ -1327,7 +1328,7 @@ export default function Kitchen3D({
           intensity={night ? 0.12 : 1.5}
           color={night ? "#9fb4ff" : "#fff2df"}
           castShadow
-          shadow-mapSize={[2048, 2048]}
+          shadow-mapSize={[1024, 1024]}
           shadow-bias={-0.0004}
           shadow-camera-left={-8}
           shadow-camera-right={8}
@@ -1394,13 +1395,25 @@ export default function Kitchen3D({
           enableDamping
           dampingFactor={0.08}
         />
-        <EffectComposer multisampling={4} enableNormalPass>
-          {/* Ambient occlusion — the single biggest realism cue for interiors:
-              it darkens crevices, corners and where objects meet surfaces. */}
-          <N8AO aoRadius={0.55} intensity={2.2} distanceFalloff={0.8} quality="medium" halfRes />
-          <Bloom luminanceThreshold={0.7} luminanceSmoothing={0.9} intensity={0.6} mipmapBlur radius={0.7} />
-          <Vignette eskil={false} offset={0.22} darkness={0.7} />
-        </EffectComposer>
+        {/* Watches real framerate; drops the expensive AO pass if we can't
+            hold ~50fps, and scales resolution down before it ever stutters. */}
+        <PerformanceMonitor onDecline={() => setHeavyFx(false)} onIncline={() => setHeavyFx(true)} />
+        <AdaptiveDpr pixelated={false} />
+
+        {heavyFx ? (
+          <EffectComposer multisampling={0} enableNormalPass>
+            {/* Ambient occlusion — the single biggest realism cue for interiors:
+                it darkens crevices, corners and where objects meet surfaces. */}
+            <N8AO aoRadius={0.55} intensity={2.2} distanceFalloff={0.8} quality="low" halfRes />
+            <Bloom luminanceThreshold={0.7} luminanceSmoothing={0.9} intensity={0.6} mipmapBlur radius={0.7} />
+            <Vignette eskil={false} offset={0.22} darkness={0.7} />
+          </EffectComposer>
+        ) : (
+          <EffectComposer multisampling={0} enableNormalPass={false}>
+            <Bloom luminanceThreshold={0.75} luminanceSmoothing={0.9} intensity={0.45} mipmapBlur radius={0.6} />
+            <Vignette eskil={false} offset={0.22} darkness={0.7} />
+          </EffectComposer>
+        )}
       </Canvas>
 
       {/* Appliance controls — vertical column on the LEFT */}
