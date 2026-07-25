@@ -11,6 +11,7 @@ import {
   RoundedBox,
   PerformanceMonitor,
   AdaptiveDpr,
+  Lightformer,
 } from "@react-three/drei";
 import { EffectComposer, Bloom, Vignette, N8AO } from "@react-three/postprocessing";
 import { Lightbulb, LightbulbOff, Sun, Moon, Droplets, Flame, CookingPot } from "lucide-react";
@@ -55,7 +56,7 @@ export type FridgeInventory = { fridge: FoodItem[]; freezer: FoodItem[]; pantry:
 function canvasTex(
   draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void,
   repeat: [number, number] = [1, 1],
-  size = 512,
+  size = 1024,
 ) {
   const c = document.createElement("canvas");
   c.width = c.height = size;
@@ -64,7 +65,7 @@ function canvasTex(
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
   t.repeat.set(repeat[0], repeat[1]);
   t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
+  t.anisotropy = 8;
   return t;
 }
 
@@ -868,6 +869,54 @@ function Scene({
     [],
   );
 
+  // Restore surface relief lost in the rebuild. Gold, steel, lacquer and
+  // plaster had colour and roughness but no micro-relief, so they read as flat
+  // plastic. Normal maps are texture lookups — no per-frame cost.
+  useMemo(() => {
+    // brushed metal: fine directional scratches, as on real appliance steel
+    const brushed = heightToNormal(
+      (ctx, w, h) => {
+        for (let i = 0; i < 2600; i++) {
+          const y = Math.random() * h;
+          const v = 128 + (Math.random() - 0.5) * 90;
+          ctx.strokeStyle = `rgb(${v},${v},${v})`;
+          ctx.lineWidth = Math.random() * 1.4 + 0.2;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(w, y + (Math.random() - 0.5) * 2);
+          ctx.stroke();
+        }
+      },
+      [3, 3],
+      1.1,
+      256,
+    );
+    STEEL.normalMap = brushed;
+    STEEL.normalScale = new THREE.Vector2(0.3, 0.3);
+    // gold: very fine polish lines so highlights break up instead of being a
+    // single flat sheen
+    GOLD_MAT.normalMap = brushed;
+    GOLD_MAT.normalScale = new THREE.Vector2(0.1, 0.1);
+    // sprayed lacquer: subtle orange-peel, as real cabinet doors have
+    const peel = heightToNormal(
+      (ctx, w, h) => {
+        for (let i = 0; i < 900; i++) {
+          const v = 128 + (Math.random() - 0.5) * 60;
+          ctx.fillStyle = `rgb(${v},${v},${v})`;
+          ctx.beginPath();
+          ctx.arc(Math.random() * w, Math.random() * h, 3 + Math.random() * 9, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      },
+      [4, 4],
+      0.8,
+      256,
+    );
+    BLACKGLASS.normalMap = peel;
+    BLACKGLASS.normalScale = new THREE.Vector2(0.1, 0.1);
+    [STEEL, GOLD_MAT, BLACKGLASS].forEach((m) => (m.needsUpdate = true));
+  }, []);
+
   const blackMarbleMat = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
@@ -923,8 +972,8 @@ function Scene({
           map={marbleWhite}
           normalMap={stoneRelief}
           normalScale={new THREE.Vector2(0.12, 0.12)}
-          resolution={256}
-          mixBlur={1.0}
+          resolution={512}
+          mixBlur={0.9}
           mixStrength={1.4}
           blur={[300, 90]}
           roughness={0.2}
@@ -1339,7 +1388,20 @@ export default function Kitchen3D({
           shadow-camera-bottom={-9}
         />
         <Suspense fallback={null}>
-          <Environment preset={night ? "night" : "apartment"} environmentIntensity={night ? 0.3 : 0.9} />
+          <Environment key={night ? "n" : "d"} resolution={256} frames={1} environmentIntensity={night ? 0.35 : 1.05}>
+            {/* ceiling bounce — broad, soft, slightly warm */}
+            <Lightformer form="rect" intensity={night ? 0.5 : 3.2} color="#fff3e2" position={[0, 6, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[14, 9, 1]} />
+            {/* the window: a tall bright panel on the left. This is what draws
+                the long vertical highlight down polished gold and marble. */}
+            <Lightformer form="rect" intensity={night ? 0.8 : 7} color={night ? "#b9c8ff" : "#eef6ff"} position={[-9, 2.2, 0.4]} rotation={[0, Math.PI / 2, 0]} scale={[7, 3.4, 1]} />
+            {/* opposite soft fill so metals aren't black on their far side */}
+            <Lightformer form="rect" intensity={night ? 0.3 : 1.5} color="#fff0dd" position={[9, 2.2, 1]} rotation={[0, -Math.PI / 2, 0]} scale={[7, 3, 1]} />
+            {/* warm low kicker: gives the gold its amber depth */}
+            <Lightformer form="rect" intensity={night ? 0.5 : 1.9} color="#ffcf92" position={[0, 0.6, 7]} rotation={[0, Math.PI, 0]} scale={[10, 1.6, 1]} />
+            {/* narrow strips read as specular glints in the gold edges */}
+            <Lightformer form="rect" intensity={night ? 1.2 : 4} color="#ffffff" position={[-2.4, 4.2, 2.4]} rotation={[Math.PI / 2.6, 0, 0]} scale={[0.5, 5, 1]} />
+            <Lightformer form="rect" intensity={night ? 1.2 : 4} color="#ffffff" position={[2.4, 4.2, 2.4]} rotation={[Math.PI / 2.6, 0, 0]} scale={[0.5, 5, 1]} />
+          </Environment>
         </Suspense>
 
         {modelUrl ? (
