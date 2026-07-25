@@ -8,6 +8,7 @@ import { Segmented } from "@/components/dashboard/ui";
 import { OverviewModule, type OverviewData } from "@/components/dashboard/modules/OverviewModule";
 import { LifeMapModule } from "@/components/dashboard/modules/LifeMapModule";
 import { CommandCenter } from "@/components/dashboard/CommandCenter";
+import { JarvisBriefing } from "@/components/jarvis/JarvisBriefing";
 
 type Tab = "command" | "map" | "stats";
 
@@ -31,6 +32,11 @@ export function HomeModule({ overview, mapLocations, mapLifeAreas, mapOrganizati
 
   return (
     <div>
+      {/* Jarvis speaks first, at the top of the home screen — the one place the
+          user reliably lands. Renders nothing when there is nothing worth
+          saying, which is most of the time. */}
+      <JarvisBriefing />
+
       <div className="mb-5 flex items-center justify-end">
         <Segmented
           value={tab}

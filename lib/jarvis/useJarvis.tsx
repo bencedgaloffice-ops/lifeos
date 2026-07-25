@@ -43,6 +43,7 @@ import type {
   PermissionLevel,
   TranscriptLine,
 } from "./types";
+import { askJarvis, type UiDirective } from "@/app/dashboard/ai/agent-actions";
 import {
   jarvisAddJournal,
   jarvisAddKitchen,
@@ -250,10 +251,15 @@ export function JarvisProvider({ children, userName }: { children: React.ReactNo
       setStatus("thinking");
       jlog("Processing:", command.intent, command.args);
       try {
-        const reply = await runIntent(command, localeRef.current);
-        jlog("AI response generated:", reply);
+        const reply = await runIntent(command, localeRef.current, sess.level);
+        jlog("AI response generated:", reply.text, reply.used ?? []);
         touchSession();
-        speak(reply);
+        // Jarvis may have asked to move the screen as part of answering.
+        if (reply.directive) {
+          const route = directiveToRoute(reply.directive);
+          if (route) router.push(route);
+        }
+        speak(reply.text);
       } catch (err) {
         jlog("Error running command:", err);
         speak("Something went wrong running that.");
@@ -493,32 +499,105 @@ export function useJarvis() {
 /*  Intent → server action dispatch                                    */
 /* ------------------------------------------------------------------ */
 
-async function runIntent(command: JarvisCommand, locale: string): Promise<string> {
+/** Map a module key from a `navigate` tool call onto a real route. */
+const MODULE_ROUTES: Record<string, string> = {
+  overview: "/dashboard",
+  map: "/dashboard/map",
+  calendar: "/dashboard/calendar",
+  finance: "/dashboard/finance",
+  goals: "/dashboard/goals",
+  projects: "/dashboard/projects",
+  vision: "/dashboard/vision",
+  legacy: "/dashboard/legacy",
+  relationship: "/dashboard/relationship",
+  habits: "/dashboard/habits",
+  protection: "/dashboard/protection",
+  journal: "/dashboard/journal",
+  kitchen: "/dashboard/kitchen",
+  nutrition: "/dashboard/nutrition",
+  profile: "/dashboard/profile",
+  ai: "/dashboard/ai",
+  jarvis: "/dashboard/jarvis",
+  settings: "/dashboard/settings",
+  business: "/dashboard/business",
+  garage: "/dashboard/business/garage",
+};
+
+/** Turn a UI directive into a URL, carrying view/focus as query params so the
+ * target module can pick them up on mount. */
+export function directiveToRoute(d: UiDirective): string | null {
+  const base = MODULE_ROUTES[d.module];
+  if (!base) return null;
+  const q = new URLSearchParams();
+  if (d.view) q.set("view", d.view);
+  if (d.focus) q.set("focus", d.focus);
+  const qs = q.toString();
+  return qs ? `${base}?${qs}` : base;
+}
+
+export type IntentResult = {
+  /** What Jarvis says back. */
+  text: string;
+  /** A screen change it asked for, if any. */
+  directive?: UiDirective | null;
+  /** Which specialist answered, for the transcript. */
+  agentLabel?: string;
+  /** Tools it actually ran. */
+  used?: string[];
+};
+
+/**
+ * Dispatch an intent.
+ *
+ * The rule-based writes stay rule-based on purpose: "add milk to the shopping
+ * list" must be exact and instant, and routing it through a model would make it
+ * slower and less reliable, not smarter.
+ *
+ * The open-ended intents — questions, research, analysis — now go to the
+ * agentic core, which can look things up, act, and move the screen. It falls
+ * back to the old single-shot path when no API key is configured, so the
+ * assistant degrades rather than breaking.
+ */
+async function runIntent(command: JarvisCommand, locale: string, level: PermissionLevel): Promise<IntentResult> {
   const loc = (locale === "hu" ? "hu" : "en") as "en" | "hu";
+
+  const viaAgent = async (query: string): Promise<IntentResult> => {
+    const reply = await askJarvis(query, { level, locale: loc });
+    if (reply.answer) {
+      return {
+        text: reply.answer,
+        directive: reply.directive,
+        agentLabel: reply.agentLabel,
+        used: reply.used,
+      };
+    }
+    // No agent (no key) or the call failed — fall back to the grounded
+    // rule-based answer so the user still gets something real.
+    if (reply.stop === "not_configured") return { text: await jarvisAsk(query, loc) };
+    const web = await jarvisWebAnswer(query);
+    return { text: web ?? (await jarvisAsk(query, loc)) };
+  };
+
   switch (command.intent) {
     case "shopping.add":
-      return (await jarvisAddShopping(command.args.name)).message;
+      return { text: (await jarvisAddShopping(command.args.name)).message };
     case "shopping.remove":
-      return (await jarvisRemoveShopping(command.args.name)).message;
+      return { text: (await jarvisRemoveShopping(command.args.name)).message };
     case "kitchen.add":
-      return (await jarvisAddKitchen(command.args.name)).message;
+      return { text: (await jarvisAddKitchen(command.args.name)).message };
     case "goal.create":
-      return (await jarvisCreateGoal(command.args.title)).message;
+      return { text: (await jarvisCreateGoal(command.args.title)).message };
     case "reminder.create":
-      return (await jarvisCreateReminder(command.args.title)).message;
+      return { text: (await jarvisCreateReminder(command.args.title)).message };
     case "journal.add":
-      return (await jarvisAddJournal(command.args.text)).message;
+      return { text: (await jarvisAddJournal(command.args.text)).message };
     case "memory.add":
-      return (await jarvisRemember(command.args.text)).message;
-    case "web.query": {
-      const answer = await jarvisWebAnswer(command.args.query ?? "");
-      // Nothing online → fall back to the grounded LifeOS answer.
-      return answer ?? (await jarvisAsk(command.args.query ?? "", loc));
-    }
+      return { text: (await jarvisRemember(command.args.text)).message };
     case "garage.analyze":
-      return jarvisAnalyzeVehicle(command.args.query ?? "", loc);
+      return { text: await jarvisAnalyzeVehicle(command.args.query ?? "", loc) };
+    case "web.query":
     case "read.query":
     default:
-      return jarvisAsk(command.args.query ?? "", loc);
+      return viaAgent(command.args.query ?? "");
   }
 }

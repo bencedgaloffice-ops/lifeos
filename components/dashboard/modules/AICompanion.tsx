@@ -7,10 +7,18 @@ import type { AiMemory } from "@/lib/types";
 import { AISphereCanvas } from "@/components/three/AISphereCanvas";
 import { ModuleHeader, Panel, Field, inputClass } from "@/components/dashboard/ui";
 import { askCompanion, saveMemory, deleteMemory } from "@/app/dashboard/ai/actions";
+import { askJarvis } from "@/app/dashboard/ai/agent-actions";
+import { useJarvis } from "@/lib/jarvis/useJarvis";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 
 type Insight = { label: string; value: string };
-type Msg = { role: "user" | "ai"; text: string };
+type Msg = {
+  role: "user" | "ai";
+  text: string;
+  /** Which specialist answered, and what it actually did. */
+  agent?: string;
+  used?: string[];
+};
 
 export function AICompanion({
   insights,
@@ -22,6 +30,9 @@ export function AICompanion({
   greeting: string;
 }) {
   const { t, tList, locale } = useLocale();
+  // The chat inherits the live trust level, so a question that needs to write
+  // something is gated by exactly the same rule the voice path uses.
+  const { level } = useJarvis();
   const suggestions = tList("ai.suggestions");
   const [messages, setMessages] = useState<Msg[]>([{ role: "ai", text: greeting }]);
   const [input, setInput] = useState("");
@@ -35,8 +46,19 @@ export function AICompanion({
     setInput("");
     setThinking(true);
     try {
-      const reply = await askCompanion(question, locale);
-      setMessages((m) => [...m, { role: "ai", text: reply }]);
+      // Agentic path first: it can look things up, act, and cite sources.
+      // Falls back to the rule-based companion when no API key is configured,
+      // so the panel keeps working rather than going dark.
+      const reply = await askJarvis(question, { level, locale });
+      if (reply.answer) {
+        setMessages((m) => [
+          ...m,
+          { role: "ai", text: reply.answer!, agent: reply.agentLabel, used: reply.used },
+        ]);
+      } else {
+        const fallback = await askCompanion(question, locale);
+        setMessages((m) => [...m, { role: "ai", text: fallback }]);
+      }
     } catch {
       setMessages((m) => [...m, { role: "ai", text: t("auth.errorGeneric") }]);
     } finally {
@@ -102,7 +124,26 @@ export function AICompanion({
                           : "max-w-[85%] rounded-2xl rounded-bl-md glass px-4 py-2.5 text-sm leading-relaxed text-white/80"
                       }
                     >
+                      {m.role === "ai" && m.agent && (
+                        <p className="mb-1.5 text-[0.6rem] uppercase tracking-[0.2em] text-cyan-300/60">
+                          {m.agent}
+                        </p>
+                      )}
                       {m.text}
+                      {/* What it actually did to answer — an assistant that can
+                          write to your data should show its working. */}
+                      {m.role === "ai" && m.used && m.used.length > 0 && (
+                        <p className="mt-2 flex flex-wrap gap-1 border-t border-hairline pt-2">
+                          {[...new Set(m.used)].map((tool) => (
+                            <span
+                              key={tool}
+                              className="rounded-full bg-white/[0.06] px-2 py-0.5 font-mono text-[0.58rem] text-white/40"
+                            >
+                              {tool}
+                            </span>
+                          ))}
+                        </p>
+                      )}
                     </div>
                   </motion.div>
                 ))}

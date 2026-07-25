@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   ChefHat,
@@ -87,6 +88,24 @@ export function KitchenModule({
   // selecting an object flies the camera to it, which would otherwise hide
   // the whole kitchen behind a close-up on first load.
   const [selected, setSelected] = useState<KitchenObject | null>(null);
+
+  // Jarvis's `navigate` tool routes here with ?view= and ?focus=, so "open the
+  // shopping tab" or "show me the fridge" lands on the right screen rather than
+  // just the module's default.
+  const params = useSearchParams();
+  useEffect(() => {
+    const v = params.get("view");
+    if (v && ["world", "manager", "chef", "shopping", "music"].includes(v)) {
+      setView(v as typeof view);
+    }
+    const f = params.get("focus");
+    if (f && ["fridge", "freezer", "pantry", "island", "oven", "sink"].includes(f)) {
+      setView("world");
+      setSelected(f as KitchenObject);
+    }
+    // Only on arrival — re-running would fight the user's own tab clicks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [params]);
 
   const objectLabels: Record<KitchenObject, string> = {
     fridge: t("kitchen.fridge"),
