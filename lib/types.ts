@@ -588,6 +588,17 @@ export type StorePrice = {
   created_at: string;
 };
 
+/** A saved YouTube / YouTube Music station for the Kitchen player. */
+export type MusicStation = {
+  id: string;
+  user_id: string;
+  label: string;
+  kind: "video" | "playlist";
+  youtube_id: string;
+  sort_order: number;
+  created_at: string;
+};
+
 export type Recipe = {
   id: string;
   user_id: string;

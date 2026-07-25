@@ -132,3 +132,27 @@ export async function applyStorePlan(plan: { itemId: string; storeId: string }[]
   );
   refresh();
 }
+
+/* ---------------- Kitchen music (YouTube, no API key) ---------------- */
+
+export async function addMusicStation(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const youtubeId = String(fd.get("youtube_id") ?? "").trim();
+  const kind = String(fd.get("kind") ?? "video");
+  const label = String(fd.get("label") ?? "").trim();
+  if (!youtubeId || (kind !== "video" && kind !== "playlist")) return;
+
+  await supabase.from("music_stations").insert({
+    user_id: user.id,
+    label: label || youtubeId,
+    kind,
+    youtube_id: youtubeId,
+  });
+  refresh();
+}
+
+export async function deleteMusicStation(id: string) {
+  const { supabase } = await requireUser();
+  await supabase.from("music_stations").delete().eq("id", id);
+  refresh();
+}

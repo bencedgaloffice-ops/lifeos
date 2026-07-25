@@ -14,13 +14,14 @@ import {
   Sparkles,
   Check,
 } from "lucide-react";
-import type { KitchenItem, ShoppingListItem, Store, StorePrice } from "@/lib/types";
+import type { KitchenItem, ShoppingListItem, Store, StorePrice, MusicStation } from "@/lib/types";
 import type { SuggestedMeal } from "@/app/dashboard/kitchen/suggestions";
 import { formatDate } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { ModuleHeader, Panel, Pill, EmptyState, Field, inputClass, Segmented } from "@/components/dashboard/ui";
 import { Kitchen3DCanvas, type KitchenObject } from "@/components/three/Kitchen3DCanvas";
 import { SmartShopping } from "@/components/dashboard/kitchen/SmartShopping";
+import { KitchenMusic } from "@/components/dashboard/kitchen/KitchenMusic";
 import {
   createKitchenItem,
   deleteKitchenItem,
@@ -36,6 +37,7 @@ type Props = {
   suggestions: SuggestedMeal[];
   stores: Store[];
   prices: StorePrice[];
+  stations: MusicStation[];
 };
 
 const locationIcons = { fridge: Refrigerator, pantry: Archive, freezer: Snowflake } as const;
@@ -62,13 +64,13 @@ function expiryTone(dateStr: string | null): "amber" | null {
   return days <= 3 ? "amber" : null;
 }
 
-export function KitchenModule({ items, shoppingList, suggestions, stores, prices }: Props) {
+export function KitchenModule({ items, shoppingList, suggestions, stores, prices, stations }: Props) {
   const { t, locale } = useLocale();
   const [, startTransition] = useTransition();
   const [openItem, setOpenItem] = useState<null | "fridge" | "pantry" | "freezer">(null);
   const [openList, setOpenList] = useState(false);
   const [logged, setLogged] = useState<Set<string>>(new Set());
-  const [view, setView] = useState<"world" | "manager" | "shopping">("world");
+  const [view, setView] = useState<"world" | "manager" | "shopping" | "music">("world");
   // Start with nothing selected so the page opens on the wide room view —
   // selecting an object flies the camera to it, which would otherwise hide
   // the whole kitchen behind a close-up on first load.
@@ -122,6 +124,7 @@ export function KitchenModule({ items, shoppingList, suggestions, stores, prices
         { value: "world", label: t("kitchen.viewWorld") },
         { value: "manager", label: t("kitchen.viewManager") },
         { value: "shopping", label: t("kitchen.viewShopping") },
+        { value: "music", label: t("kitchen.viewMusic") },
       ]}
     />
   );
@@ -196,6 +199,20 @@ export function KitchenModule({ items, shoppingList, suggestions, stores, prices
               )}
             </div>
           )}
+      </div>
+    );
+  }
+
+  if (view === "music") {
+    return (
+      <div>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <ModuleHeader icon={ChefHat} title={t("kitchen.title")} subtitle={t("kitchen.musicSubtitle")} accent="kitchen" />
+          {toggle}
+        </div>
+        <div className="mt-4">
+          <KitchenMusic stations={stations} />
+        </div>
       </div>
     );
   }
