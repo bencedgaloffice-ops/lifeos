@@ -586,6 +586,11 @@ export type StorePrice = {
   price_huf: number;
   observed_at: string;
   created_at: string;
+  /** 'observed' = the user saw this on a shelf. 'ai_estimate' = researched. */
+  source: "observed" | "ai_estimate";
+  /** How sure the research was, 0–100. Null for observed prices. */
+  confidence: number | null;
+  note: string | null;
 };
 
 /** A saved YouTube / YouTube Music station for the Kitchen player. */
