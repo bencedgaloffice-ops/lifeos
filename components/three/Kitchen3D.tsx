@@ -68,6 +68,60 @@ function makeTexture(draw: (ctx: CanvasRenderingContext2D, w: number, h: number)
   return tex;
 }
 
+/**
+ * Converts a procedurally-drawn height field into a tangent-space NORMAL map
+ * (Sobel gradient). This is the single biggest thing separating "flat coloured
+ * plastic" from a surface that reads as physically present: it gives wood its
+ * grain depth, tile its recessed grout, steel its brushed micro-scratches and
+ * plaster its tooth — all reacting correctly to light as the camera moves.
+ * Costs nothing per frame (it's just another texture lookup).
+ */
+function heightToNormal(
+  draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void,
+  repeat: [number, number] = [1, 1],
+  strength = 2.2,
+  size = 512,
+) {
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const ctx = c.getContext("2d")!;
+  ctx.fillStyle = "#808080";
+  ctx.fillRect(0, 0, size, size);
+  draw(ctx, size, size);
+  const src = ctx.getImageData(0, 0, size, size).data;
+  const out = ctx.createImageData(size, size);
+  const at = (x: number, y: number) => {
+    const xx = (x + size) % size;
+    const yy = (y + size) % size;
+    return src[(yy * size + xx) * 4] / 255;
+  };
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      // Sobel gradients
+      const dx =
+        at(x - 1, y - 1) + 2 * at(x - 1, y) + at(x - 1, y + 1) -
+        (at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1));
+      const dy =
+        at(x - 1, y - 1) + 2 * at(x, y - 1) + at(x + 1, y - 1) -
+        (at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1));
+      const nx = dx * strength;
+      const ny = dy * strength;
+      const nz = 1;
+      const len = Math.hypot(nx, ny, nz) || 1;
+      const i = (y * size + x) * 4;
+      out.data[i] = ((nx / len) * 0.5 + 0.5) * 255;
+      out.data[i + 1] = ((ny / len) * 0.5 + 0.5) * 255;
+      out.data[i + 2] = ((nz / len) * 0.5 + 0.5) * 255;
+      out.data[i + 3] = 255;
+    }
+  }
+  ctx.putImageData(out, 0, 0);
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(repeat[0], repeat[1]);
+  return t;
+}
+
 /** Procedural micro-imperfection map: subtle smudges/grain so no surface reads
  * as a perfectly uniform CG plane. Used as a roughness map. */
 function microRoughness(base = 128, blotch = 26) {
@@ -287,6 +341,129 @@ function Produce({ position, color, r = 0.05 }: { position: [number, number, num
       <sphereGeometry args={[r, 14, 14]} />
       <meshStandardMaterial color={color} roughness={0.6} />
     </mesh>
+  );
+}
+
+/** Dust motes suspended in the window light — the classic architectural-viz
+ * atmosphere cue. Drift slowly and twinkle as they catch the sun. */
+function DustMotes({ on }: { on: boolean }) {
+  const pts = useRef<THREE.Points>(null);
+  const geo = useMemo(() => {
+    const n = 130;
+    const arr = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      arr[i * 3] = -4.4 + Math.random() * 3.2;
+      arr[i * 3 + 1] = 0.4 + Math.random() * 3.0;
+      arr[i * 3 + 2] = -1.6 + Math.random() * 3.6;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(arr, 3));
+    return g;
+  }, []);
+  useFrame((s, dt) => {
+    if (!pts.current) return;
+    pts.current.visible = on;
+    if (!on) return;
+    const p = pts.current.geometry.attributes.position as THREE.BufferAttribute;
+    const t = s.clock.elapsedTime;
+    for (let i = 0; i < p.count; i++) {
+      // slow convection drift, not linear fall
+      let y = p.getY(i) + Math.sin(t * 0.25 + i) * dt * 0.06 + dt * 0.012;
+      if (y > 3.4) y = 0.4;
+      p.setY(i, y);
+      p.setX(i, p.getX(i) + Math.sin(t * 0.18 + i * 1.7) * dt * 0.02);
+    }
+    p.needsUpdate = true;
+    (pts.current.material as THREE.PointsMaterial).opacity = 0.28 + Math.sin(t * 0.7) * 0.06;
+  });
+  return (
+    <points ref={pts} geometry={geo}>
+      <pointsMaterial size={0.016} color="#fff4e0" transparent opacity={0.3} depthWrite={false} sizeAttenuation />
+    </points>
+  );
+}
+
+/** Almost-imperceptible emissive pulse — the way real LED drivers breathe. */
+function PulseEmissive({
+  base,
+  amount = 0.12,
+  speed = 1.1,
+  position,
+  children,
+}: {
+  base: number;
+  amount?: number;
+  speed?: number;
+  position?: [number, number, number];
+  children?: ReactNode;
+}) {
+  const ref = useRef<THREE.Mesh>(null);
+  useFrame((s) => {
+    const m = ref.current?.material as THREE.MeshStandardMaterial | undefined;
+    if (m) m.emissiveIntensity = base * (1 + Math.sin(s.clock.elapsedTime * speed) * amount);
+  });
+  return (
+    <mesh ref={ref} position={position}>
+      {children}
+    </mesh>
+  );
+}
+
+/** Gentle life: leaves breathe, LED strips pulse almost imperceptibly. */
+function Breathing({ children, amount = 0.02, speed = 0.6 }: { children: ReactNode; amount?: number; speed?: number }) {
+  const g = useRef<THREE.Group>(null);
+  useFrame((s) => {
+    if (!g.current) return;
+    const t = s.clock.elapsedTime * speed;
+    g.current.rotation.z = Math.sin(t) * amount;
+    g.current.rotation.x = Math.cos(t * 0.7) * amount * 0.6;
+  });
+  return <group ref={g}>{children}</group>;
+}
+
+/** Wall clock whose hands show the real current time and actually move. */
+function Clock() {
+  const min = useRef<THREE.Group>(null);
+  const hr = useRef<THREE.Group>(null);
+  useFrame(() => {
+    const d = new Date();
+    const m = d.getMinutes() + d.getSeconds() / 60;
+    const h = (d.getHours() % 12) + m / 60;
+    if (min.current) min.current.rotation.z = -(m / 60) * Math.PI * 2;
+    if (hr.current) hr.current.rotation.z = -(h / 12) * Math.PI * 2;
+  });
+  return (
+    <group position={[-2.4, 3.35, -2.78]}>
+      <mesh material={CERAMIC} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[0.28, 0.28, 0.05, 36]} />
+      </mesh>
+      <mesh position={[0, 0, 0.03]}>
+        <circleGeometry args={[0.24, 36]} />
+        <meshStandardMaterial color="#f6f4ee" roughness={0.6} />
+      </mesh>
+      {Array.from({ length: 12 }).map((_, i) => (
+        <mesh key={i} position={[Math.sin((i / 12) * Math.PI * 2) * 0.2, Math.cos((i / 12) * Math.PI * 2) * 0.2, 0.035]}>
+          <boxGeometry args={[0.012, 0.03, 0.005]} />
+          <meshStandardMaterial color="#1c2027" />
+        </mesh>
+      ))}
+      <group ref={hr}>
+        <mesh position={[0, 0.055, 0.04]}>
+          <boxGeometry args={[0.018, 0.12, 0.008]} />
+          <meshStandardMaterial color="#1c2027" />
+        </mesh>
+      </group>
+      <group ref={min}>
+        <mesh position={[0, 0.08, 0.045]}>
+          <boxGeometry args={[0.012, 0.18, 0.008]} />
+          <meshStandardMaterial color="#1c2027" />
+        </mesh>
+      </group>
+      <mesh position={[0, 0, 0.05]}>
+        <cylinderGeometry args={[0.014, 0.014, 0.01, 12]} />
+        <meshStandardMaterial color="#c19a5b" metalness={1} roughness={0.3} />
+      </mesh>
+    </group>
   );
 }
 
@@ -892,6 +1069,67 @@ function Scene({
     WALL.roughnessMap = microRoughness(210, 22);
     STEEL.roughnessMap = metal;
     DARKMETAL.roughnessMap = metal;
+
+    // --- Surface relief (normal maps) ---
+    // Brushed stainless: fine directional scratches, like real appliance steel.
+    const brushed = heightToNormal(
+      (ctx, w, h) => {
+        for (let i = 0; i < 2600; i++) {
+          const y = Math.random() * h;
+          const v = 128 + (Math.random() - 0.5) * 90;
+          ctx.strokeStyle = `rgb(${v},${v},${v})`;
+          ctx.lineWidth = Math.random() * 1.4 + 0.2;
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(w, y + (Math.random() - 0.5) * 2);
+          ctx.stroke();
+        }
+      },
+      [2, 2],
+      1.1,
+      256,
+    );
+    STEEL.normalMap = brushed;
+    STEEL.normalScale = new THREE.Vector2(0.28, 0.28);
+    DARKMETAL.normalMap = brushed;
+    DARKMETAL.normalScale = new THREE.Vector2(0.2, 0.2);
+
+    // Matte lacquer cabinetry: very subtle orange-peel, as real sprayed doors have.
+    const orangePeel = heightToNormal(
+      (ctx, w, h) => {
+        for (let i = 0; i < 900; i++) {
+          const v = 128 + (Math.random() - 0.5) * 60;
+          ctx.fillStyle = `rgb(${v},${v},${v})`;
+          ctx.beginPath();
+          ctx.arc(Math.random() * w, Math.random() * h, 3 + Math.random() * 9, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      },
+      [4, 4],
+      0.8,
+      256,
+    );
+    BLACK.normalMap = orangePeel;
+    BLACK.normalScale = new THREE.Vector2(0.16, 0.16);
+    BLACK2.normalMap = orangePeel;
+    BLACK2.normalScale = new THREE.Vector2(0.12, 0.12);
+
+    // Plaster wall tooth.
+    const plaster = heightToNormal(
+      (ctx, w, h) => {
+        for (let i = 0; i < 5200; i++) {
+          const v = 128 + (Math.random() - 0.5) * 70;
+          ctx.fillStyle = `rgb(${v},${v},${v})`;
+          ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2);
+        }
+      },
+      [6, 6],
+      1.0,
+      256,
+    );
+    WALL.normalMap = plaster;
+    WALL.normalScale = new THREE.Vector2(0.5, 0.5);
+
     [BLACK, BLACK2, WALL, STEEL, DARKMETAL].forEach((m) => (m.needsUpdate = true));
   }, []);
 
@@ -1003,7 +1241,70 @@ function Scene({
     [],
   );
 
-  const bronzeMat = useMemo(() => new THREE.MeshStandardMaterial({ map: bronze, roughness: 0.35, metalness: 0.45, envMapIntensity: 1.3 }), [bronze]);
+  // Wood grain relief + plank seams.
+  const woodNormal = useMemo(
+    () =>
+      heightToNormal(
+        (ctx, w, h) => {
+          const planks = 6;
+          const pw = w / planks;
+          for (let i = 0; i < planks; i++) {
+            for (let g = 0; g < 40; g++) {
+              const x = i * pw + Math.random() * pw;
+              const v = 128 + (Math.random() - 0.5) * 64;
+              ctx.strokeStyle = `rgb(${v},${v},${v})`;
+              ctx.lineWidth = Math.random() * 1.6 + 0.3;
+              ctx.beginPath();
+              ctx.moveTo(x, 0);
+              ctx.bezierCurveTo(x + 4, h * 0.33, x - 4, h * 0.66, x, h);
+              ctx.stroke();
+            }
+            ctx.fillStyle = "#3a3a3a"; // seam groove
+            ctx.fillRect(i * pw + pw - 2, 0, 2, h);
+          }
+          for (let y = 0; y < h; y += h / 4) {
+            ctx.fillStyle = "#3a3a3a";
+            ctx.fillRect(0, y, w, 2);
+          }
+        },
+        [5, 5],
+        1.6,
+        256,
+      ),
+    [],
+  );
+  // Marble/terrazzo aggregate relief.
+  const stoneNormal = useMemo(
+    () =>
+      heightToNormal(
+        (ctx, w, h) => {
+          for (let i = 0; i < 1200; i++) {
+            const v = 128 + (Math.random() - 0.5) * 46;
+            ctx.fillStyle = `rgb(${v},${v},${v})`;
+            ctx.beginPath();
+            ctx.arc(Math.random() * w, Math.random() * h, 1 + Math.random() * 3.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        },
+        [1, 1],
+        0.9,
+        256,
+      ),
+    [],
+  );
+
+  const bronzeMat = useMemo(
+    () =>
+      new THREE.MeshStandardMaterial({
+        map: bronze,
+        normalMap: stoneNormal,
+        normalScale: new THREE.Vector2(0.35, 0.35),
+        roughness: 0.35,
+        metalness: 0.45,
+        envMapIntensity: 1.3,
+      }),
+    [bronze, stoneNormal],
+  );
   const copperMat = useMemo(() => new THREE.MeshStandardMaterial({ map: copper, roughness: 0.45, metalness: 0.7, envMapIntensity: 1.2 }), [copper]);
 
   // Faceted angular island base (waterfall wedge)
@@ -1066,6 +1367,8 @@ function Scene({
         <planeGeometry args={[18, 16]} />
         <MeshReflectorMaterial
           map={wood}
+          normalMap={woodNormal}
+          normalScale={new THREE.Vector2(0.55, 0.55)}
           resolution={256}
           mixBlur={1.4}
           mixStrength={0.7}
@@ -1105,10 +1408,10 @@ function Scene({
       </mesh>
 
       {/* Back-lit onyx splash (signature glow) */}
-      <mesh position={[0.4, 1.35, -2.52]}>
+      <PulseEmissive base={2.0} amount={0.07} speed={0.5} position={[0.4, 1.35, -2.52]}>
         <planeGeometry args={[2.3, 0.7]} />
         <meshStandardMaterial map={onyx} emissive="#ffb257" emissiveMap={onyx} emissiveIntensity={2.0} toneMapped={false} />
-      </mesh>
+      </PulseEmissive>
       <pointLight position={[0.4, 1.35, -2.0]} intensity={2.4} distance={4} decay={2} color="#ffb85f" />
 
       {/* Base run + slim black counter */}
@@ -1247,6 +1550,7 @@ function Scene({
         <mesh material={CERAMIC}>
           <cylinderGeometry args={[0.09, 0.07, 0.34, 16]} />
         </mesh>
+        <Breathing amount={0.028} speed={0.45}>
         {[
           [0, 0.6, 0.1],
           [0.12, 0.7, -0.05],
@@ -1263,7 +1567,14 @@ function Scene({
             <meshStandardMaterial color="#e4c33a" emissive="#caa41f" emissiveIntensity={0.3} />
           </mesh>
         ))}
+        </Breathing>
       </group>
+
+      {/* Live wall clock — real time, hands actually move */}
+      <Clock />
+
+      {/* Dust suspended in the daylight */}
+      <DustMotes on={!night} />
 
       <ContactShadows position={[0, 0.015, 0]} opacity={0.55} scale={20} blur={2.6} far={9} resolution={1024} color="#000000" />
     </>
