@@ -20,6 +20,7 @@ const Kitchen3D = dynamic(() => import("./Kitchen3D"), {
 export function Kitchen3DCanvas(props: {
   selected: KitchenObject | null;
   onSelect: (k: KitchenObject) => void;
+  onDeselect?: () => void;
   labels: Record<KitchenObject, string>;
   controls: KitchenControlLabels;
   inventory: FridgeInventory;

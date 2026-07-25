@@ -147,7 +147,7 @@ const STEEL = new THREE.MeshStandardMaterial({ color: "#cfd3d8", roughness: 0.22
 const BLACKGLASS = new THREE.MeshStandardMaterial({ color: "#0b0d10", roughness: 0.09, metalness: 0.6, envMapIntensity: 1.8 });
 const CERAMIC = new THREE.MeshStandardMaterial({ color: "#f2eee6", roughness: 0.4 });
 const LEATHER = new THREE.MeshStandardMaterial({ color: "#141519", roughness: 0.55, metalness: 0.05 });
-const GLASSY = new THREE.MeshStandardMaterial({ color: "#dfeaee", roughness: 0.08, metalness: 0.1, transparent: true, opacity: 0.3 });
+const GLASSY = new THREE.MeshStandardMaterial({ color: "#cfe0e6", roughness: 0.07, metalness: 0.1, transparent: true, opacity: 0.13 });
 
 /* ------------------------------------------------------------ interaction */
 
@@ -185,7 +185,7 @@ function Hoverable({
     >
       <HoverCtx.Provider value={hovered}>{children}</HoverCtx.Provider>
       {hovered && (
-        <Html center position={[0, labelY, 0]} distanceFactor={10} zIndexRange={[10, 0]}>
+        <Html center position={[0, labelY, 0]} distanceFactor={6} zIndexRange={[10, 0]}>
           <div className="pointer-events-none whitespace-nowrap rounded-full border border-[#c9a227]/40 bg-black/70 px-3 py-1 text-[11px] font-medium tracking-wide text-[#f0e2b8] backdrop-blur">
             {name} <span className="text-white/35">· {hint}</span>
           </div>
@@ -461,7 +461,7 @@ function Fridge({
 
   useFrame((_, dt) => {
     const step = Math.min(dt, 0.05);
-    vel.current += ((selected ? 1 : 0) - swing.current) * 55 * step - vel.current * 12 * step;
+    vel.current += ((selected ? 1 : 0) - swing.current) * 34 * step - vel.current * 11 * step;
     swing.current += vel.current * step;
     if (l.current) l.current.rotation.y = swing.current * 2.0;
     if (r.current) r.current.rotation.y = -swing.current * 2.0;
@@ -612,7 +612,7 @@ function Freezer({
   useFrame((_, dt) => {
     if (!d.current) return;
     const step = Math.min(dt, 0.05);
-    vel.current += ((selected ? 0.5 : 0) - d.current.position.z) * 90 * step - vel.current * 15 * step;
+    vel.current += ((selected ? 0.5 : 0) - d.current.position.z) * 58 * step - vel.current * 13 * step;
     d.current.position.z += vel.current * step;
   });
   return (
@@ -659,7 +659,7 @@ function Pantry({ selected, onSelect, label }: { selected: boolean; onSelect: (k
   const [lit, setLit] = useState(0);
   useFrame((_, dt) => {
     const step = Math.min(dt, 0.05);
-    vel.current += ((selected ? 1 : 0) - swing.current) * 50 * step - vel.current * 12 * step;
+    vel.current += ((selected ? 1 : 0) - swing.current) * 32 * step - vel.current * 11 * step;
     swing.current += vel.current * step;
     if (l.current) l.current.rotation.y = swing.current * 2.0;
     if (r.current) r.current.rotation.y = -swing.current * 2.0;
@@ -789,7 +789,7 @@ function Scene({
   const marbleWhite = useMemo(
     () =>
       canvasTex((ctx, w, h) => {
-        ctx.fillStyle = "#f6f4f0";
+        ctx.fillStyle = "#d8d4cb";
         ctx.fillRect(0, 0, w, h);
         for (let i = 0; i < 24; i++) {
           const g = ctx.createRadialGradient(Math.random() * w, Math.random() * h, 8, Math.random() * w, Math.random() * h, 130 + Math.random() * 150);
@@ -824,7 +824,7 @@ function Scene({
   const woodTex = useMemo(
     () =>
       canvasTex((ctx, w, h) => {
-        ctx.fillStyle = "#9c7a4f";
+        ctx.fillStyle = "#5b4530";
         ctx.fillRect(0, 0, w, h);
         for (let i = 0; i < 220; i++) {
           const y = Math.random() * h;
@@ -929,7 +929,7 @@ function Scene({
       }),
     [marbleBlack, stoneRelief],
   );
-  const woodMat = useMemo(() => new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.66, metalness: 0.04 }), [woodTex]);
+  const woodMat = useMemo(() => new THREE.MeshStandardMaterial({ map: woodTex, roughness: 0.78, metalness: 0.02 }), [woodTex]);
 
   const view = useMemo(
     () =>
@@ -976,12 +976,12 @@ function Scene({
           mixBlur={0.9}
           mixStrength={1.4}
           blur={[300, 90]}
-          roughness={0.2}
+          roughness={0.34}
           depthScale={1}
           minDepthThreshold={0.4}
           maxDepthThreshold={1.35}
-          color="#ffffff"
-          metalness={0.25}
+          color="#e9e6df"
+          metalness={0.08}
         />
       </mesh>
 
@@ -1013,19 +1013,19 @@ function Scene({
       </mesh>
       {[-3.2, -1.6, 0, 1.6, 3.2].map((x) => (
         <mesh key={x} position={[x, 3.4, -0.6]} castShadow material={woodMat}>
-          <boxGeometry args={[0.42, 0.14, 6.6]} />
+          <boxGeometry args={[0.3, 0.12, 6.6]} />
         </mesh>
       ))}
       <mesh position={[0, 3.34, -3.2]}>
         <boxGeometry args={[15, 0.02, 0.05]} />
-        <meshStandardMaterial color="#fff3dd" emissive="#ffd79a" emissiveIntensity={lightsOn ? 2.2 : 0.05} />
+        <meshStandardMaterial color="#fff3dd" emissive="#ffd79a" emissiveIntensity={lightsOn ? 0.9 : 0.05} />
       </mesh>
 
       {/* window wall (left) */}
       <group position={[-7.05, 1.85, 0.4]} rotation={[0, Math.PI / 2, 0]}>
         <mesh>
           <planeGeometry args={[4.6, 2.3]} />
-          <meshBasicMaterial map={view} toneMapped={false} />
+          <meshBasicMaterial map={view} />
         </mesh>
         {[1.2, -1.2].map((y) => (
           <mesh key={y} position={[0, y, 0.02]} material={GOLD_MAT}>
@@ -1038,7 +1038,7 @@ function Scene({
           </mesh>
         ))}
       </group>
-      <pointLight position={[-5.6, 2.2, 0.4]} intensity={day ? 14 : 2} distance={14} decay={2} color={day ? "#f2f7ff" : "#9fb4ff"} />
+      <pointLight position={[-5.6, 2.2, 0.4]} intensity={day ? 5 : 1.4} distance={13} decay={2} color={day ? "#f2f7ff" : "#9fb4ff"} />
 
       {/* CENTRE: chef's cooking zone, on axis */}
       <mesh position={[0, 1.72, -3.34]}>
@@ -1047,7 +1047,7 @@ function Scene({
           map={marbleWhite}
           emissive="#ffbf6a"
           emissiveMap={marbleWhite}
-          emissiveIntensity={lightsOn ? 1.4 : 0.25}
+          emissiveIntensity={lightsOn ? 0.55 : 0.15}
           toneMapped={false}
         />
       </mesh>
@@ -1056,7 +1056,7 @@ function Scene({
           <boxGeometry args={[3.1, 0.04, 0.05]} />
         </mesh>
       ))}
-      <pointLight position={[0, 1.7, -2.9]} intensity={lightsOn ? 3 : 0.4} distance={4.5} decay={2} color="#ffc178" />
+      <pointLight position={[0, 1.7, -2.9]} intensity={lightsOn ? 0.8 : 0.25} distance={4} decay={2} color="#ffc178" />
 
       {/* symmetrical base run either side of the cooking zone */}
       {[-0.55, 0.55].map((x) => (
@@ -1203,9 +1203,9 @@ function Scene({
           </mesh>
           <mesh position={[0, 2.47, 0]}>
             <circleGeometry args={[0.07, 18]} />
-            <meshStandardMaterial color="#fff3d6" emissive="#ffd08a" emissiveIntensity={lightsOn ? 4 : 0.1} />
+            <meshStandardMaterial color="#fff3d6" emissive="#ffd08a" emissiveIntensity={lightsOn ? 2.0 : 0.1} />
           </mesh>
-          {lightsOn && <pointLight position={[0, 2.35, 0]} intensity={4} distance={4.5} decay={2} color="#ffdca6" />}
+          {lightsOn && <pointLight position={[0, 2.35, 0]} intensity={1.1} distance={4} decay={2} color="#ffdca6" />}
         </group>
       ))}
 
@@ -1221,9 +1221,9 @@ function Scene({
         <group key={i} position={[x, 3.46, z]}>
           <mesh>
             <cylinderGeometry args={[0.075, 0.075, 0.03, 18]} />
-            <meshStandardMaterial color="#fff6e6" emissive="#ffedcf" emissiveIntensity={lightsOn ? 2.2 : 0.04} />
+            <meshStandardMaterial color="#fff6e6" emissive="#ffedcf" emissiveIntensity={lightsOn ? 1.1 : 0.04} />
           </mesh>
-          {lightsOn && <pointLight position={[0, -0.2, 0]} intensity={2.4} distance={6} decay={2} color="#ffeacb" />}
+          {lightsOn && <pointLight position={[0, -0.2, 0]} intensity={0.55} distance={5.5} decay={2} color="#ffeacb" />}
         </group>
       ))}
 
@@ -1243,7 +1243,7 @@ function Scene({
       </group>
 
       <DustMotes on={day} />
-      <ContactShadows position={[0, 0.012, 0]} opacity={0.4} scale={24} blur={2.8} far={10} resolution={512} color="#2a2620" />
+      <ContactShadows position={[0, 0.012, 0]} opacity={0.78} scale={24} blur={2.2} far={7} resolution={1024} color="#171410" />
     </>
   );
 }
@@ -1251,7 +1251,7 @@ function Scene({
 /* ------------------------------------------------------------------ camera */
 
 const POSES: Record<string, { cam: [number, number, number]; tgt: [number, number, number] }> = {
-  home: { cam: [0.6, 1.78, 6.9], tgt: [0, 1.3, -1.8] },
+  home: { cam: [0.4, 1.62, 5.9], tgt: [0, 1.18, -1.9] },
   fridge: { cam: [-3.1, 1.6, -0.7], tgt: [-3.1, 1.25, -2.7] },
   freezer: { cam: [-1.7, 1.1, -1.05], tgt: [-1.7, 0.45, -2.7] },
   pantry: { cam: [3.1, 1.6, -0.7], tgt: [3.1, 1.25, -2.7] },
@@ -1282,8 +1282,9 @@ function CameraRig({ controlsRef, focus }: { controlsRef: React.MutableRefObject
     const c = controlsRef.current;
     const a = anim.current;
     if (!c || !a) return;
-    a.p = Math.min(1, a.p + dt / 1.3);
-    const e = a.p < 0.5 ? 2 * a.p * a.p : 1 - Math.pow(-2 * a.p + 2, 2) / 2;
+    a.p = Math.min(1, a.p + dt / 1.7);
+    // quintic ease-in-out: barely perceptible start and a long, soft settle
+    const e = a.p < 0.5 ? 16 * Math.pow(a.p, 5) : 1 - Math.pow(-2 * a.p + 2, 5) / 2;
     camera.position.lerpVectors(a.fc, a.tc, e);
     c.target.lerpVectors(a.ft, a.tt, e);
     c.update();
@@ -1310,6 +1311,7 @@ class ModelBoundary extends Component<{ fallback: ReactNode; children: ReactNode
 export default function Kitchen3D({
   selected,
   onSelect,
+  onDeselect,
   labels,
   controls,
   inventory,
@@ -1317,6 +1319,7 @@ export default function Kitchen3D({
 }: {
   selected: KitchenObject | null;
   onSelect: (k: KitchenObject) => void;
+  onDeselect?: () => void;
   labels: Record<KitchenObject, string>;
   controls: KitchenControlLabels;
   inventory: FridgeInventory;
@@ -1330,6 +1333,16 @@ export default function Kitchen3D({
   const [water, setWater] = useState(false);
   const [stove, setStove] = useState(false);
   const [oven, setOven] = useState(false);
+
+  // Escape closes whatever is open and returns the camera to the room.
+  useEffect(() => {
+    if (!onDeselect) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onDeselect();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onDeselect]);
 
   const scene = (
     <Scene
@@ -1366,15 +1379,16 @@ export default function Kitchen3D({
       <Canvas
         shadows
         dpr={[1, 1.5]}
-        camera={{ position: [0, 1.72, 6.4], fov: 42 }}
-        gl={{ antialias: true, alpha: false, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.15 }}
+        camera={{ position: [0.4, 1.62, 5.9], fov: 36 }}
+        gl={{ antialias: true, alpha: false, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 0.92 }}
         style={{ touchAction: "none" }}
+        onPointerMissed={() => onDeselect?.()}
       >
         <color attach="background" args={[night ? "#080a10" : "#171a1f"]} />
         <fog attach="fog" args={[night ? "#080a10" : "#171a1f", 22, 46]} />
 
-        <ambientLight intensity={night ? 0.16 : 0.6} />
-        <hemisphereLight args={["#fff6ea", "#6d6558", night ? 0.18 : 0.9]} />
+        <ambientLight intensity={night ? 0.1 : 0.2} />
+        <hemisphereLight args={["#fff6ea", "#5a5348", night ? 0.12 : 0.3]} />
         <directionalLight
           position={[-5, 6, 4]}
           intensity={night ? 0.22 : 2.3}
@@ -1388,19 +1402,19 @@ export default function Kitchen3D({
           shadow-camera-bottom={-9}
         />
         <Suspense fallback={null}>
-          <Environment key={night ? "n" : "d"} resolution={256} frames={1} environmentIntensity={night ? 0.35 : 1.05}>
+          <Environment key={night ? "n" : "d"} resolution={256} frames={1} environmentIntensity={night ? 0.28 : 0.5}>
             {/* ceiling bounce — broad, soft, slightly warm */}
-            <Lightformer form="rect" intensity={night ? 0.5 : 3.2} color="#fff3e2" position={[0, 6, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[14, 9, 1]} />
+            <Lightformer form="rect" intensity={night ? 0.35 : 1.0} color="#fff3e2" position={[0, 6, 0]} rotation={[Math.PI / 2, 0, 0]} scale={[14, 9, 1]} />
             {/* the window: a tall bright panel on the left. This is what draws
                 the long vertical highlight down polished gold and marble. */}
-            <Lightformer form="rect" intensity={night ? 0.8 : 7} color={night ? "#b9c8ff" : "#eef6ff"} position={[-9, 2.2, 0.4]} rotation={[0, Math.PI / 2, 0]} scale={[7, 3.4, 1]} />
+            <Lightformer form="rect" intensity={night ? 0.6 : 3.0} color={night ? "#b9c8ff" : "#eef6ff"} position={[-9, 2.2, 0.4]} rotation={[0, Math.PI / 2, 0]} scale={[7, 3.4, 1]} />
             {/* opposite soft fill so metals aren't black on their far side */}
-            <Lightformer form="rect" intensity={night ? 0.3 : 1.5} color="#fff0dd" position={[9, 2.2, 1]} rotation={[0, -Math.PI / 2, 0]} scale={[7, 3, 1]} />
+            <Lightformer form="rect" intensity={night ? 0.2 : 0.45} color="#fff0dd" position={[9, 2.2, 1]} rotation={[0, -Math.PI / 2, 0]} scale={[7, 3, 1]} />
             {/* warm low kicker: gives the gold its amber depth */}
-            <Lightformer form="rect" intensity={night ? 0.5 : 1.9} color="#ffcf92" position={[0, 0.6, 7]} rotation={[0, Math.PI, 0]} scale={[10, 1.6, 1]} />
+            <Lightformer form="rect" intensity={night ? 0.35 : 0.6} color="#ffcf92" position={[0, 0.6, 7]} rotation={[0, Math.PI, 0]} scale={[10, 1.6, 1]} />
             {/* narrow strips read as specular glints in the gold edges */}
-            <Lightformer form="rect" intensity={night ? 1.2 : 4} color="#ffffff" position={[-2.4, 4.2, 2.4]} rotation={[Math.PI / 2.6, 0, 0]} scale={[0.5, 5, 1]} />
-            <Lightformer form="rect" intensity={night ? 1.2 : 4} color="#ffffff" position={[2.4, 4.2, 2.4]} rotation={[Math.PI / 2.6, 0, 0]} scale={[0.5, 5, 1]} />
+            <Lightformer form="rect" intensity={night ? 0.8 : 1.6} color="#ffffff" position={[-2.4, 4.2, 2.4]} rotation={[Math.PI / 2.6, 0, 0]} scale={[0.5, 5, 1]} />
+            <Lightformer form="rect" intensity={night ? 0.8 : 1.6} color="#ffffff" position={[2.4, 4.2, 2.4]} rotation={[Math.PI / 2.6, 0, 0]} scale={[0.5, 5, 1]} />
           </Environment>
         </Suspense>
 
@@ -1435,7 +1449,7 @@ export default function Kitchen3D({
 
         {heavyFx ? (
           <EffectComposer multisampling={0} enableNormalPass>
-            <N8AO aoRadius={0.6} intensity={1.7} distanceFalloff={0.8} quality="low" halfRes />
+            <N8AO aoRadius={0.7} intensity={2.6} distanceFalloff={0.9} quality="low" halfRes />
             <Bloom luminanceThreshold={0.78} luminanceSmoothing={0.9} intensity={0.42} mipmapBlur radius={0.65} />
             <Vignette eskil={false} offset={0.3} darkness={0.42} />
           </EffectComposer>
