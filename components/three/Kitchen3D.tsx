@@ -616,16 +616,16 @@ function Freezer({
   });
   return (
     <Hoverable name={label} hint="open" onActivate={() => onSelect("freezer")} labelY={0.85}>
-      <group position={[-1.55, 0.3, -3.05]}>
-        <RoundedBox args={[1.0, 0.6, 0.78]} radius={0.01} smoothness={3} castShadow>
+      <group position={[-1.7, 0.3, -3.02]}>
+        <RoundedBox args={[0.9, 0.6, 0.78]} radius={0.01} smoothness={3} castShadow>
           <meshStandardMaterial color="#101216" roughness={0.3} metalness={0.35} />
         </RoundedBox>
         <mesh position={[0, 0, -0.28]}>
-          <planeGeometry args={[0.9, 0.5]} />
+          <planeGeometry args={[0.82, 0.5]} />
           <meshStandardMaterial color="#eaf6ff" emissive="#bfe4ff" emissiveIntensity={selected ? 0.9 : 0.1} />
         </mesh>
         <group ref={d}>
-          <RoundedBox args={[1.0, 0.6, 0.06]} radius={0.008} smoothness={3} position={[0, 0, 0.4]} castShadow material={BLACKGLASS} />
+          <RoundedBox args={[0.9, 0.6, 0.06]} radius={0.008} smoothness={3} position={[0, 0, 0.4]} castShadow material={BLACKGLASS} />
           <GoldHandle position={[0, 0.13, 0.45]} length={0.6} vertical={false} />
           <mesh position={[0, -0.1, 0.16]} material={STEEL}>
             <boxGeometry args={[0.82, 0.28, 0.5]} />
@@ -1010,16 +1010,16 @@ function Scene({
       <pointLight position={[0, 1.7, -2.9]} intensity={lightsOn ? 3 : 0.4} distance={4.5} decay={2} color="#ffc178" />
 
       {/* symmetrical base run either side of the cooking zone */}
-      {[-1.05, 1.05].map((x) => (
-        <group key={x} position={[x, 0, -3.05]}>
+      {[-0.55, 0.55].map((x) => (
+        <group key={x} position={[x, 0, -3.02]}>
           <RoundedBox args={[1.0, 0.9, 0.72]} radius={0.01} smoothness={3} position={[0, 0.45, 0]} castShadow receiveShadow>
             <meshStandardMaterial color="#101216" roughness={0.3} metalness={0.3} />
           </RoundedBox>
           <GoldHandle position={[0, 0.72, 0.37]} length={0.4} vertical={false} />
         </group>
       ))}
-      <mesh position={[0, 0.93, -3.05]} castShadow material={blackMarbleMat}>
-        <boxGeometry args={[4.3, 0.06, 0.76]} />
+      <mesh position={[0, 0.93, -3.02]} castShadow material={blackMarbleMat}>
+        <boxGeometry args={[2.3, 0.06, 0.78]} />
       </mesh>
 
       {/* range hood: warm wood + gold */}
@@ -1089,13 +1089,13 @@ function Scene({
           <mesh position={[0, 0.045, 0.81]} material={GOLD_MAT}>
             <boxGeometry args={[3.6, 0.03, 0.03]} />
           </mesh>
-          <mesh position={[-1.0, 1.0, -0.1]} material={BLACKGLASS}>
-            <boxGeometry args={[0.9, 0.02, 0.5]} />
+          <mesh position={[1.15, 1.0, -0.15]} material={BLACKGLASS}>
+            <boxGeometry args={[0.86, 0.02, 0.48]} />
           </mesh>
-          <mesh position={[0.95, 1.02, 0.1]} rotation={[0, 0.25, 0]} castShadow material={woodMat}>
+          <mesh position={[0.2, 1.02, 0.22]} rotation={[0, 0.25, 0]} castShadow material={woodMat}>
             <boxGeometry args={[0.56, 0.032, 0.36]} />
           </mesh>
-          <group position={[0.3, 1.03, -0.2]}>
+          <group position={[-0.4, 1.03, -0.3]}>
             <mesh material={CERAMIC}>
               <cylinderGeometry args={[0.2, 0.11, 0.09, 18]} />
             </mesh>
@@ -1179,7 +1179,7 @@ function Scene({
       ))}
 
       {/* orchid on the island end — a little life */}
-      <group position={[1.55, 1.0, -0.3]}>
+      <group position={[1.75, 1.0, 0.25]}>
         <mesh material={CERAMIC}>
           <cylinderGeometry args={[0.1, 0.08, 0.22, 16]} />
         </mesh>
@@ -1202,9 +1202,9 @@ function Scene({
 /* ------------------------------------------------------------------ camera */
 
 const POSES: Record<string, { cam: [number, number, number]; tgt: [number, number, number] }> = {
-  home: { cam: [0, 1.72, 6.4], tgt: [0, 1.35, -1.6] },
+  home: { cam: [0.6, 1.78, 6.9], tgt: [0, 1.3, -1.8] },
   fridge: { cam: [-3.1, 1.6, -0.7], tgt: [-3.1, 1.25, -2.7] },
-  freezer: { cam: [-1.55, 1.1, -1.1], tgt: [-1.55, 0.45, -2.7] },
+  freezer: { cam: [-1.7, 1.1, -1.05], tgt: [-1.7, 0.45, -2.7] },
   pantry: { cam: [3.1, 1.6, -0.7], tgt: [3.1, 1.25, -2.7] },
   island: { cam: [0, 1.85, 2.5], tgt: [0, 1.0, -0.3] },
   oven: { cam: [1.9, 1.5, -1.4], tgt: [1.9, 1.2, -3.1] },

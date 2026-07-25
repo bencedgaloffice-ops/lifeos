@@ -66,7 +66,10 @@ export function KitchenModule({ items, shoppingList, suggestions }: Props) {
   const [openList, setOpenList] = useState(false);
   const [logged, setLogged] = useState<Set<string>>(new Set());
   const [view, setView] = useState<"world" | "manager">("world");
-  const [selected, setSelected] = useState<KitchenObject | null>("fridge");
+  // Start with nothing selected so the page opens on the wide room view —
+  // selecting an object flies the camera to it, which would otherwise hide
+  // the whole kitchen behind a close-up on first load.
+  const [selected, setSelected] = useState<KitchenObject | null>(null);
 
   const objectLabels: Record<KitchenObject, string> = {
     fridge: t("kitchen.fridge"),
