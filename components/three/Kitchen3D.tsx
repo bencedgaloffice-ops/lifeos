@@ -48,7 +48,14 @@ export type KitchenControlLabels = {
   oven: string;
 };
 
-export type FoodItem = { name: string; quantity: string | null; expires_at: string | null };
+export type FoodItem = {
+  /** Stable identity. Placement is derived from this, which is what makes the
+   * twin persistent: the same item lands in the same spot every time. */
+  id: string;
+  name: string;
+  quantity: string | null;
+  expires_at: string | null;
+};
 export type FridgeInventory = { fridge: FoodItem[]; freezer: FoodItem[]; pantry: FoodItem[] };
 
 /* -------------------------------------------------------- texture helpers */
@@ -147,7 +154,6 @@ const STEEL = new THREE.MeshStandardMaterial({ color: "#cfd3d8", roughness: 0.22
 const BLACKGLASS = new THREE.MeshStandardMaterial({ color: "#0b0d10", roughness: 0.09, metalness: 0.6, envMapIntensity: 1.8 });
 const CERAMIC = new THREE.MeshStandardMaterial({ color: "#f2eee6", roughness: 0.4 });
 const LEATHER = new THREE.MeshStandardMaterial({ color: "#141519", roughness: 0.55, metalness: 0.05 });
-const GLASSY = new THREE.MeshStandardMaterial({ color: "#cfe0e6", roughness: 0.07, metalness: 0.1, transparent: true, opacity: 0.13 });
 
 /* ------------------------------------------------------------ interaction */
 
@@ -249,77 +255,550 @@ function countFrom(q: string | null, fallback: number) {
   return m ? Math.min(10, Math.max(0, Number(m[0]))) : fallback;
 }
 
+/* ------------------------------------------- deterministic human placement */
+
+/** FNV-1a. The same string always hashes to the same number. */
+function hashId(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/** xorshift32 — a deterministic 0..1 stream from a seed. */
+function rng(seed: number): () => number {
+  let s = seed >>> 0 || 1;
+  return () => {
+    s ^= s << 13;
+    s >>>= 0;
+    s ^= s >>> 17;
+    s ^= s << 5;
+    s >>>= 0;
+    return s / 4294967296;
+  };
+}
+
+export type Placement = {
+  /** Sideways drift along the shelf. */
+  dx: number;
+  /** Depth: positive is toward the door. */
+  dz: number;
+  /** Yaw — nothing in a real fridge is perfectly square to the shelf. */
+  ry: number;
+  /** Slight lean, for the few things resting against something else. */
+  tilt: number;
+  scale: number;
+  /** Which geometry / label variant this item uses. */
+  variant: number;
+};
+
+/**
+ * Human placement, not showroom placement.
+ *
+ * A real fridge is not a product shot: most things sit slightly off-square,
+ * a few are dead straight because they happened to land that way, and depth is
+ * governed by how often you reach for something. Whatever needs using up has
+ * been pulled to the front; the rest gets pushed in behind it.
+ *
+ * Every value comes from the item's own id, so it is stable forever — the twin
+ * persists rather than re-rolling a fresh arrangement on every mount.
+ *
+ * `urgency` runs 0..1, where 1 means "use me first".
+ */
+function placeItem(id: string, urgency: number): Placement {
+  const r = rng(hashId(id));
+  const tidy = r();
+  const rough = r();
+  return {
+    dx: (r() - 0.5) * 0.055,
+    dz: (urgency - 0.5) * 0.17 + (r() - 0.5) * 0.05,
+    // A quarter of everything is square-on, the rest is rotated a little.
+    ry: tidy > 0.74 ? (r() - 0.5) * 0.06 : (r() - 0.5) * 1.1,
+    tilt: rough > 0.86 ? (r() - 0.5) * 0.1 : 0,
+    scale: 0.9 + r() * 0.22,
+    variant: Math.floor(r() * 6),
+  };
+}
+
+/** 1 for "about to expire", falling to 0 for things with weeks left. Drives
+ * both shelf order and how far forward an item sits. */
+function urgencyOf(item: FoodItem): number {
+  const d = daysLeft(item.expires_at);
+  if (!Number.isFinite(d)) return 0.18;
+  return THREE.MathUtils.clamp(1 - d / 10, 0, 1);
+}
+
+/* ------------------------------------------------ premium object materials */
+
+const RUBBER = new THREE.MeshStandardMaterial({ color: "#0a0b0d", roughness: 0.96, metalness: 0 });
+/** Fridge interior liner: the slightly soft, slightly warm white of real ABS. */
+const LINER = new THREE.MeshStandardMaterial({ color: "#eff2f3", roughness: 0.42, metalness: 0.04 });
+/** Tempered shelf glass. Deliberately NOT a transmission material — those cost
+ * a full extra render pass each and previously collapsed the framerate here.
+ * Low opacity with near-zero roughness and a strong env contribution reads as
+ * thick glass at a fraction of the price. */
+const SHELF_GLASS = new THREE.MeshStandardMaterial({
+  color: "#dbecf3",
+  roughness: 0.04,
+  metalness: 0.06,
+  transparent: true,
+  opacity: 0.24,
+  envMapIntensity: 2.4,
+  side: THREE.DoubleSide,
+});
+/** Crisper drawer / door bin fronts — thicker, cloudier than shelf glass. */
+const CLEAR_PLASTIC = new THREE.MeshStandardMaterial({
+  color: "#e4f0f5",
+  roughness: 0.14,
+  metalness: 0,
+  transparent: true,
+  opacity: 0.19,
+  envMapIntensity: 1.5,
+  side: THREE.DoubleSide,
+});
+/** Bottle and jar walls. Open-ended cylinders in two shells give a visible
+ * glass thickness at the silhouette, which is what actually sells "glass". */
+const BOTTLE_GLASS = new THREE.MeshStandardMaterial({
+  color: "#dcecf2",
+  roughness: 0.05,
+  metalness: 0.04,
+  transparent: true,
+  opacity: 0.2,
+  envMapIntensity: 2.2,
+  side: THREE.DoubleSide,
+});
+const RAIL_MAT = new THREE.MeshStandardMaterial({ color: "#949aa0", roughness: 0.28, metalness: 0.92 });
+const DIFFUSER = new THREE.MeshStandardMaterial({ color: "#f7fbff", roughness: 0.85, transparent: true, opacity: 0.92 });
+const FILM = new THREE.MeshStandardMaterial({
+  color: "#eef6f8",
+  roughness: 0.18,
+  transparent: true,
+  opacity: 0.22,
+  side: THREE.DoubleSide,
+  depthWrite: false,
+});
+
+/* ---------------------------------------------------------- label textures */
+
+/**
+ * Plausible packaging labels — a masthead band, a block of copy, a nutrition
+ * panel and a barcode. Six different colourways so a shelf reads as competing
+ * brands rather than six copies of one product.
+ *
+ * Drawn once, lazily (needs `document`), and shared by every instance. The
+ * randomness is seeded, so a label looks the same on every reload.
+ */
+let _labels: THREE.Texture[] | null = null;
+function labelTextures(): THREE.Texture[] {
+  if (_labels) return _labels;
+  const palettes: [string, string, string][] = [
+    ["#f5f7f9", "#1f4e8c", "#c8202f"],
+    ["#fffdf4", "#2f6b3a", "#c98a1f"],
+    ["#f7f2ea", "#8a2230", "#2b2b2b"],
+    ["#eef4f8", "#0d2a4a", "#7fa8d4"],
+    ["#fdf6ec", "#a8611f", "#3d2c1e"],
+    ["#f2f7f2", "#3b6e4a", "#c9b45e"],
+  ];
+  _labels = palettes.map(([bg, ink, accent], pi) =>
+    canvasTex(
+      (ctx, w, h) => {
+        const r = rng(7919 + pi * 104729);
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, w, h);
+        // masthead
+        ctx.fillStyle = ink;
+        ctx.fillRect(0, h * 0.09, w, h * 0.19);
+        ctx.fillStyle = accent;
+        ctx.fillRect(0, h * 0.3, w, h * 0.018);
+        // brand mark inside the masthead
+        ctx.fillStyle = bg;
+        ctx.globalAlpha = 0.92;
+        ctx.fillRect(w * 0.1, h * 0.145, w * (0.34 + r() * 0.3), h * 0.075);
+        ctx.globalAlpha = 1;
+        // body copy, as type-sized blocks (no font dependency)
+        ctx.fillStyle = ink;
+        for (let line = 0; line < 5; line++) {
+          ctx.globalAlpha = 0.5 - line * 0.06;
+          ctx.fillRect(w * 0.11, h * (0.4 + line * 0.072), w * (0.28 + r() * 0.46), h * 0.02);
+        }
+        ctx.globalAlpha = 1;
+        // nutrition panel
+        ctx.strokeStyle = ink;
+        ctx.lineWidth = Math.max(1, h * 0.005);
+        ctx.strokeRect(w * 0.6, h * 0.7, w * 0.3, h * 0.22);
+        for (let row = 0; row < 4; row++) {
+          ctx.globalAlpha = 0.35;
+          ctx.fillRect(w * 0.63, h * (0.75 + row * 0.04), w * 0.24, h * 0.012);
+        }
+        ctx.globalAlpha = 1;
+        // barcode
+        ctx.fillStyle = "#111318";
+        for (let b = 0; b < 28; b++) {
+          if (r() > 0.4) ctx.fillRect(w * 0.09 + b * (w * 0.0125), h * 0.78, w * 0.006, h * 0.13);
+        }
+      },
+      [1, 1],
+      256,
+    ),
+  );
+  return _labels;
+}
+
+/**
+ * Six irregular produce shells. Real vegetables are lumpy and no two are alike,
+ * so each variant is a differently-displaced icosahedron; instances then pick a
+ * variant, a scale and a rotation from their own seed, which means a crisper
+ * full of tomatoes never reads as a row of identical spheres.
+ */
+let _produce: THREE.BufferGeometry[] | null = null;
+function produceGeometries(): THREE.BufferGeometry[] {
+  if (_produce) return _produce;
+  _produce = Array.from({ length: 6 }, (_, v) => {
+    const g = new THREE.IcosahedronGeometry(1, 2);
+    const p = g.attributes.position as THREE.BufferAttribute;
+    const r = rng(1000 + v * 9781);
+    const amp = 0.09 + r() * 0.13;
+    const sx = 0.84 + r() * 0.34;
+    const sy = 0.8 + r() * 0.44;
+    const sz = 0.86 + r() * 0.28;
+    for (let i = 0; i < p.count; i++) {
+      const x = p.getX(i);
+      const y = p.getY(i);
+      const z = p.getZ(i);
+      const n =
+        Math.sin(x * 3.1 + v) * Math.cos(y * 2.7 - v * 1.3) * Math.sin(z * 3.4 + v * 2.1) +
+        0.4 * Math.sin(x * 6.2 - y * 5.1 + z * 4.7);
+      const k = 1 + n * amp;
+      p.setXYZ(i, x * k * sx, y * k * sy, z * k * sz);
+    }
+    g.computeVertexNormals();
+    return g;
+  });
+  return _produce;
+}
+
 /* -------------------------------------------------------------- food props */
 
+/** Shared prop for anything placed by the placement engine. */
+type Placed = { position: [number, number, number]; place: Placement };
+
+/** Apply a placement to a group: drift, depth, yaw, lean, size. */
+function placedProps({ position, place }: Placed) {
+  return {
+    position: [position[0] + place.dx, position[1], position[2] + place.dz] as [number, number, number],
+    rotation: [place.tilt, place.ry, place.tilt * 0.6] as [number, number, number],
+    scale: place.scale,
+  };
+}
+
+/**
+ * A real bottle: liquid you can see through the wall, a meniscus on top of it,
+ * a double-shell wall so the glass has visible thickness at the silhouette, a
+ * tapered shoulder and neck, a moulded cap, and a printed label band.
+ */
 function Bottle({
   position,
+  place,
   colour,
   fill,
-  r = 0.045,
-  h = 0.3,
-}: {
-  position: [number, number, number];
-  colour: string;
-  fill: number;
-  r?: number;
-  h?: number;
-}) {
-  const lh = Math.max(0.02, h * 0.86 * fill);
+  r = 0.042,
+  h = 0.29,
+}: Placed & { colour: string; fill: number; r?: number; h?: number }) {
+  const labels = labelTextures();
+  const bodyH = h * 0.7;
+  const lh = Math.max(0.015, bodyH * 0.94 * fill);
+  const base = -h / 2;
   return (
-    <group position={position}>
-      <mesh material={GLASSY}>
-        <cylinderGeometry args={[r, r, h, 14]} />
+    <group {...placedProps({ position, place })}>
+      {/* liquid — drawn first so it reads through the wall */}
+      <mesh position={[0, base + lh / 2 + 0.006, 0]}>
+        <cylinderGeometry args={[r * 0.93, r * 0.93, lh, 20]} />
+        <meshStandardMaterial color={colour} roughness={0.3} metalness={0.02} transparent opacity={0.94} />
       </mesh>
-      <mesh position={[0, -h / 2 + lh / 2 + 0.02, 0]}>
-        <cylinderGeometry args={[r * 0.82, r * 0.82, lh, 14]} />
-        <meshStandardMaterial color={colour} roughness={0.42} />
+      {/* the flat, bright surface of the liquid */}
+      <mesh position={[0, base + lh + 0.006, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[r * 0.93, 20]} />
+        <meshStandardMaterial color={colour} roughness={0.04} metalness={0.14} />
       </mesh>
-      <mesh position={[0, h / 2 + 0.02, 0]} material={GOLD_MAT}>
-        <cylinderGeometry args={[r * 0.55, r * 0.55, 0.045, 12]} />
+
+      {/* wall, in two open shells — this is what gives glass its thickness */}
+      <mesh material={BOTTLE_GLASS} position={[0, base + bodyH / 2, 0]}>
+        <cylinderGeometry args={[r, r * 0.98, bodyH, 22, 1, true]} />
+      </mesh>
+      <mesh material={BOTTLE_GLASS} position={[0, base + bodyH / 2, 0]} scale={[0.93, 1, 0.93]}>
+        <cylinderGeometry args={[r, r * 0.98, bodyH * 0.998, 22, 1, true]} />
+      </mesh>
+      {/* punted base */}
+      <mesh position={[0, base + 0.004, 0]} material={BOTTLE_GLASS}>
+        <cylinderGeometry args={[r * 0.98, r * 0.9, 0.008, 22]} />
+      </mesh>
+      {/* shoulder taper + neck */}
+      <mesh material={BOTTLE_GLASS} position={[0, base + bodyH + h * 0.09, 0]}>
+        <cylinderGeometry args={[r * 0.42, r, h * 0.18, 22, 1, true]} />
+      </mesh>
+      <mesh material={BOTTLE_GLASS} position={[0, base + bodyH + h * 0.22, 0]}>
+        <cylinderGeometry args={[r * 0.4, r * 0.42, h * 0.1, 18, 1, true]} />
+      </mesh>
+      {/* moulded cap with a knurled skirt */}
+      <mesh position={[0, base + bodyH + h * 0.3, 0]}>
+        <cylinderGeometry args={[r * 0.46, r * 0.46, h * 0.09, 18]} />
+        <meshStandardMaterial color="#2b3037" roughness={0.42} metalness={0.15} />
+      </mesh>
+      <mesh position={[0, base + bodyH + h * 0.27, 0]} material={GOLD_MAT}>
+        <cylinderGeometry args={[r * 0.47, r * 0.47, h * 0.014, 18]} />
+      </mesh>
+
+      {/* printed label */}
+      <mesh position={[0, base + bodyH * 0.44, 0]}>
+        <cylinderGeometry args={[r * 1.012, r * 1.005, bodyH * 0.46, 22, 1, true]} />
+        <meshStandardMaterial
+          map={labels[place.variant % labels.length]}
+          roughness={0.74}
+          side={THREE.DoubleSide}
+        />
       </mesh>
     </group>
   );
 }
 
-function EggTray({ position, count }: { position: [number, number, number]; count: number }) {
+/**
+ * A gable-top milk carton. Instantly readable as milk in a way a cylinder never
+ * is: square body, the two slanted roof panels folded to a ridge, the crimped
+ * seam along the top, and a screw spout off to one side.
+ */
+function Carton({ position, place, h = 0.24, w = 0.075 }: Placed & { h?: number; w?: number }) {
+  const labels = labelTextures();
+  const bodyH = h * 0.74;
+  const base = -h / 2;
+  const tex = labels[place.variant % labels.length];
   return (
-    <group position={position}>
-      <mesh>
-        <boxGeometry args={[0.34, 0.03, 0.16]} />
-        <meshStandardMaterial color="#d9d3c6" roughness={0.9} />
+    <group {...placedProps({ position, place })}>
+      <mesh position={[0, base + bodyH / 2, 0]}>
+        <boxGeometry args={[w, bodyH, w]} />
+        <meshStandardMaterial map={tex} roughness={0.78} />
       </mesh>
-      {Array.from({ length: Math.min(10, Math.round(count)) }).map((_, i) => (
-        <mesh key={i} position={[-0.14 + (i % 5) * 0.07, 0.04, -0.04 + Math.floor(i / 5) * 0.08]} scale={[1, 1.25, 1]}>
-          <sphereGeometry args={[0.026, 10, 10]} />
-          <meshStandardMaterial color="#f3e3c7" roughness={0.72} />
+      {/* gable roof: two panels leaning to a ridge */}
+      {[-1, 1].map((s) => (
+        <mesh
+          key={s}
+          position={[0, base + bodyH + h * 0.1, (s * w) / 4]}
+          rotation={[s * 0.72, 0, 0]}
+          castShadow
+        >
+          <boxGeometry args={[w, w * 0.78, 0.004]} />
+          <meshStandardMaterial color="#f0ece2" roughness={0.8} />
+        </mesh>
+      ))}
+      {/* crimped top seam */}
+      <mesh position={[0, base + bodyH + h * 0.21, 0]}>
+        <boxGeometry args={[w * 1.005, h * 0.035, 0.006]} />
+        <meshStandardMaterial color="#e6e0d3" roughness={0.85} />
+      </mesh>
+      {/* screw spout, offset like the real thing */}
+      <mesh position={[w * 0.22, base + bodyH + h * 0.09, w * 0.2]} rotation={[0.72, 0, 0]}>
+        <cylinderGeometry args={[w * 0.16, w * 0.16, h * 0.05, 14]} />
+        <meshStandardMaterial color="#b8352f" roughness={0.4} />
+      </mesh>
+    </group>
+  );
+}
+
+/** Egg tray with a moulded pulp base, dimpled wells, and a hinged lid folded
+ * back — eggs sit down in the wells rather than balancing on a flat plate. */
+function EggTray({ position, place, count }: Placed & { count: number }) {
+  const n = Math.min(10, Math.max(0, Math.round(count)));
+  const r = rng(hashId(`eggs${place.variant}`));
+  return (
+    <group {...placedProps({ position, place })}>
+      <mesh>
+        <boxGeometry args={[0.32, 0.028, 0.15]} />
+        <meshStandardMaterial color="#d5cec0" roughness={0.94} />
+      </mesh>
+      {/* wells: a shallow dish under each egg */}
+      {Array.from({ length: 10 }).map((_, i) => (
+        <mesh key={`w${i}`} position={[-0.128 + (i % 5) * 0.064, 0.015, -0.036 + Math.floor(i / 5) * 0.072]}>
+          <cylinderGeometry args={[0.026, 0.02, 0.014, 12, 1, true]} />
+          <meshStandardMaterial color="#c8c1b2" roughness={0.96} side={THREE.DoubleSide} />
+        </mesh>
+      ))}
+      {/* the lid, folded back against the shelf */}
+      <mesh position={[0, 0.06, -0.115]} rotation={[-1.24, 0, 0]}>
+        <boxGeometry args={[0.32, 0.14, 0.006]} />
+        <meshStandardMaterial color="#d5cec0" roughness={0.94} />
+      </mesh>
+      {/* eggs — each slightly different in size, tint and lean */}
+      {Array.from({ length: n }).map((_, i) => (
+        <mesh
+          key={i}
+          position={[-0.128 + (i % 5) * 0.064, 0.036, -0.036 + Math.floor(i / 5) * 0.072]}
+          rotation={[(r() - 0.5) * 0.3, r() * 3, (r() - 0.5) * 0.3]}
+          scale={[1, 1.28 + r() * 0.1, 1]}
+          castShadow
+        >
+          <sphereGeometry args={[0.0235 + r() * 0.003, 14, 12]} />
+          <meshStandardMaterial color={r() > 0.6 ? "#e8d3ae" : "#f3e6cd"} roughness={0.74} />
         </mesh>
       ))}
     </group>
   );
 }
 
-function Tray({ position, colour, fill }: { position: [number, number, number]; colour: string; fill: number }) {
-  const w = 0.14 + 0.16 * fill;
+/**
+ * A supermarket meat tray: white polystyrene base with a lip, the product
+ * inside, an absorbent pad under it, and cling film stretched over the top with
+ * a printed label stuck on.
+ */
+function Tray({ position, place, colour, fill }: Placed & { colour: string; fill: number }) {
+  const labels = labelTextures();
+  const w = 0.15 + 0.14 * fill;
   return (
-    <group position={position}>
+    <group {...placedProps({ position, place })}>
+      {/* tray base + raised lip */}
       <mesh>
-        <boxGeometry args={[w + 0.03, 0.03, 0.2]} />
-        <meshStandardMaterial color="#eceaea" roughness={0.5} />
+        <boxGeometry args={[w + 0.03, 0.016, 0.2]} />
+        <meshStandardMaterial color="#f1efec" roughness={0.62} />
       </mesh>
-      <mesh position={[0, 0.03, 0]}>
-        <boxGeometry args={[w, 0.05, 0.16]} />
-        <meshStandardMaterial color={colour} roughness={0.55} />
+      {[
+        [(w + 0.03) / 2, 0, 0.004, 0.2],
+        [-(w + 0.03) / 2, 0, 0.004, 0.2],
+      ].map(([x], i) => (
+        <mesh key={i} position={[x as number, 0.014, 0]}>
+          <boxGeometry args={[0.005, 0.026, 0.2]} />
+          <meshStandardMaterial color="#f1efec" roughness={0.62} />
+        </mesh>
+      ))}
+      {[0.1, -0.1].map((z) => (
+        <mesh key={z} position={[0, 0.014, z]}>
+          <boxGeometry args={[w + 0.03, 0.026, 0.005]} />
+          <meshStandardMaterial color="#f1efec" roughness={0.62} />
+        </mesh>
+      ))}
+      {/* absorbent pad */}
+      <mesh position={[0, 0.011, 0]}>
+        <boxGeometry args={[w - 0.004, 0.004, 0.17]} />
+        <meshStandardMaterial color="#e9e6e0" roughness={0.95} />
+      </mesh>
+      {/* product */}
+      <mesh position={[0, 0.026, 0]}>
+        <boxGeometry args={[w - 0.012, 0.028, 0.155]} />
+        <meshStandardMaterial color={colour} roughness={0.58} />
+      </mesh>
+      {/* cling film */}
+      <mesh position={[0, 0.042, 0]} material={FILM}>
+        <boxGeometry args={[w + 0.032, 0.004, 0.202]} />
+      </mesh>
+      {/* stuck-on label */}
+      <mesh position={[w * 0.16, 0.045, 0.03]} rotation={[-Math.PI / 2, 0, 0.14]}>
+        <planeGeometry args={[0.07, 0.05]} />
+        <meshStandardMaterial map={labels[place.variant % labels.length]} roughness={0.85} />
       </mesh>
     </group>
   );
 }
 
-function Produce({ position, colour, r = 0.05 }: { position: [number, number, number]; colour: string; r?: number }) {
+/**
+ * A single piece of produce. Uses one of six irregular shells, scaled and
+ * rotated from its own seed and given a slightly varied tint, so a crisper
+ * never reads as a row of cloned spheres.
+ */
+function Produce({ position, place, colour, r = 0.05 }: Placed & { colour: string; r?: number }) {
+  const geos = produceGeometries();
+  const geo = geos[place.variant % geos.length];
+  // Vary the tint a touch per item — nothing in nature is one flat colour.
+  const tint = useMemo(() => {
+    const c = new THREE.Color(colour);
+    const j = rng(hashId(`${colour}${place.variant}${place.dx}`));
+    c.offsetHSL((j() - 0.5) * 0.035, (j() - 0.5) * 0.12, (j() - 0.5) * 0.09);
+    return c;
+  }, [colour, place.variant, place.dx]);
   return (
-    <mesh position={position} castShadow>
-      <sphereGeometry args={[r, 12, 12]} />
-      <meshStandardMaterial color={colour} roughness={0.6} />
+    <mesh
+      geometry={geo}
+      position={[position[0] + place.dx, position[1], position[2] + place.dz]}
+      rotation={[place.ry * 1.4, place.ry, place.tilt * 3]}
+      scale={r * place.scale}
+    >
+      {/* No shadow casting: these sit inside a cabinet lit by its own point
+          light, so they never appear in the room's shadow map — paying for a
+          shadow-pass draw call each would be pure waste. */}
+      <meshStandardMaterial color={tint} roughness={0.66} metalness={0} />
     </mesh>
+  );
+}
+
+/** A printed cardboard pack — pantry staples, freezer boxes, cereal. */
+function Pack({
+  position,
+  place,
+  w = 0.11,
+  h = 0.2,
+  d = 0.06,
+}: Placed & { w?: number; h?: number; d?: number }) {
+  const labels = labelTextures();
+  const tex = labels[place.variant % labels.length];
+  return (
+    <group {...placedProps({ position, place })}>
+      <mesh position={[0, h / 2, 0]}>
+        <boxGeometry args={[w, h, d]} />
+        <meshStandardMaterial map={tex} roughness={0.86} />
+      </mesh>
+      {/* creased top flap */}
+      <mesh position={[0, h - 0.002, 0]}>
+        <boxGeometry args={[w * 1.004, 0.004, d * 1.004]} />
+        <meshStandardMaterial color="#cbb493" roughness={0.9} />
+      </mesh>
+    </group>
+  );
+}
+
+/** A glass storage jar: contents visible through a double-shell wall, a metal
+ * screw lid, and a hand-written-looking label. */
+function Jar({
+  position,
+  place,
+  colour,
+  r = 0.058,
+  h = 0.22,
+  fill = 0.66,
+}: Placed & { colour: string; r?: number; h?: number; fill?: number }) {
+  const lh = Math.max(0.02, h * 0.82 * fill);
+  const base = -h / 2;
+  return (
+    <group {...placedProps({ position, place })}>
+      {/* contents, sitting on the bottom */}
+      <mesh position={[0, base + lh / 2 + 0.008, 0]}>
+        <cylinderGeometry args={[r * 0.9, r * 0.88, lh, 18]} />
+        <meshStandardMaterial color={colour} roughness={0.9} />
+      </mesh>
+      <mesh position={[0, base + lh + 0.008, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[r * 0.9, 18]} />
+        <meshStandardMaterial color={colour} roughness={0.95} />
+      </mesh>
+      {/* wall, two shells */}
+      <mesh material={BOTTLE_GLASS}>
+        <cylinderGeometry args={[r, r, h, 20, 1, true]} />
+      </mesh>
+      <mesh material={BOTTLE_GLASS} scale={[0.93, 1, 0.93]}>
+        <cylinderGeometry args={[r, r, h * 0.998, 20, 1, true]} />
+      </mesh>
+      <mesh position={[0, base + 0.005, 0]} material={BOTTLE_GLASS}>
+        <cylinderGeometry args={[r, r * 0.94, 0.01, 20]} />
+      </mesh>
+      {/* threaded neck + metal lid */}
+      <mesh position={[0, h / 2 - 0.012, 0]} material={BOTTLE_GLASS}>
+        <cylinderGeometry args={[r * 0.86, r, 0.024, 20, 1, true]} />
+      </mesh>
+      <mesh position={[0, h / 2 + 0.012, 0]} material={GOLD_MAT}>
+        <cylinderGeometry args={[r * 0.9, r * 0.9, 0.026, 20]} />
+      </mesh>
+      {/* label */}
+      <mesh position={[0, -h * 0.06, 0]}>
+        <cylinderGeometry args={[r * 1.01, r * 1.01, h * 0.34, 20, 1, true]} />
+        <meshStandardMaterial color="#f6f1e6" roughness={0.92} side={THREE.DoubleSide} />
+      </mesh>
+    </group>
   );
 }
 
@@ -403,44 +882,497 @@ function Breathing({ children, amount = 0.03, speed = 0.5 }: { children: ReactNo
   return <group ref={g}>{children}</group>;
 }
 
-/** Low compressor hum (WebAudio, no asset). Starts only after a user gesture. */
-function useApplianceHum(active: boolean) {
-  const ref = useRef<{ ctx: AudioContext; gain: GainNode } | null>(null);
+/* ------------------------------------------------------------------ audio */
+
+/**
+ * The kitchen soundstage — entirely synthesized.
+ *
+ * A real kitchen is never silent: a compressor cycles, a fan turns, the room
+ * itself has a floor of noise. All of it is built here out of oscillators and
+ * filtered noise, so there are no audio files to ship, nothing to fail to load,
+ * and no licensing to worry about.
+ *
+ * Layers:
+ *   compressor  58 Hz fundamental + a detuned partial, lowpassed — the hum
+ *   fan         noise through a narrow bandpass, the bearing whine on top
+ *   freezer     a colder, lower rumble with more mechanical grain
+ *   room        very low broadband floor, always on once audio is unlocked
+ *
+ * One-shots: `seal()` for the gasket peeling off the frame (and the softer thud
+ * of it closing), `rails()` for a drawer running out on its slides.
+ *
+ * Browsers refuse to start audio before a user gesture, so the graph is built
+ * lazily on the first interaction; every call before that is a silent no-op
+ * rather than an error.
+ */
+type SoundEngine = {
+  ctx: AudioContext;
+  master: GainNode;
+  compressor: GainNode;
+  fan: GainNode;
+  freezer: GainNode;
+  noise: AudioBuffer;
+};
+
+let _audio: SoundEngine | null = null;
+let _audioFailed = false;
+
+/** Two seconds of white noise, looped. Cheaper and more controllable than a
+ * ScriptProcessor, and one buffer serves every noise-based layer. */
+function makeNoise(ctx: AudioContext): AudioBuffer {
+  const buf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  return buf;
+}
+
+function loopNoise(ctx: AudioContext, buf: AudioBuffer): AudioBufferSourceNode {
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.loop = true;
+  src.start();
+  return src;
+}
+
+function audioEngine(): SoundEngine | null {
+  if (_audio) return _audio;
+  if (_audioFailed) return null;
+  try {
+    const Ctor =
+      window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!Ctor) {
+      _audioFailed = true;
+      return null;
+    }
+    const ctx = new Ctor();
+    const noise = makeNoise(ctx);
+
+    const master = ctx.createGain();
+    master.gain.value = 0.85;
+    master.connect(ctx.destination);
+
+    /* --- room ambience: always on, barely there --- */
+    const roomLp = ctx.createBiquadFilter();
+    roomLp.type = "lowpass";
+    roomLp.frequency.value = 340;
+    const room = ctx.createGain();
+    room.gain.value = 0.006;
+    loopNoise(ctx, noise).connect(roomLp).connect(room).connect(master);
+
+    /* --- compressor hum --- */
+    const compressor = ctx.createGain();
+    compressor.gain.value = 0;
+    const humLp = ctx.createBiquadFilter();
+    humLp.type = "lowpass";
+    humLp.frequency.value = 210;
+    humLp.connect(compressor).connect(master);
+    for (const [freq, level] of [
+      [58, 1],
+      [116.6, 0.34],
+      [174, 0.12],
+    ] as const) {
+      const osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const g = ctx.createGain();
+      g.gain.value = level;
+      osc.connect(g).connect(humLp);
+      osc.start();
+    }
+
+    /* --- fan: air through a narrow band, plus bearing whine --- */
+    const fan = ctx.createGain();
+    fan.gain.value = 0;
+    fan.connect(master);
+    const fanBp = ctx.createBiquadFilter();
+    fanBp.type = "bandpass";
+    fanBp.frequency.value = 430;
+    fanBp.Q.value = 1.1;
+    loopNoise(ctx, noise).connect(fanBp).connect(fan);
+    const whine = ctx.createOscillator();
+    whine.type = "triangle";
+    whine.frequency.value = 1180;
+    const whineG = ctx.createGain();
+    whineG.gain.value = 0.012;
+    whine.connect(whineG).connect(fan);
+    whine.start();
+
+    /* --- freezer: colder, lower, grainier --- */
+    const freezer = ctx.createGain();
+    freezer.gain.value = 0;
+    freezer.connect(master);
+    const frBp = ctx.createBiquadFilter();
+    frBp.type = "bandpass";
+    frBp.frequency.value = 165;
+    frBp.Q.value = 0.7;
+    loopNoise(ctx, noise).connect(frBp).connect(freezer);
+    const frOsc = ctx.createOscillator();
+    frOsc.type = "sine";
+    frOsc.frequency.value = 43;
+    const frG = ctx.createGain();
+    frG.gain.value = 0.5;
+    frOsc.connect(frG).connect(freezer);
+    frOsc.start();
+
+    _audio = { ctx, master, compressor, fan, freezer, noise };
+    return _audio;
+  } catch {
+    _audioFailed = true;
+    return null;
+  }
+}
+
+/** Ramp a continuous layer toward a level. */
+function setLayer(which: "compressor" | "fan" | "freezer", level: number, seconds = 0.6) {
+  const e = audioEngine();
+  if (!e) return;
+  if (e.ctx.state === "suspended") void e.ctx.resume();
+  e[which].gain.setTargetAtTime(level, e.ctx.currentTime, seconds);
+}
+
+/**
+ * The gasket. Opening peels the seal off the frame — a bright, short burst of
+ * noise with a fast decay. Closing is the opposite: a duller thud with a
+ * downward pitch sweep, the sound of a heavy door meeting a rubber stop.
+ */
+function playSeal(opening: boolean) {
+  const e = audioEngine();
+  if (!e) return;
+  if (e.ctx.state === "suspended") void e.ctx.resume();
+  const t = e.ctx.currentTime;
+
+  const src = e.ctx.createBufferSource();
+  src.buffer = e.noise;
+  const bp = e.ctx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.setValueAtTime(opening ? 900 : 320, t);
+  bp.frequency.exponentialRampToValueAtTime(opening ? 240 : 110, t + 0.16);
+  bp.Q.value = 0.9;
+  const g = e.ctx.createGain();
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(opening ? 0.1 : 0.14, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + (opening ? 0.18 : 0.26));
+  src.connect(bp).connect(g).connect(e.master);
+  src.start(t);
+  src.stop(t + 0.4);
+
+  // The body of the door, only on closing.
+  if (!opening) {
+    const thud = e.ctx.createOscillator();
+    thud.type = "sine";
+    thud.frequency.setValueAtTime(96, t);
+    thud.frequency.exponentialRampToValueAtTime(44, t + 0.2);
+    const tg = e.ctx.createGain();
+    tg.gain.setValueAtTime(0.16, t);
+    tg.gain.exponentialRampToValueAtTime(0.0001, t + 0.28);
+    thud.connect(tg).connect(e.master);
+    thud.start(t);
+    thud.stop(t + 0.32);
+  }
+}
+
+/** A drawer running out on its slides: narrow, high, and gated for the length
+ * of the travel rather than fired as a click. */
+function playRails(seconds = 0.5) {
+  const e = audioEngine();
+  if (!e) return;
+  if (e.ctx.state === "suspended") void e.ctx.resume();
+  const t = e.ctx.currentTime;
+  const src = e.ctx.createBufferSource();
+  src.buffer = e.noise;
+  const bp = e.ctx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.setValueAtTime(1500, t);
+  bp.frequency.linearRampToValueAtTime(760, t + seconds);
+  bp.Q.value = 5.5;
+  const g = e.ctx.createGain();
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(0.035, t + 0.05);
+  g.gain.setTargetAtTime(0.0001, t + seconds * 0.7, 0.09);
+  src.connect(bp).connect(g).connect(e.master);
+  src.start(t);
+  src.stop(t + seconds + 0.4);
+}
+
+/**
+ * Keep an appliance's continuous layers running while it's in focus. The fan
+ * rides slightly louder than the compressor when a door is open, because that's
+ * exactly what you hear standing in front of an open fridge.
+ */
+function useApplianceHum(active: boolean, kind: "fridge" | "freezer" = "fridge") {
   useEffect(() => {
-    if (!active) {
-      if (ref.current) ref.current.gain.gain.setTargetAtTime(0, ref.current.ctx.currentTime, 0.25);
+    if (kind === "freezer") {
+      setLayer("freezer", active ? 0.05 : 0, active ? 0.4 : 0.8);
       return;
     }
-    if (!ref.current) {
-      try {
-        const Ctor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-        if (!Ctor) return;
-        const ctx = new Ctor();
-        const osc = ctx.createOscillator();
-        osc.type = "sine";
-        osc.frequency.value = 62;
-        const lp = ctx.createBiquadFilter();
-        lp.type = "lowpass";
-        lp.frequency.value = 200;
-        const gain = ctx.createGain();
-        gain.gain.value = 0;
-        osc.connect(lp).connect(gain).connect(ctx.destination);
-        osc.start();
-        ref.current = { ctx, gain };
-      } catch {
-        return;
-      }
+    setLayer("compressor", active ? 0.045 : 0.012, active ? 0.5 : 1);
+    setLayer("fan", active ? 0.05 : 0, active ? 0.35 : 0.9);
+  }, [active, kind]);
+}
+
+/** Fire a one-shot when a boolean flips, skipping the initial mount so the
+ * kitchen doesn't slam every door the moment it loads. */
+function useEdgeSound(value: boolean, fire: (rising: boolean) => void) {
+  const prev = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (prev.current === null) {
+      prev.current = value;
+      return;
     }
-    const { ctx, gain } = ref.current;
-    if (ctx.state === "suspended") void ctx.resume();
-    gain.gain.setTargetAtTime(0.04, ctx.currentTime, 0.5);
-  }, [active]);
-  useEffect(() => () => void ref.current?.ctx.close().catch(() => {}), []);
+    if (prev.current !== value) {
+      prev.current = value;
+      fire(value);
+    }
+  });
+}
+
+/* --------------------------------------------------------- door mechanics */
+
+/**
+ * Door mechanics with real sequencing.
+ *
+ * A premium fridge door does not simply rotate. The handle travels first, the
+ * gasket releases with a short suction, and only then does the mass of the door
+ * start to swing. Closing runs the same sequence backwards, with damping that
+ * climbs as the door nears the frame — which is what a soft-close hinge
+ * actually feels like: quick through the middle, deliberate at the end.
+ *
+ * Returns refs so the caller can drive whatever geometry it likes: `pull` for
+ * handle travel and seal separation, `swing` for the rotation itself.
+ */
+function useDoorMechanics(open: boolean, stiffness = 30) {
+  const pull = useRef(0);
+  const swing = useRef(0);
+  const vel = useRef(0);
+  const broken = useRef(false);
+
+  useFrame((_, dt) => {
+    const step = Math.min(dt, 0.05);
+
+    // Handle travel: quick, short, and it never overshoots.
+    pull.current += ((open ? 1 : 0) - pull.current) * Math.min(1, step * 10);
+
+    // The door can only start moving once the gasket has let go.
+    const gate = THREE.MathUtils.smoothstep(pull.current, 0.3, 0.78);
+    const target = open ? gate : 0;
+
+    // Soft close: damping rises steeply over the last few degrees.
+    const damping = open ? 11 : 11 + (1 - swing.current) * 34;
+    vel.current += (target - swing.current) * stiffness * step - vel.current * damping * step;
+    swing.current = Math.max(0, swing.current + vel.current * step);
+
+    // Gasket sound, fired on the crossing rather than every frame.
+    const isBroken = swing.current > 0.02;
+    if (isBroken !== broken.current) {
+      broken.current = isBroken;
+      playSeal(isBroken);
+    }
+  });
+
+  return { pull, swing };
 }
 
 /* -------------------------------------------------------------- appliances */
 
-/** Refrigeration column — black glass + gold, doors with real weight. */
+/* --------------------------------------------------- appliance sub-assembly */
+
+/**
+ * A hinge barrel — the visible pivot hardware. Real appliance doors are hung on
+ * chunky cylindrical hinges you can see at the top and bottom of the gap; their
+ * absence is one of the things that makes a 3D fridge read as a game prop.
+ */
+function Hinge({ position }: { position: [number, number, number] }) {
+  return (
+    <group position={position}>
+      <mesh rotation={[0, 0, 0]} material={STEEL}>
+        <cylinderGeometry args={[0.019, 0.019, 0.062, 14]} />
+      </mesh>
+      <mesh position={[0, 0.036, 0]} material={STEEL}>
+        <cylinderGeometry args={[0.011, 0.011, 0.014, 12]} />
+      </mesh>
+      <mesh position={[0, -0.036, 0]} material={STEEL}>
+        <cylinderGeometry args={[0.011, 0.011, 0.014, 12]} />
+      </mesh>
+    </group>
+  );
+}
+
+/**
+ * The magnetic gasket: a hollow rubber frame around the inside edge of a door.
+ * Built as four bars rather than one box so there is a genuine opening through
+ * the middle, and so the profile catches light along its edges like real EPDM.
+ */
+function Gasket({ w, h, depth = 0.02 }: { w: number; h: number; depth?: number }) {
+  const t = 0.026;
+  return (
+    <group>
+      {[h / 2 - t / 2, -h / 2 + t / 2].map((y) => (
+        <mesh key={y} position={[0, y, 0]} material={RUBBER}>
+          <boxGeometry args={[w, t, depth]} />
+        </mesh>
+      ))}
+      {[w / 2 - t / 2, -w / 2 + t / 2].map((x) => (
+        <mesh key={x} position={[x, 0, 0]} material={RUBBER}>
+          <boxGeometry args={[t, h - t * 2, depth]} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/**
+ * An LED strip: an aluminium housing with a frosted diffuser in front of it,
+ * plus the emissive face itself. Real appliance lighting is never a bare glowing
+ * rectangle — you see the channel it sits in.
+ */
+function LedStrip({
+  position,
+  length,
+  lit,
+  colour = "#eaf6ff",
+  vertical = false,
+}: {
+  position: [number, number, number];
+  length: number;
+  lit: number;
+  colour?: string;
+  vertical?: boolean;
+}) {
+  const args: [number, number, number] = vertical ? [0.018, length, 0.012] : [length, 0.018, 0.012];
+  const dif: [number, number, number] = vertical ? [0.011, length * 0.97, 0.006] : [length * 0.97, 0.011, 0.006];
+  return (
+    <group position={position}>
+      <mesh material={RAIL_MAT}>
+        <boxGeometry args={args} />
+      </mesh>
+      <mesh position={[0, 0, 0.008]} material={DIFFUSER}>
+        <boxGeometry args={dif} />
+      </mesh>
+      <mesh position={[0, 0, 0.011]}>
+        <boxGeometry args={[dif[0] * 0.94, dif[1] * 0.94, 0.002]} />
+        <meshStandardMaterial color={colour} emissive={colour} emissiveIntensity={0.15 + lit * 3.4} toneMapped />
+      </mesh>
+    </group>
+  );
+}
+
+/**
+ * A pair of drawer slides. Two telescoping sections per side, so the drawer
+ * visibly runs out on hardware rather than sliding through thin air.
+ */
+function DrawerRails({ width, depth, y }: { width: number; depth: number; y: number }) {
+  return (
+    <group position={[0, y, 0]}>
+      {[-width / 2, width / 2].map((x) => (
+        <group key={x} position={[x, 0, 0]}>
+          <mesh material={RAIL_MAT}>
+            <boxGeometry args={[0.014, 0.026, depth]} />
+          </mesh>
+          <mesh position={[0, -0.02, depth * 0.06]} material={RAIL_MAT}>
+            <boxGeometry args={[0.01, 0.016, depth * 0.9]} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+/**
+ * A temperature sensor pod with a status LED and a small digital readout.
+ * Emissive segments rather than real type — legible as a display at this
+ * distance without dragging a font into the 3D scene.
+ */
+function TempSensor({
+  position,
+  lit,
+  cold = false,
+}: {
+  position: [number, number, number];
+  lit: number;
+  cold?: boolean;
+}) {
+  const colour = cold ? "#8fd8ff" : "#a8e8c0";
+  return (
+    <group position={position}>
+      <mesh material={LINER}>
+        <boxGeometry args={[0.11, 0.05, 0.016]} />
+      </mesh>
+      {/* status LED */}
+      <mesh position={[-0.04, 0, 0.011]}>
+        <cylinderGeometry args={[0.005, 0.005, 0.004, 10]} />
+        <meshStandardMaterial color={colour} emissive={colour} emissiveIntensity={1.2 + lit * 2.4} />
+      </mesh>
+      {/* readout: three seven-segment-ish digits */}
+      <mesh position={[0.012, 0, 0.01]}>
+        <planeGeometry args={[0.062, 0.03]} />
+        <meshStandardMaterial color="#0a0d10" roughness={0.5} />
+      </mesh>
+      {[0, 1, 2].map((d) => (
+        <group key={d} position={[-0.006 + d * 0.018, 0, 0.012]}>
+          {[0.008, -0.008].map((sy) => (
+            <mesh key={sy} position={[0, sy, 0]}>
+              <planeGeometry args={[0.009, 0.002]} />
+              <meshStandardMaterial color={colour} emissive={colour} emissiveIntensity={0.5 + lit * 1.6} />
+            </mesh>
+          ))}
+          <mesh position={[0.0045, 0, 0]}>
+            <planeGeometry args={[0.002, 0.017]} />
+            <meshStandardMaterial color={colour} emissive={colour} emissiveIntensity={0.5 + lit * 1.6} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+/**
+ * A retaining bin on the inside of a door — the moulded shelf bottles actually
+ * stand in. Floor, a clear front wall to hold things back, and two end cheeks.
+ */
+function DoorBin({
+  position,
+  width,
+  height = 0.11,
+  depth = 0.13,
+}: {
+  position: [number, number, number];
+  width: number;
+  height?: number;
+  depth?: number;
+}) {
+  return (
+    <group position={position}>
+      <mesh material={LINER}>
+        <boxGeometry args={[width, 0.012, depth]} />
+      </mesh>
+      <mesh position={[0, height / 2, depth / 2 - 0.006]} material={CLEAR_PLASTIC}>
+        <boxGeometry args={[width, height, 0.008]} />
+      </mesh>
+      {[-width / 2 + 0.005, width / 2 - 0.005].map((x) => (
+        <mesh key={x} position={[x, height / 2 - 0.01, 0]} material={LINER}>
+          <boxGeometry args={[0.01, height * 0.8, depth]} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/* -------------------------------------------------------------- appliances */
+
+/**
+ * The refrigeration column, built the way the real appliance is built.
+ *
+ * Front to back: an outer steel-and-glass shell, then the insulated wall
+ * cavity, then the ABS liner that forms the actual food compartment. The
+ * thickness between shell and liner is real geometry, visible at the opening —
+ * this is the single biggest reason a 3D fridge reads as a hollow box or as a
+ * genuine appliance.
+ *
+ * The doors carry their own construction: a glass front panel, an insulated
+ * core, a moulded inner liner, a hollow magnetic gasket, retaining bins, and
+ * visible hinge hardware at top and bottom. Opening runs handle -> gasket
+ * release -> swing, and closing soft-closes into the frame.
+ */
 function Fridge({
   selected,
   onSelect,
@@ -454,195 +1386,508 @@ function Fridge({
 }) {
   const l = useRef<THREE.Group>(null);
   const r = useRef<THREE.Group>(null);
-  const swing = useRef(0);
-  const vel = useRef(0);
+  const lHandle = useRef<THREE.Group>(null);
+  const rHandle = useRef<THREE.Group>(null);
   const [lit, setLit] = useState(0);
   useApplianceHum(selected);
+  const { pull, swing } = useDoorMechanics(selected, 30);
 
-  useFrame((_, dt) => {
-    const step = Math.min(dt, 0.05);
-    vel.current += ((selected ? 1 : 0) - swing.current) * 34 * step - vel.current * 11 * step;
-    swing.current += vel.current * step;
+  useFrame(() => {
+    // Doors swing on their hinge; the handles travel a few millimetres first.
     if (l.current) l.current.rotation.y = swing.current * 2.0;
     if (r.current) r.current.rotation.y = -swing.current * 2.0;
-    const want = THREE.MathUtils.clamp((swing.current - 0.08) / 0.5, 0, 1);
+    const travel = pull.current * 0.014 * (1 - swing.current);
+    if (lHandle.current) lHandle.current.position.z = 0.075 + travel;
+    if (rHandle.current) rHandle.current.position.z = 0.075 + travel;
+    const want = THREE.MathUtils.clamp((swing.current - 0.06) / 0.45, 0, 1);
     if (Math.abs(want - lit) > 0.02) setLit(want);
   });
 
+  /**
+   * Sort every category by urgency, then hand each item a placement.
+   * Order is meaningful: index 0 is whatever needs eating first, and the
+   * placement engine pulls high-urgency items toward the front of the shelf,
+   * so the arrangement itself tells you what to use up.
+   */
   const buckets = useMemo(() => {
     const b: Record<FoodKind, FoodItem[]> = {
       milk: [], egg: [], cheese: [], meat: [], fish: [], butter: [],
       yogurt: [], water: [], juice: [], fruit: [], veg: [], other: [],
     };
     items.forEach((i) => b[categorize(i.name)].push(i));
-    // Soonest-expiring first — and first == front of the shelf.
-    (Object.keys(b) as FoodKind[]).forEach((k) => b[k].sort((x, y) => daysLeft(x.expires_at) - daysLeft(y.expires_at)));
+    (Object.keys(b) as FoodKind[]).forEach((k) =>
+      b[k].sort((x, y) => daysLeft(x.expires_at) - daysLeft(y.expires_at)),
+    );
     return b;
   }, [items]);
 
-  const drinks = useMemo(() => items.filter((i) => ["water", "juice", "milk"].includes(categorize(i.name))), [items]);
-  const fruitC = ["#b8352f", "#d4761f", "#3f7d2f", "#7d3f6a"];
-  const vegC = ["#a83232", "#3f8f45", "#2f7d5a", "#c9761f"];
+  const drinks = useMemo(
+    () => items.filter((i) => ["water", "juice"].includes(categorize(i.name))),
+    [items],
+  );
+  const fruitC = ["#b8352f", "#d4761f", "#3f7d2f", "#7d3f6a", "#c2452f", "#5d8f2f"];
+  const vegC = ["#a83232", "#3f8f45", "#2f7d5a", "#c9761f", "#7d9a3a", "#8f4b2f"];
+
+  /* Shell dimensions, kept as constants so the wall cavity stays consistent. */
+  const W = 1.75;
+  const H = 2.35;
+  const D = 0.78;
+  const WALL = 0.075; // insulated cavity thickness — visible at the opening
+  const IW = W - WALL * 2;
+  const IH = H - WALL * 2;
 
   return (
     <Hoverable name={label} hint="open" onActivate={() => onSelect("fridge")} labelY={2.5}>
       <group position={[-3.1, 0, -3.05]}>
-        <RoundedBox args={[1.75, 2.35, 0.78]} radius={0.012} smoothness={3} position={[0, 1.175, 0]} castShadow receiveShadow>
-          <meshStandardMaterial color="#101216" roughness={0.28} metalness={0.35} envMapIntensity={1.3} />
+        {/* ---------- outer shell ---------- */}
+        <RoundedBox
+          args={[W, H, D]}
+          radius={0.014}
+          smoothness={3}
+          position={[0, H / 2, 0]}
+          castShadow
+          receiveShadow
+        >
+          <meshStandardMaterial color="#101216" roughness={0.26} metalness={0.42} envMapIntensity={1.4} />
         </RoundedBox>
-        <mesh position={[0, 1.2, 0.04]}>
-          <boxGeometry args={[1.55, 2.08, 0.68]} />
-          <meshStandardMaterial color="#f3f5f6" roughness={0.32} metalness={0.2} />
-        </mesh>
-        <mesh position={[0, 1.2, -0.3]}>
-          <planeGeometry args={[1.5, 2.02]} />
-          <meshStandardMaterial color="#fbfdff" emissive="#eaf6ff" emissiveIntensity={0.1 + lit * 1.3} />
+
+        {/* ---------- insulated wall cavity: the foam core between shell and liner.
+             Slightly inset on every face so you read a real wall thickness where
+             the door opening cuts through it. ---------- */}
+        <mesh position={[0, H / 2, 0.01]}>
+          <boxGeometry args={[W - 0.02, H - 0.02, D - 0.03]} />
+          <meshStandardMaterial color="#d8d4cc" roughness={0.95} metalness={0} />
         </mesh>
 
-        {[0.58, 1.18, 1.78].map((y) => (
-          <group key={y} position={[0, y, 0.06]}>
-            <mesh material={GLASSY}>
-              <boxGeometry args={[1.5, 0.028, 0.62]} />
+        {/* ---------- inner liner: the actual food compartment ---------- */}
+        <mesh position={[0, H / 2, WALL / 2]} material={LINER}>
+          <boxGeometry args={[IW, IH, D - WALL]} />
+        </mesh>
+        {/* liner back wall, catching the shelf lighting */}
+        <mesh position={[0, H / 2, -D / 2 + WALL + 0.008]}>
+          <planeGeometry args={[IW - 0.01, IH - 0.01]} />
+          <meshStandardMaterial color="#f7fafb" roughness={0.36} metalness={0.06} emissive="#e8f4ff" emissiveIntensity={0.04 + lit * 0.55} />
+        </mesh>
+        {/* the visible cut edge of the wall around the opening — this is the
+            detail that makes the interior feel deep rather than painted on */}
+        {[
+          { p: [0, H - WALL / 2 - 0.01, D / 2 - (D - WALL) / 2] as [number, number, number], a: [IW, WALL, D - WALL] as [number, number, number] },
+          { p: [0, WALL / 2 + 0.01, D / 2 - (D - WALL) / 2] as [number, number, number], a: [IW, WALL, D - WALL] as [number, number, number] },
+          { p: [-W / 2 + WALL / 2, H / 2, D / 2 - (D - WALL) / 2] as [number, number, number], a: [WALL, IH, D - WALL] as [number, number, number] },
+          { p: [W / 2 - WALL / 2, H / 2, D / 2 - (D - WALL) / 2] as [number, number, number], a: [WALL, IH, D - WALL] as [number, number, number] },
+        ].map((s, i) => (
+          <mesh key={i} position={s.p} material={LINER}>
+            <boxGeometry args={s.a} />
+          </mesh>
+        ))}
+
+        {/* ---------- glass shelves on moulded supports ---------- */}
+        {[0.62, 1.2, 1.78].map((y, si) => (
+          <group key={y} position={[0, y, 0.055]}>
+            {/* tempered glass with a real edge */}
+            <mesh material={SHELF_GLASS} castShadow receiveShadow>
+              <boxGeometry args={[IW - 0.03, 0.014, D - WALL - 0.09]} />
             </mesh>
-            <mesh position={[0, 0, 0.31]} material={GOLD_MAT}>
-              <boxGeometry args={[1.5, 0.014, 0.014]} />
+            {/* polished trim on the front edge — how shelf glass is actually finished */}
+            <mesh position={[0, 0, (D - WALL - 0.09) / 2]} material={GOLD_MAT}>
+              <boxGeometry args={[IW - 0.03, 0.02, 0.012]} />
             </mesh>
-            <mesh position={[0, 0.16, -0.29]}>
-              <boxGeometry args={[1.42, 0.012, 0.02]} />
-              <meshStandardMaterial color="#eaf6ff" emissive="#dcefff" emissiveIntensity={0.2 + lit * 3} />
-            </mesh>
+            {/* moulded ladder supports the shelf rests on */}
+            {[-(IW - 0.03) / 2 + 0.008, (IW - 0.03) / 2 - 0.008].map((x) => (
+              <mesh key={x} position={[x, -0.012, 0]} material={LINER}>
+                <boxGeometry args={[0.016, 0.022, D - WALL - 0.1]} />
+              </mesh>
+            ))}
+            {/* the shelf's own LED channel, tucked under the one above */}
+            <LedStrip position={[0, 0.2, -(D - WALL) / 2 + 0.06]} length={IW - 0.16} lit={lit} />
+            {si === 2 && <TempSensor position={[(IW - 0.03) / 2 - 0.1, 0.11, -(D - WALL) / 2 + 0.07]} lit={lit} />}
           </group>
         ))}
 
-        {/* TOP — dairy + eggs (soonest-expiring sits forward) */}
-        {buckets.milk.slice(0, 2).map((it, i) => (
-          <Bottle key={`m${i}`} position={[-0.5 + i * 0.19, 1.97, 0.16 - i * 0.2]} colour="#f8f7f3" fill={fillFrom(it.quantity)} />
-        ))}
-        {buckets.egg.slice(0, 1).map((it, i) => (
-          <EggTray key={`e${i}`} position={[0.08, 1.84, 0.02]} count={countFrom(it.quantity, 10)} />
-        ))}
-        {buckets.butter.slice(0, 1).map((_, i) => (
-          <mesh key={`b${i}`} position={[0.52, 1.86, 0.08]}>
-            <boxGeometry args={[0.14, 0.05, 0.08]} />
-            <meshStandardMaterial color="#f4e2a1" roughness={0.6} />
+        {/* ---------- TOP SHELF: dairy compartment + eggs ---------- */}
+        {/* a walled dairy compartment with its own flap, as on a real door-less
+            top shelf: the butter and soft cheese live inside it */}
+        <group position={[0.44, 1.9, 0.02]}>
+          <mesh material={LINER}>
+            <boxGeometry args={[0.4, 0.012, 0.2]} />
           </mesh>
-        ))}
-        {buckets.yogurt.slice(0, 3).map((_, i) => (
-          <mesh key={`y${i}`} position={[0.4 + (i % 2) * 0.1, 1.86, -0.14]}>
-            <cylinderGeometry args={[0.05, 0.045, 0.07, 12]} />
-            <meshStandardMaterial color="#eef0f2" roughness={0.5} />
+          {[-0.2, 0.2].map((x) => (
+            <mesh key={x} position={[x, 0.05, 0]} material={LINER}>
+              <boxGeometry args={[0.01, 0.1, 0.2]} />
+            </mesh>
+          ))}
+          <mesh position={[0, 0.05, -0.1]} material={LINER}>
+            <boxGeometry args={[0.4, 0.1, 0.01]} />
           </mesh>
-        ))}
+          {/* hinged flap, tipped open */}
+          <mesh position={[0, 0.09, 0.075]} rotation={[0.62, 0, 0]} material={CLEAR_PLASTIC}>
+            <boxGeometry args={[0.4, 0.11, 0.008]} />
+          </mesh>
+        </group>
 
-        {/* MIDDLE — proteins */}
+        {buckets.milk.slice(0, 3).map((it, i) => (
+          <Carton
+            key={it.id}
+            position={[-0.56 + i * 0.17, 1.885, 0.02]}
+            place={placeItem(it.id, urgencyOf(it))}
+          />
+        ))}
+        {buckets.egg.slice(0, 1).map((it) => (
+          <EggTray
+            key={it.id}
+            position={[-0.06, 1.842, 0.0]}
+            place={placeItem(it.id, urgencyOf(it))}
+            count={countFrom(it.quantity, 10)}
+          />
+        ))}
+        {buckets.butter.slice(0, 2).map((it, i) => (
+          <group key={it.id} position={[0.34 + i * 0.14, 1.845, 0.01]} rotation={[0, placeItem(it.id, 0.2).ry * 0.5, 0]}>
+            <mesh castShadow>
+              <boxGeometry args={[0.115, 0.042, 0.07]} />
+              <meshStandardMaterial color="#f6e9b8" roughness={0.62} />
+            </mesh>
+            {/* foil wrapper folded over one end */}
+            <mesh position={[0.048, 0.001, 0]}>
+              <boxGeometry args={[0.024, 0.045, 0.073]} />
+              <meshStandardMaterial color="#d9c98f" roughness={0.35} metalness={0.5} />
+            </mesh>
+          </group>
+        ))}
+        {buckets.yogurt.slice(0, 4).map((it, i) => {
+          const p = placeItem(it.id, urgencyOf(it));
+          return (
+            <group
+              key={it.id}
+              position={[-0.12 + (i % 2) * 0.11 + p.dx, 1.877, -0.16 + Math.floor(i / 2) * 0.1 + p.dz * 0.4]}
+              rotation={[0, p.ry, 0]}
+            >
+              {/* tapered pot */}
+              <mesh castShadow>
+                <cylinderGeometry args={[0.049, 0.042, 0.068, 16]} />
+                <meshStandardMaterial color="#eef1f3" roughness={0.48} />
+              </mesh>
+              {/* foil lid, slightly domed */}
+              <mesh position={[0, 0.036, 0]}>
+                <cylinderGeometry args={[0.05, 0.05, 0.004, 16]} />
+                <meshStandardMaterial color="#c9ccd1" roughness={0.28} metalness={0.72} />
+              </mesh>
+              {/* wrap-around sleeve label */}
+              <mesh position={[0, -0.004, 0]}>
+                <cylinderGeometry args={[0.0495, 0.0435, 0.05, 16, 1, true]} />
+                <meshStandardMaterial
+                  map={labelTextures()[p.variant % 6]}
+                  roughness={0.7}
+                  side={THREE.DoubleSide}
+                />
+              </mesh>
+            </group>
+          );
+        })}
+
+        {/* ---------- MIDDLE SHELF: proteins ---------- */}
         {buckets.meat.slice(0, 2).map((it, i) => (
-          <Tray key={`me${i}`} position={[-0.36 + i * 0.42, 1.23, 0.14 - i * 0.2]} colour="#bc5555" fill={fillFrom(it.quantity)} />
+          <Tray
+            key={it.id}
+            position={[-0.4 + i * 0.44, 1.238, 0.02]}
+            place={placeItem(it.id, urgencyOf(it))}
+            colour="#bc5555"
+            fill={fillFrom(it.quantity)}
+          />
         ))}
-        {buckets.fish.slice(0, 1).map((it, i) => (
-          <Tray key={`f${i}`} position={[0.44, 1.23, -0.1]} colour="#d3a09c" fill={fillFrom(it.quantity)} />
+        {buckets.fish.slice(0, 1).map((it) => (
+          <Tray
+            key={it.id}
+            position={[0.46, 1.238, -0.04]}
+            place={placeItem(it.id, urgencyOf(it))}
+            colour="#d3a09c"
+            fill={fillFrom(it.quantity)}
+          />
         ))}
-        {buckets.cheese.slice(0, 2).map((it, i) => (
-          <mesh key={`c${i}`} position={[-0.5 + i * 0.18, 1.27, 0.2]}>
-            <boxGeometry args={[0.08 + 0.13 * fillFrom(it.quantity), 0.09, 0.13]} />
-            <meshStandardMaterial color="#f2c14e" roughness={0.55} />
+        {buckets.cheese.slice(0, 3).map((it, i) => {
+          const p = placeItem(it.id, urgencyOf(it));
+          return (
+            <group
+              key={it.id}
+              position={[-0.58 + i * 0.15 + p.dx, 1.262, 0.1 + p.dz * 0.5]}
+              rotation={[0, p.ry, p.tilt]}
+            >
+              {/* wedge, wrapped in waxed paper on two faces */}
+              <mesh castShadow>
+                <boxGeometry args={[0.07 + 0.1 * fillFrom(it.quantity), 0.06, 0.11]} />
+                <meshStandardMaterial color="#f0c04a" roughness={0.56} />
+              </mesh>
+              <mesh position={[0, 0.001, -0.002]} scale={[1.02, 0.7, 1.03]}>
+                <boxGeometry args={[0.07 + 0.1 * fillFrom(it.quantity), 0.06, 0.11]} />
+                <meshStandardMaterial color="#f6f2e6" roughness={0.9} />
+              </mesh>
+            </group>
+          );
+        })}
+        {buckets.other.slice(0, 3).map((it, i) => (
+          <Jar
+            key={it.id}
+            position={[0.0 + i * 0.15, 1.32, -0.14]}
+            place={placeItem(it.id, urgencyOf(it))}
+            colour="#9c6b3f"
+            r={0.045}
+            h={0.14}
+            fill={fillFrom(it.quantity)}
+          />
+        ))}
+
+        {/* ---------- BOTTOM SHELF: fruit ---------- */}
+        {buckets.fruit.slice(0, 9).map((it, i) => (
+          <Produce
+            key={it.id}
+            position={[-0.58 + (i % 5) * 0.28, 0.685, -0.08 + Math.floor(i / 5) * 0.19]}
+            place={placeItem(it.id, urgencyOf(it))}
+            colour={fruitC[hashId(it.id) % fruitC.length]}
+          />
+        ))}
+
+        {/* ---------- CRISPER DRAWER on real slides ---------- */}
+        <DrawerRails width={IW - 0.06} depth={D - WALL - 0.1} y={0.44} />
+        <group position={[0, 0.26, 0.06]}>
+          {/* moulded base + clear front, so the vegetables are visible through it */}
+          <mesh material={LINER}>
+            <boxGeometry args={[IW - 0.09, 0.012, D - WALL - 0.12]} />
           </mesh>
-        ))}
-
-        {/* BOTTOM — fruit */}
-        {buckets.fruit.slice(0, 8).map((_, i) => (
-          <Produce key={`fr${i}`} position={[-0.55 + (i % 4) * 0.32, 0.66, -0.1 + Math.floor(i / 4) * 0.2]} colour={fruitC[i % fruitC.length]} />
-        ))}
-
-        {/* crisper drawer */}
-        <mesh position={[0, 0.24, 0.04]} material={GLASSY}>
-          <boxGeometry args={[1.44, 0.36, 0.6]} />
-        </mesh>
-        {buckets.veg.slice(0, 8).map((_, i) => (
-          <Produce key={`v${i}`} position={[-0.55 + (i % 4) * 0.34, 0.24, -0.1 + Math.floor(i / 4) * 0.2]} colour={vegC[i % vegC.length]} r={0.055} />
+          <mesh position={[0, 0.09, (D - WALL - 0.12) / 2]} material={CLEAR_PLASTIC}>
+            <boxGeometry args={[IW - 0.09, 0.19, 0.01]} />
+          </mesh>
+          {[-(IW - 0.09) / 2, (IW - 0.09) / 2].map((x) => (
+            <mesh key={x} position={[x, 0.09, 0]} material={CLEAR_PLASTIC}>
+              <boxGeometry args={[0.01, 0.19, D - WALL - 0.12]} />
+            </mesh>
+          ))}
+          {/* recessed pull */}
+          <mesh position={[0, 0.15, (D - WALL - 0.12) / 2 + 0.008]} material={GOLD_MAT}>
+            <boxGeometry args={[0.3, 0.018, 0.014]} />
+          </mesh>
+          {/* humidity slider */}
+          <mesh position={[(IW - 0.09) / 2 - 0.16, 0.16, (D - WALL - 0.12) / 2 + 0.008]} material={RAIL_MAT}>
+            <boxGeometry args={[0.07, 0.012, 0.008]} />
+          </mesh>
+        </group>
+        {buckets.veg.slice(0, 10).map((it, i) => (
+          <Produce
+            key={it.id}
+            position={[-0.6 + (i % 5) * 0.3, 0.3, -0.06 + Math.floor(i / 5) * 0.18]}
+            place={placeItem(it.id, urgencyOf(it))}
+            colour={vegC[hashId(it.id) % vegC.length]}
+            r={0.055}
+          />
         ))}
 
         <ColdAir position={[0, 0.2, 0.45]} on={selected} />
-        {lit > 0.05 && <pointLight position={[0, 1.4, 0.3]} intensity={lit * 2.6} distance={2.4} decay={2} color="#eef8ff" />}
+        {lit > 0.05 && (
+          <pointLight position={[0, 1.5, 0.24]} intensity={lit * 2.4} distance={2.3} decay={2} color="#eef8ff" />
+        )}
 
-        {/* doors: black glass, gold handle, rubber seal */}
-        <group ref={l} position={[-0.875, 1.175, 0.4]}>
-          <RoundedBox args={[0.875, 2.35, 0.07]} radius={0.008} smoothness={3} position={[0.4375, 0, 0]} castShadow material={BLACKGLASS} />
-          <mesh position={[0.4375, 0, -0.04]}>
-            <boxGeometry args={[0.79, 2.2, 0.015]} />
-            <meshStandardMaterial color="#08090b" roughness={0.92} />
-          </mesh>
-          <GoldHandle position={[0.8, 0, 0.07]} length={1.5} />
-          {drinks.slice(0, 3).map((it, i) => (
-            <Bottle
-              key={i}
-              position={[0.45, 0.55 - i * 0.55, 0.12]}
-              colour={categorize(it.name) === "water" ? "#bfe0ff" : "#c8873a"}
-              fill={fillFrom(it.quantity)}
-              h={0.32}
+        {/* ---------- hinge hardware ---------- */}
+        {[-W / 2 + 0.02, W / 2 - 0.02].map((x) =>
+          [H - 0.11, 0.11].map((y) => <Hinge key={`${x}${y}`} position={[x, y, D / 2 - 0.02]} />),
+        )}
+
+        {/* ---------- DOORS ---------- */}
+        {[
+          { ref: l, handleRef: lHandle, x: -W / 2, s: 1 },
+          { ref: r, handleRef: rHandle, x: W / 2, s: -1 },
+        ].map((d, di) => (
+          <group key={di} ref={d.ref} position={[d.x, H / 2, D / 2]}>
+            {/* outer glass panel */}
+            <RoundedBox
+              args={[W / 2, H, 0.026]}
+              radius={0.008}
+              smoothness={3}
+              position={[(d.s * W) / 4, 0, 0.049]}
+              castShadow
+              material={BLACKGLASS}
             />
-          ))}
-        </group>
-        <group ref={r} position={[0.875, 1.175, 0.4]}>
-          <RoundedBox args={[0.875, 2.35, 0.07]} radius={0.008} smoothness={3} position={[-0.4375, 0, 0]} castShadow material={BLACKGLASS} />
-          <mesh position={[-0.4375, 0, -0.04]}>
-            <boxGeometry args={[0.79, 2.2, 0.015]} />
-            <meshStandardMaterial color="#08090b" roughness={0.92} />
-          </mesh>
-          <GoldHandle position={[-0.8, 0, 0.07]} length={1.5} />
-        </group>
+            {/* insulated core — the door has real thickness */}
+            <mesh position={[(d.s * W) / 4, 0, 0.024]}>
+              <boxGeometry args={[W / 2 - 0.012, H - 0.012, 0.046]} />
+              <meshStandardMaterial color="#d8d4cc" roughness={0.95} />
+            </mesh>
+            {/* moulded inner liner */}
+            <mesh position={[(d.s * W) / 4, 0, 0.0]} material={LINER}>
+              <boxGeometry args={[W / 2 - 0.018, H - 0.018, 0.012]} />
+            </mesh>
+            {/* magnetic gasket, standing proud of the liner */}
+            <group position={[(d.s * W) / 4, 0, -0.012]}>
+              <Gasket w={W / 2 - 0.04} h={H - 0.04} />
+            </group>
+            {/* handle on mounting posts */}
+            <group ref={d.handleRef} position={[0, 0, 0.075]}>
+              <group position={[d.s * (W / 2 - 0.055), 0, 0]}>
+                <GoldHandle position={[0, 0, 0]} length={1.5} />
+              </group>
+            </group>
+
+            {/* retaining bins, and bottles standing in them (left door only) */}
+            {di === 0 &&
+              [0.66, 0.02, -0.62].map((y, bi) => {
+                const bottle = drinks[bi];
+                return (
+                  <group key={y}>
+                    <DoorBin position={[(d.s * W) / 4, y, 0.008]} width={W / 2 - 0.09} />
+                    {bottle && (
+                      <Bottle
+                        position={[(d.s * W) / 4 - 0.16 + bi * 0.06, y + 0.16, 0.01]}
+                        place={placeItem(bottle.id, urgencyOf(bottle))}
+                        colour={categorize(bottle.name) === "water" ? "#c4e2f7" : "#c8873a"}
+                        fill={fillFrom(bottle.quantity)}
+                        h={0.31}
+                      />
+                    )}
+                  </group>
+                );
+              })}
+            {di === 1 &&
+              [0.66, 0.02, -0.62].map((y) => (
+                <DoorBin key={y} position={[(d.s * W) / 4, y, 0.008]} width={W / 2 - 0.09} />
+              ))}
+          </group>
+        ))}
       </group>
     </Hoverable>
   );
 }
 
-/** Freezer drawer with frosted packs — spring-damped travel. */
+/**
+ * Freezer drawer, built as a real drawer: an insulated cabinet with a liner, a
+ * wire basket running out on telescoping slides, a gasket around the front
+ * panel, and frost building on everything inside.
+ *
+ * The travel is weighted — heavier than the fridge doors, because a loaded
+ * freezer basket is heavy — and it soft-closes on the last centimetre.
+ */
 function Freezer({
   selected,
   onSelect,
   label,
   frost,
+  items,
 }: {
   selected: boolean;
   onSelect: (k: KitchenObject) => void;
   label: string;
   frost: THREE.Texture;
+  items: FoodItem[];
 }) {
   const d = useRef<THREE.Group>(null);
   const vel = useRef(0);
+  const travel = useRef(0);
+  useApplianceHum(selected, "freezer");
+  useEdgeSound(selected, (opening) => {
+    playSeal(opening);
+    playRails(0.55);
+  });
+
   useFrame((_, dt) => {
     if (!d.current) return;
     const step = Math.min(dt, 0.05);
-    vel.current += ((selected ? 0.5 : 0) - d.current.position.z) * 58 * step - vel.current * 13 * step;
-    d.current.position.z += vel.current * step;
+    // Heavier mass than a door, and soft-close damping as it returns home.
+    const damping = selected ? 13 : 13 + (1 - travel.current / 0.5) * 22;
+    vel.current += ((selected ? 0.5 : 0) - travel.current) * 52 * step - vel.current * damping * step;
+    travel.current = Math.max(0, travel.current + vel.current * step);
+    d.current.position.z = travel.current;
   });
+
+  const packs = items.slice(0, 4);
   return (
     <Hoverable name={label} hint="open" onActivate={() => onSelect("freezer")} labelY={0.85}>
       <group position={[-1.7, 0.3, -3.02]}>
-        <RoundedBox args={[0.9, 0.6, 0.78]} radius={0.01} smoothness={3} castShadow>
-          <meshStandardMaterial color="#101216" roughness={0.3} metalness={0.35} />
+        {/* cabinet + insulated wall + liner */}
+        <RoundedBox args={[0.9, 0.6, 0.78]} radius={0.01} smoothness={3} castShadow receiveShadow>
+          <meshStandardMaterial color="#101216" roughness={0.28} metalness={0.4} />
         </RoundedBox>
-        <mesh position={[0, 0, -0.28]}>
-          <planeGeometry args={[0.82, 0.5]} />
-          <meshStandardMaterial color="#eaf6ff" emissive="#bfe4ff" emissiveIntensity={selected ? 0.9 : 0.1} />
+        <mesh position={[0, 0, 0.01]}>
+          <boxGeometry args={[0.87, 0.57, 0.75]} />
+          <meshStandardMaterial color="#d8d4cc" roughness={0.95} />
         </mesh>
+        <mesh position={[0, 0, 0.03]} material={LINER}>
+          <boxGeometry args={[0.79, 0.49, 0.72]} />
+        </mesh>
+        <mesh position={[0, 0, -0.31]}>
+          <planeGeometry args={[0.78, 0.48]} />
+          <meshStandardMaterial
+            color="#f2fbff"
+            roughness={0.4}
+            emissive="#bfe4ff"
+            emissiveIntensity={selected ? 0.75 : 0.06}
+          />
+        </mesh>
+        <LedStrip position={[0, 0.2, -0.24]} length={0.6} lit={selected ? 1 : 0} colour="#d6efff" />
+        <TempSensor position={[0.26, 0.19, -0.26]} lit={selected ? 1 : 0} cold />
+        <DrawerRails width={0.8} depth={0.66} y={-0.2} />
+
         <group ref={d}>
-          <RoundedBox args={[0.9, 0.6, 0.06]} radius={0.008} smoothness={3} position={[0, 0, 0.4]} castShadow material={BLACKGLASS} />
-          <GoldHandle position={[0, 0.13, 0.45]} length={0.6} vertical={false} />
-          <mesh position={[0, -0.1, 0.16]} material={STEEL}>
-            <boxGeometry args={[0.82, 0.28, 0.5]} />
+          {/* front panel: glass face, insulated core, liner, gasket */}
+          <RoundedBox
+            args={[0.9, 0.6, 0.026]}
+            radius={0.008}
+            smoothness={3}
+            position={[0, 0, 0.42]}
+            castShadow
+            material={BLACKGLASS}
+          />
+          <mesh position={[0, 0, 0.398]}>
+            <boxGeometry args={[0.88, 0.58, 0.042]} />
+            <meshStandardMaterial color="#d8d4cc" roughness={0.95} />
           </mesh>
-          {["#cfe4ff", "#e8d8c0", "#d9c0c0"].map((c, i) => (
-            <group key={i} position={[-0.26 + i * 0.26, -0.03, 0.18]}>
-              <mesh>
-                <boxGeometry args={[0.2, 0.16, 0.28]} />
-                <meshStandardMaterial color={c} roughness={0.88} />
+          <mesh position={[0, 0, 0.374]} material={LINER}>
+            <boxGeometry args={[0.86, 0.56, 0.01]} />
+          </mesh>
+          <group position={[0, 0, 0.362]}>
+            <Gasket w={0.82} h={0.52} />
+          </group>
+          <GoldHandle position={[0, 0.14, 0.46]} length={0.6} vertical={false} />
+
+          {/* wire basket rather than a solid steel slab */}
+          <group position={[0, -0.1, 0.14]}>
+            <mesh material={RAIL_MAT}>
+              <boxGeometry args={[0.78, 0.008, 0.5]} />
+            </mesh>
+            {[-0.25, 0.25].map((z) => (
+              <mesh key={z} position={[0, 0.09, z]} material={RAIL_MAT}>
+                <boxGeometry args={[0.78, 0.18, 0.007]} />
               </mesh>
-              <mesh scale={1.04}>
-                <boxGeometry args={[0.2, 0.16, 0.28]} />
-                <meshStandardMaterial map={frost} transparent opacity={0.6} roughness={1} depthWrite={false} />
+            ))}
+            {[-0.39, 0.39].map((x) => (
+              <mesh key={x} position={[x, 0.09, 0]} material={RAIL_MAT}>
+                <boxGeometry args={[0.007, 0.18, 0.5]} />
               </mesh>
-            </group>
-          ))}
+            ))}
+            {/* basket wires across the floor */}
+            {Array.from({ length: 7 }).map((_, i) => (
+              <mesh key={i} position={[-0.33 + i * 0.11, 0.004, 0]} material={RAIL_MAT}>
+                <boxGeometry args={[0.005, 0.005, 0.5]} />
+              </mesh>
+            ))}
+          </group>
+
+          {/* frozen goods: printed packs with frost crusted over them */}
+          {packs.map((it, i) => {
+            const p = placeItem(it.id, urgencyOf(it));
+            return (
+              <group
+                key={it.id}
+                position={[-0.27 + i * 0.18 + p.dx * 0.6, -0.03, 0.16 + p.dz * 0.4]}
+                rotation={[0, p.ry * 0.5, 0]}
+              >
+                <mesh castShadow>
+                  <boxGeometry args={[0.15, 0.15, 0.24]} />
+                  <meshStandardMaterial map={labelTextures()[p.variant % 6]} roughness={0.9} />
+                </mesh>
+                {/* frost layer, slightly proud of the pack */}
+                <mesh scale={1.035}>
+                  <boxGeometry args={[0.15, 0.15, 0.24]} />
+                  <meshStandardMaterial map={frost} transparent opacity={0.55} roughness={1} depthWrite={false} />
+                </mesh>
+              </group>
+            );
+          })}
         </group>
         <ColdAir position={[0, 0, 0.5]} on={selected} />
       </group>
@@ -650,28 +1895,65 @@ function Freezer({
   );
 }
 
-/** Full-height pantry: gold-framed glass doors, lit shelves, labelled jars. */
-function Pantry({ selected, onSelect, label }: { selected: boolean; onSelect: (k: KitchenObject) => void; label: string }) {
+/**
+ * Full-height pantry: a real cabinet carcass with a back panel, solid timber
+ * shelves on visible supports, gold-framed glass doors on hinges, and cove
+ * lighting in a channel under each shelf.
+ *
+ * Contents follow the same frequency-of-use rule as the fridge: whatever the
+ * user is running through sits at the front of a shelf, and the deeper rows are
+ * the things nobody has reached for in weeks.
+ */
+function Pantry({
+  selected,
+  onSelect,
+  label,
+  items,
+}: {
+  selected: boolean;
+  onSelect: (k: KitchenObject) => void;
+  label: string;
+  items: FoodItem[];
+}) {
   const l = useRef<THREE.Group>(null);
   const r = useRef<THREE.Group>(null);
-  const swing = useRef(0);
-  const vel = useRef(0);
   const [lit, setLit] = useState(0);
-  useFrame((_, dt) => {
-    const step = Math.min(dt, 0.05);
-    vel.current += ((selected ? 1 : 0) - swing.current) * 32 * step - vel.current * 11 * step;
-    swing.current += vel.current * step;
+  const { swing } = useDoorMechanics(selected, 28);
+
+  useFrame(() => {
     if (l.current) l.current.rotation.y = swing.current * 2.0;
     if (r.current) r.current.rotation.y = -swing.current * 2.0;
-    const want = THREE.MathUtils.clamp((swing.current - 0.06) / 0.5, 0, 1);
+    const want = THREE.MathUtils.clamp((swing.current - 0.05) / 0.45, 0, 1);
     if (Math.abs(want - lit) > 0.02) setLit(want);
   });
-  const jar = ["#e2d3ad", "#c9b48a", "#e8dcc4", "#b99b6a", "#d8c9a6", "#c2a97e"];
+
+  const jarColours = ["#e2d3ad", "#c9b48a", "#e8dcc4", "#b99b6a", "#d8c9a6", "#c2a97e"];
+  const SHELVES = [0.45, 0.86, 1.27, 1.68, 2.05];
+
+  /** Split the real pantry contents across the shelves, urgent items first so
+   * they land on the middle shelves at eye level and toward the front. */
+  const byShelf = useMemo(() => {
+    const sorted = [...items].sort((a, b) => daysLeft(a.expires_at) - daysLeft(b.expires_at));
+    const rows: FoodItem[][] = SHELVES.map(() => []);
+    // Eye-level shelves fill first — that's where things you use actually live.
+    const order = [2, 3, 1, 4, 0];
+    sorted.forEach((it, i) => rows[order[i % order.length]].push(it));
+    return rows;
+  }, [items]);
+
   return (
     <Hoverable name={label} hint="open" onActivate={() => onSelect("pantry")} labelY={2.5}>
       <group position={[3.1, 0, -3.05]}>
-        <RoundedBox args={[1.75, 2.35, 0.78]} radius={0.012} smoothness={3} position={[0, 1.175, 0]} castShadow receiveShadow>
-          <meshStandardMaterial color="#101216" roughness={0.3} metalness={0.3} />
+        {/* carcass + back panel */}
+        <RoundedBox
+          args={[1.75, 2.35, 0.78]}
+          radius={0.012}
+          smoothness={3}
+          position={[0, 1.175, 0]}
+          castShadow
+          receiveShadow
+        >
+          <meshStandardMaterial color="#101216" roughness={0.3} metalness={0.32} />
         </RoundedBox>
         <mesh position={[0, 1.2, 0.02]}>
           <boxGeometry args={[1.58, 2.1, 0.7]} />
@@ -679,61 +1961,98 @@ function Pantry({ selected, onSelect, label }: { selected: boolean; onSelect: (k
         </mesh>
         <mesh position={[0, 1.2, -0.31]}>
           <planeGeometry args={[1.52, 2.04]} />
-          <meshStandardMaterial color="#d9bb8c" emissive="#ffcf85" emissiveIntensity={0.08 + lit * 0.7} />
+          <meshStandardMaterial color="#d9bb8c" roughness={0.7} emissive="#ffcf85" emissiveIntensity={0.06 + lit * 0.6} />
         </mesh>
-        {[0.45, 0.86, 1.27, 1.68, 2.05].map((y, si) => (
+
+        {SHELVES.map((y, si) => (
           <group key={y} position={[0, y, 0.04]}>
-            <mesh castShadow>
+            {/* solid timber shelf with a bullnosed gold front edge */}
+            <mesh castShadow receiveShadow>
               <boxGeometry args={[1.55, 0.032, 0.62]} />
-              <meshStandardMaterial color="#8a6b45" roughness={0.65} />
+              <meshStandardMaterial color="#8a6b45" roughness={0.66} />
             </mesh>
             <mesh position={[0, 0.02, 0.31]} material={GOLD_MAT}>
-              <boxGeometry args={[1.55, 0.012, 0.012]} />
+              <boxGeometry args={[1.55, 0.014, 0.014]} />
             </mesh>
-            <mesh position={[0, 0.15, -0.28]}>
-              <boxGeometry args={[1.46, 0.01, 0.018]} />
-              <meshStandardMaterial color="#fff1d6" emissive="#ffcf85" emissiveIntensity={0.15 + lit * 2.6} />
-            </mesh>
-            {Array.from({ length: 5 }).map((_, i) => (
-              <group key={i} position={[-0.6 + i * 0.3, 0.13, 0]}>
-                <mesh material={GLASSY}>
-                  <cylinderGeometry args={[0.062, 0.062, 0.22, 14]} />
-                </mesh>
-                <mesh position={[0, -0.03, 0]}>
-                  <cylinderGeometry args={[0.052, 0.052, 0.14, 14]} />
-                  <meshStandardMaterial color={jar[(si + i) % jar.length]} roughness={0.85} />
-                </mesh>
-                <mesh position={[0, 0.12, 0]} material={GOLD_MAT}>
-                  <cylinderGeometry args={[0.064, 0.064, 0.022, 14]} />
-                </mesh>
-                <mesh position={[0, 0.02, 0.063]}>
-                  <planeGeometry args={[0.075, 0.032]} />
-                  <meshStandardMaterial color="#f6f1e6" roughness={0.9} />
-                </mesh>
-              </group>
+            {/* shelf supports, so it isn't floating */}
+            {[-0.765, 0.765].map((x) => (
+              <mesh key={x} position={[x, -0.024, 0]}>
+                <boxGeometry args={[0.018, 0.02, 0.6]} />
+                <meshStandardMaterial color="#6f5636" roughness={0.7} />
+              </mesh>
             ))}
+            {/* cove lighting in a channel under the shelf above */}
+            <LedStrip position={[0, 0.17, -0.27]} length={1.4} lit={lit} colour="#ffe6bd" />
+
+            {/* real contents where we have them, decanted staples otherwise */}
+            {byShelf[si].slice(0, 5).map((it, i) => {
+              const p = placeItem(it.id, urgencyOf(it));
+              // Alternate jars and printed packs so a shelf reads as a real
+              // pantry rather than a row of matched canisters.
+              return (hashId(it.id) & 1) === 0 ? (
+                <Jar
+                  key={it.id}
+                  position={[-0.6 + i * 0.3, 0.13, 0]}
+                  place={p}
+                  colour={jarColours[hashId(it.id) % jarColours.length]}
+                  fill={fillFrom(it.quantity)}
+                />
+              ) : (
+                <Pack key={it.id} position={[-0.6 + i * 0.3, 0.018, 0]} place={p} />
+              );
+            })}
+            {/* fill the rest of the shelf with decanted staples */}
+            {Array.from({ length: Math.max(0, 5 - byShelf[si].length) }).map((_, k) => {
+              const i = byShelf[si].length + k;
+              const key = `pantry-${si}-${i}`;
+              return (
+                <Jar
+                  key={key}
+                  position={[-0.6 + i * 0.3, 0.13, 0]}
+                  place={placeItem(key, 0.15)}
+                  colour={jarColours[(si + i) % jarColours.length]}
+                  fill={0.4 + ((hashId(key) % 50) / 100)}
+                />
+              );
+            })}
           </group>
         ))}
-        {lit > 0.05 && <pointLight position={[0, 1.3, 0.25]} intensity={lit * 2.2} distance={2.4} decay={2} color="#ffd9a0" />}
+
+        {lit > 0.05 && (
+          <pointLight position={[0, 1.3, 0.25]} intensity={lit * 2.1} distance={2.4} decay={2} color="#ffd9a0" />
+        )}
+
+        {/* hinge hardware */}
+        {[-0.855, 0.855].map((x) =>
+          [2.24, 0.11].map((y) => <Hinge key={`${x}${y}`} position={[x, y, 0.37]} />),
+        )}
+
+        {/* glass doors in gold frames */}
         {[
           { ref: l, x: -0.875, s: 1 },
           { ref: r, x: 0.875, s: -1 },
         ].map((d, i) => (
           <group key={i} ref={d.ref} position={[d.x, 1.175, 0.4]}>
-            <mesh position={[d.s * 0.4375, 0, 0]} material={GLASSY}>
-              <boxGeometry args={[0.875, 2.35, 0.03]} />
+            {/* glazing */}
+            <mesh position={[d.s * 0.4375, 0, 0]} material={SHELF_GLASS}>
+              <boxGeometry args={[0.83, 2.29, 0.016]} />
             </mesh>
+            {/* frame: rails top and bottom, stiles either side */}
             {[-1.15, 1.15].map((y) => (
-              <mesh key={y} position={[d.s * 0.4375, y, 0.01]} material={GOLD_MAT}>
-                <boxGeometry args={[0.875, 0.03, 0.035]} />
+              <mesh key={y} position={[d.s * 0.4375, y, 0.005]} material={GOLD_MAT}>
+                <boxGeometry args={[0.875, 0.05, 0.032]} />
               </mesh>
             ))}
-            {[0, d.s * 0.85].map((x, k) => (
-              <mesh key={k} position={[x, 0, 0.01]} material={GOLD_MAT}>
-                <boxGeometry args={[0.03, 2.35, 0.035]} />
+            {[0.015, d.s * 0.86].map((x, k) => (
+              <mesh key={k} position={[x, 0, 0.005]} material={GOLD_MAT}>
+                <boxGeometry args={[0.032, 2.35, 0.032]} />
               </mesh>
             ))}
-            <GoldHandle position={[d.s * 0.79, 0, 0.06]} length={1.4} />
+            {/* gasket on the closing stile, so the door meets something */}
+            <mesh position={[d.s * 0.855, 0, -0.012]} material={RUBBER}>
+              <boxGeometry args={[0.014, 2.3, 0.014]} />
+            </mesh>
+            <GoldHandle position={[d.s * 0.79, 0, 0.055]} length={1.4} />
           </group>
         ))}
       </group>
@@ -1118,8 +2437,14 @@ function Scene({
 
       {/* STORE: refrigeration left, pantry right */}
       <Fridge selected={selected === "fridge"} onSelect={onSelect} label={labels.fridge} items={inventory.fridge} />
-      <Freezer selected={selected === "freezer"} onSelect={onSelect} label={labels.freezer} frost={frost} />
-      <Pantry selected={selected === "pantry"} onSelect={onSelect} label={labels.pantry} />
+      <Freezer
+        selected={selected === "freezer"}
+        onSelect={onSelect}
+        label={labels.freezer}
+        frost={frost}
+        items={inventory.freezer}
+      />
+      <Pantry selected={selected === "pantry"} onSelect={onSelect} label={labels.pantry} items={inventory.pantry} />
 
       {/* PREPARE: the island, dead centre */}
       <Hoverable name={labels.island} hint="inspect" onActivate={() => onSelect("island")} labelY={1.6}>
