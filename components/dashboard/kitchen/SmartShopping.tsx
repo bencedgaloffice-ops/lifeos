@@ -15,6 +15,7 @@ import {
   STORE_HINTS,
 } from "@/lib/kitchen/stores";
 import { recordStorePrice, deleteStorePrice, setShoppingItemStore, applyStorePlan } from "@/app/dashboard/kitchen/actions";
+import { StoreLogo } from "./StoreLogo";
 
 /**
  * Smart Shopping — Hungarian grocery intelligence.
@@ -105,15 +106,14 @@ export function SmartShopping({
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {runs.map((run) => (
             <div key={run.store.id} className="rounded-2xl border border-hairline bg-white/[0.02] p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <span className="h-7 w-1.5 flex-none rounded-full" style={{ background: run.store.color }} />
+              <div className="mb-3 flex items-center gap-2.5">
+                <StoreLogo slug={run.store.slug} />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{run.store.name}</p>
-                  <p className="truncate text-[0.65rem] text-white/40">
+                  <p className="truncate text-[0.65rem] leading-snug text-white/40">
                     {STORE_HINTS[run.store.slug] ?? run.store.strengths ?? ""}
                   </p>
                 </div>
-                <span className="font-mono text-xs tabular-nums text-white/70">{huf(run.subtotal, locale)}</span>
+                <span className="flex-none font-mono text-xs tabular-nums text-white/70">{huf(run.subtotal, locale)}</span>
               </div>
               <ul className="space-y-1.5">
                 {run.items.map((a) => (
@@ -199,9 +199,8 @@ export function SmartShopping({
             return (
               <div key={s.id} className="rounded-xl border border-hairline bg-white/[0.02] p-3">
                 <div className="flex items-center gap-2">
-                  <span className="h-5 w-1.5 flex-none rounded-full" style={{ background: s.color }} />
-                  <p className="truncate text-xs font-semibold">{s.name}</p>
-                  <span className="ml-auto text-[0.6rem] text-white/35">{"€".repeat(s.price_level)}</span>
+                  <StoreLogo slug={s.slug} className="h-6 w-[66px]" />
+                  <span className="ml-auto text-[0.6rem] tracking-wide text-white/35">{"Ft".repeat(s.price_level)}</span>
                 </div>
                 <p className="mt-1.5 text-[0.65rem] leading-relaxed text-white/40">
                   {STORE_HINTS[s.slug] ?? s.strengths ?? ""}
@@ -220,10 +219,9 @@ export function SmartShopping({
               const store = stores.find((s) => s.id === p.store_id);
               return (
                 <div key={p.id} className="group flex items-center gap-3 py-2 text-xs">
-                  <span className="h-4 w-1 flex-none rounded-full" style={{ background: store?.color ?? "#666" }} />
+                  <StoreLogo slug={store?.slug ?? ""} className="h-5 w-[54px]" />
                   <span className="min-w-0 flex-1 truncate text-white/80">{p.item_name}</span>
                   {p.unit && <span className="flex-none text-white/30">{p.unit}</span>}
-                  <span className="flex-none text-white/45">{store?.name}</span>
                   <span className="flex-none font-mono tabular-nums text-white/70">{huf(Number(p.price_huf), locale)}</span>
                   <button
                     onClick={() => startTransition(() => deleteStorePrice(p.id))}
