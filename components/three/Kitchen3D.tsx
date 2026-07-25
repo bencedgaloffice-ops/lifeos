@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useState, useMemo, Suspense, Component, type ReactNode } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { useRef, useState, useMemo, useEffect, Suspense, Component, type ReactNode } from "react";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, ContactShadows, Environment, Html, MeshReflectorMaterial } from "@react-three/drei";
 import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import { Lightbulb, LightbulbOff, Sun, Moon, Droplets, Flame, CookingPot } from "lucide-react";
@@ -66,6 +66,273 @@ function makeTexture(draw: (ctx: CanvasRenderingContext2D, w: number, h: number)
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
   return tex;
+}
+
+export type FoodItem = { name: string; quantity: string | null; expires_at: string | null };
+export type FridgeInventory = { fridge: FoodItem[]; freezer: FoodItem[]; pantry: FoodItem[] };
+
+type FoodKind = "milk" | "egg" | "cheese" | "meat" | "fish" | "butter" | "yogurt" | "water" | "juice" | "fruit" | "veg" | "other";
+
+function categorize(name: string): FoodKind {
+  const n = name.toLowerCase();
+  if (/milk|tej/.test(n)) return "milk";
+  if (/egg|tojás|tojas/.test(n)) return "egg";
+  if (/cheese|sajt/.test(n)) return "cheese";
+  if (/chicken|beef|meat|pork|csirke|hús|hus|marha|sertés|sertes|bacon|szalonna|ham|sonka/.test(n)) return "meat";
+  if (/fish|hal|salmon|lazac|tuna/.test(n)) return "fish";
+  if (/butter|vaj/.test(n)) return "butter";
+  if (/yog|joghurt|kefir/.test(n)) return "yogurt";
+  if (/water|víz|viz|ásvány|asvany/.test(n)) return "water";
+  if (/juice|lé|cola|soda|drink|ital|üdítő|udito|beer|sör|sor|wine|bor/.test(n)) return "juice";
+  if (/apple|alma|orange|narancs|banana|banán|fruit|gyümölcs|gyumolcs|berry|bogyó|grape|szőlő|szolo|lemon|citrom|pear|körte/.test(n)) return "fruit";
+  if (/tomato|paradicsom|lettuce|saláta|salata|cucumber|uborka|carrot|répa|repa|pepper|paprika|veg|zöldség|zoldseg|onion|hagyma|potato|krumpli/.test(n)) return "veg";
+  return "other";
+}
+
+/** 0..1 fill from a quantity string ("60%", "1.5L", "500g" → heuristic). */
+function fillFrom(q: string | null): number {
+  if (!q) return 0.7;
+  const pct = q.match(/(\d+)\s*%/);
+  if (pct) return Math.min(1, Math.max(0.06, Number(pct[1]) / 100));
+  return 0.72;
+}
+function countFrom(q: string | null, fallback: number): number {
+  if (!q) return fallback;
+  const m = q.match(/\d+/);
+  return m ? Math.min(30, Math.max(0, Number(m[0]))) : fallback;
+}
+
+/** Translucent bottle with a visible liquid level. */
+function Bottle({ position, color, fill, r = 0.045, h = 0.3 }: { position: [number, number, number]; color: string; fill: number; r?: number; h?: number }) {
+  const lh = Math.max(0.02, h * 0.86 * fill);
+  return (
+    <group position={position}>
+      <mesh>
+        <cylinderGeometry args={[r, r, h, 16]} />
+        <meshPhysicalMaterial color="#cfe6ef" roughness={0.05} metalness={0} transmission={0.9} thickness={0.2} transparent opacity={0.35} />
+      </mesh>
+      <mesh position={[0, -h / 2 + lh / 2 + 0.02, 0]}>
+        <cylinderGeometry args={[r * 0.82, r * 0.82, lh, 16]} />
+        <meshStandardMaterial color={color} roughness={0.4} />
+      </mesh>
+      <mesh position={[0, h / 2 + 0.02, 0]} material={DARKMETAL}>
+        <cylinderGeometry args={[r * 0.55, r * 0.55, 0.05, 12]} />
+      </mesh>
+    </group>
+  );
+}
+
+/** Egg tray — renders exactly `count` eggs so it visibly empties. */
+function EggTray({ position, count }: { position: [number, number, number]; count: number }) {
+  const cells: [number, number][] = [];
+  for (let r = 0; r < 2; r++) for (let c = 0; c < 5; c++) cells.push([c, r]);
+  return (
+    <group position={position}>
+      <mesh position={[0, 0, 0]}>
+        <boxGeometry args={[0.34, 0.03, 0.16]} />
+        <meshStandardMaterial color="#d8d2c4" roughness={0.9} />
+      </mesh>
+      {cells.slice(0, Math.min(10, Math.round(count))).map(([c, r], i) => (
+        <mesh key={i} position={[-0.14 + c * 0.07, 0.04, -0.04 + r * 0.08]} scale={[1, 1.25, 1]}>
+          <sphereGeometry args={[0.026, 12, 12]} />
+          <meshStandardMaterial color="#f3e3c7" roughness={0.7} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/** A packaged tray of meat/fish that shrinks with quantity. */
+function MeatTray({ position, color, fill }: { position: [number, number, number]; color: string; fill: number }) {
+  const w = 0.14 + 0.16 * fill;
+  return (
+    <group position={position}>
+      <mesh>
+        <boxGeometry args={[w + 0.03, 0.03, 0.2]} />
+        <meshStandardMaterial color="#e9e9ec" roughness={0.5} />
+      </mesh>
+      <mesh position={[0, 0.03, 0]}>
+        <boxGeometry args={[w, 0.05, 0.16]} />
+        <meshStandardMaterial color={color} roughness={0.55} />
+      </mesh>
+      <mesh position={[0, 0.065, 0]}>
+        <boxGeometry args={[w + 0.03, 0.005, 0.2]} />
+        <meshPhysicalMaterial color="#ffffff" roughness={0.1} transmission={0.85} transparent opacity={0.25} />
+      </mesh>
+    </group>
+  );
+}
+
+/** Cheese wedge that shrinks with quantity. */
+function Cheese({ position, fill }: { position: [number, number, number]; fill: number }) {
+  const w = 0.08 + 0.14 * fill;
+  return (
+    <mesh position={position}>
+      <boxGeometry args={[w, 0.09, 0.13]} />
+      <meshStandardMaterial color="#f2c14e" roughness={0.55} />
+    </mesh>
+  );
+}
+
+function Tub({ position, color }: { position: [number, number, number]; color: string }) {
+  return (
+    <mesh position={position}>
+      <cylinderGeometry args={[0.055, 0.05, 0.07, 16]} />
+      <meshStandardMaterial color={color} roughness={0.5} />
+    </mesh>
+  );
+}
+
+function Produce({ position, color, r = 0.05 }: { position: [number, number, number]; color: string; r?: number }) {
+  return (
+    <mesh position={position}>
+      <sphereGeometry args={[r, 14, 14]} />
+      <meshStandardMaterial color={color} roughness={0.6} />
+    </mesh>
+  );
+}
+
+/** Drifting cold-air particles that appear when a cold appliance is open. */
+function ColdAir({ position, on }: { position: [number, number, number]; on: boolean }) {
+  const g = useRef<THREE.Points>(null);
+  const geo = useMemo(() => {
+    const n = 40;
+    const arr = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      arr[i * 3] = (Math.random() - 0.5) * 1.0;
+      arr[i * 3 + 1] = Math.random() * 1.8;
+      arr[i * 3 + 2] = (Math.random() - 0.5) * 0.6;
+    }
+    const bg = new THREE.BufferGeometry();
+    bg.setAttribute("position", new THREE.BufferAttribute(arr, 3));
+    return bg;
+  }, []);
+  useFrame((_, dt) => {
+    if (!g.current) return;
+    g.current.visible = on;
+    const pos = g.current.geometry.attributes.position as THREE.BufferAttribute;
+    for (let i = 0; i < pos.count; i++) {
+      let y = pos.getY(i) - dt * 0.35;
+      if (y < 0) y = 1.8;
+      pos.setY(i, y);
+    }
+    pos.needsUpdate = true;
+  });
+  return (
+    <points ref={g} geometry={geo} position={position} visible={false}>
+      <pointsMaterial size={0.02} color="#dff2ff" transparent opacity={0.35} depthWrite={false} />
+    </points>
+  );
+}
+
+/** Cinematic camera that eases toward whatever object is selected. */
+const CAMERA_POSES: Record<string, { cam: [number, number, number]; tgt: [number, number, number] }> = {
+  home: { cam: [5.8, 3.2, 5.8], tgt: [0.3, 1, -0.2] },
+  fridge: { cam: [-2.5, 1.7, 0.9], tgt: [-3.4, 1.2, -1.8] },
+  freezer: { cam: [-2.4, 1.1, 0.7], tgt: [-3.4, 0.5, -1.4] },
+  pantry: { cam: [3.5, 1.7, 0.5], tgt: [4.9, 1.3, -2.1] },
+  island: { cam: [0.4, 2.1, 3.4], tgt: [0.4, 1.0, 0.4] },
+  oven: { cam: [2.3, 1.6, 0.7], tgt: [3.9, 1.35, -2.0] },
+  sink: { cam: [-0.2, 1.9, 2.8], tgt: [-0.2, 1.05, 1.0] },
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function CameraFocus({ controlsRef, focus }: { controlsRef: React.MutableRefObject<any>; focus: KitchenObject | null }) {
+  const { camera } = useThree();
+  const anim = useRef<{ fromC: THREE.Vector3; fromT: THREE.Vector3; toC: THREE.Vector3; toT: THREE.Vector3; p: number } | null>(null);
+  useEffect(() => {
+    const controls = controlsRef.current;
+    if (!controls) return;
+    const pose = CAMERA_POSES[focus ?? "home"] ?? CAMERA_POSES.home;
+    anim.current = {
+      fromC: camera.position.clone(),
+      fromT: controls.target.clone(),
+      toC: new THREE.Vector3(...pose.cam),
+      toT: new THREE.Vector3(...pose.tgt),
+      p: 0,
+    };
+    controls.enabled = false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus]);
+  useFrame((_, dt) => {
+    const controls = controlsRef.current;
+    const a = anim.current;
+    if (!controls || !a) return;
+    a.p = Math.min(1, a.p + dt / 1.15);
+    const e = a.p < 0.5 ? 2 * a.p * a.p : 1 - Math.pow(-2 * a.p + 2, 2) / 2;
+    camera.position.lerpVectors(a.fromC, a.toC, e);
+    controls.target.lerpVectors(a.fromT, a.toT, e);
+    controls.update();
+    if (a.p >= 1) {
+      anim.current = null;
+      controls.enabled = true;
+    }
+  });
+  return null;
+}
+
+/** Organized, inventory-driven refrigerator interior. */
+function FridgeInterior({ items }: { items: FoodItem[] }) {
+  const buckets = useMemo(() => {
+    const b: Record<FoodKind, FoodItem[]> = { milk: [], egg: [], cheese: [], meat: [], fish: [], butter: [], yogurt: [], water: [], juice: [], fruit: [], veg: [], other: [] };
+    items.forEach((it) => b[categorize(it.name)].push(it));
+    return b;
+  }, [items]);
+
+  const fruitColors = ["#c0392b", "#e67e22", "#27ae60", "#8e44ad", "#f1c40f"];
+  const vegColors = ["#c0392b", "#2ecc71", "#27ae60", "#e67e22", "#16a085"];
+
+  return (
+    <group position={[0, 0, 0.32]}>
+      {/* TOP shelf (y≈1.78): milk, eggs, butter, yogurt, drinks */}
+      {buckets.milk.slice(0, 2).map((it, i) => (
+        <Bottle key={`m${i}`} position={[-0.36 + i * 0.16, 1.94, 0]} color="#f7f7f2" fill={fillFrom(it.quantity)} />
+      ))}
+      {buckets.egg.slice(0, 1).map((it, i) => (
+        <EggTray key={`e${i}`} position={[0.12, 1.81, 0]} count={countFrom(it.quantity, 10)} />
+      ))}
+      {buckets.butter.slice(0, 1).map((_, i) => (
+        <mesh key={`b${i}`} position={[0.36, 1.83, 0.08]}>
+          <boxGeometry args={[0.14, 0.05, 0.08]} />
+          <meshStandardMaterial color="#f4e2a1" roughness={0.6} />
+        </mesh>
+      ))}
+      {buckets.yogurt.slice(0, 3).map((_, i) => (
+        <Tub key={`y${i}`} position={[0.28 + (i % 2) * 0.1, 1.83, -0.12]} color="#eef0f2" />
+      ))}
+
+      {/* MIDDLE shelf (y≈1.18): meat, fish, cheese, prepared meals */}
+      {buckets.meat.slice(0, 2).map((it, i) => (
+        <MeatTray key={`me${i}`} position={[-0.3 + i * 0.36, 1.2, 0]} color="#c65b5b" fill={fillFrom(it.quantity)} />
+      ))}
+      {buckets.fish.slice(0, 1).map((it, i) => (
+        <MeatTray key={`f${i}`} position={[0.3, 1.2, -0.14]} color="#d6a3a0" fill={fillFrom(it.quantity)} />
+      ))}
+      {buckets.cheese.slice(0, 2).map((it, i) => (
+        <Cheese key={`c${i}`} position={[-0.34 + i * 0.16, 1.24, 0.14]} fill={fillFrom(it.quantity)} />
+      ))}
+
+      {/* BOTTOM shelf (y≈0.58): fruit, containers */}
+      {buckets.fruit.slice(0, 8).map((it, i) => (
+        <Produce key={`fr${i}`} position={[-0.4 + (i % 4) * 0.24, 0.63, -0.12 + Math.floor(i / 4) * 0.2]} color={fruitColors[i % fruitColors.length]} />
+      ))}
+      {buckets.other.slice(0, 3).map((_, i) => (
+        <mesh key={`o${i}`} position={[-0.3 + i * 0.3, 0.64, 0.16]}>
+          <boxGeometry args={[0.2, 0.12, 0.16]} />
+          <meshPhysicalMaterial color="#dfe6ea" roughness={0.2} transmission={0.6} transparent opacity={0.5} />
+        </mesh>
+      ))}
+
+      {/* Vegetable drawer (transparent, below bottom shelf) */}
+      <mesh position={[0, 0.2, 0.06]}>
+        <boxGeometry args={[1.05, 0.34, 0.78]} />
+        <meshPhysicalMaterial color="#e6f0f2" roughness={0.15} transmission={0.75} transparent opacity={0.32} />
+      </mesh>
+      {buckets.veg.slice(0, 8).map((it, i) => (
+        <Produce key={`v${i}`} position={[-0.4 + (i % 4) * 0.26, 0.2, -0.12 + Math.floor(i / 4) * 0.22]} color={vegColors[i % vegColors.length]} r={0.055} />
+      ))}
+    </group>
+  );
 }
 
 function Hoverable({
@@ -324,49 +591,79 @@ function Stool({ x }: { x: number }) {
   );
 }
 
-function Fridge({ selected, onSelect, label, lightsOn }: { selected: boolean; onSelect: (k: KitchenObject) => void; label: string; lightsOn: boolean }) {
+function Fridge({ selected, onSelect, label, items }: { selected: boolean; onSelect: (k: KitchenObject) => void; label: string; items: FoodItem[] }) {
   const left = useRef<THREE.Group>(null);
   const right = useRef<THREE.Group>(null);
+  const led = useRef(0);
+  const [ledOn, setLedOn] = useState(0);
   useFrame(() => {
+    // Doors swing with a soft, physical ease; interior LED fades on after.
     const target = selected ? 1 : 0;
-    if (left.current) left.current.rotation.y = THREE.MathUtils.lerp(left.current.rotation.y, target * 2.0, 0.12);
-    if (right.current) right.current.rotation.y = THREE.MathUtils.lerp(right.current.rotation.y, -target * 2.0, 0.12);
+    if (left.current) left.current.rotation.y = THREE.MathUtils.lerp(left.current.rotation.y, target * 2.05, 0.09);
+    if (right.current) right.current.rotation.y = THREE.MathUtils.lerp(right.current.rotation.y, -target * 2.05, 0.09);
+    led.current = THREE.MathUtils.lerp(led.current, selected ? 1 : 0, 0.06);
+    if (Math.abs(led.current - ledOn) > 0.01) setLedOn(led.current);
   });
+  const doorDrinks = useMemo(() => items.filter((i) => ["water", "juice"].includes(categorize(i.name))), [items]);
   return (
     <Hoverable name={label} hint="inspect" onActivate={() => onSelect("fridge")} labelY={2.5}>
       <group position={[-3.4, 0, -2.2]}>
+        {/* body + fingerprint-resistant liner */}
         <mesh position={[0, 1.1, 0]} castShadow material={BLACK}>
           <boxGeometry args={[1.3, 2.2, 1.0]} />
         </mesh>
-        <mesh position={[0, 1.15, 0.05]} material={CERAMIC}>
-          <boxGeometry args={[1.15, 1.9, 0.9]} />
+        <mesh position={[0, 1.15, 0.05]}>
+          <boxGeometry args={[1.16, 1.92, 0.9]} />
+          <meshStandardMaterial color="#eef1f3" roughness={0.35} metalness={0.35} envMapIntensity={1.2} />
         </mesh>
+        {/* back panel glows when open */}
         <mesh position={[0, 1.15, -0.36]}>
-          <planeGeometry args={[1.1, 1.85]} />
-          <meshStandardMaterial color="#f4fbff" emissive="#dbeeff" emissiveIntensity={selected ? 0.8 : 0.12} />
+          <planeGeometry args={[1.12, 1.86]} />
+          <meshStandardMaterial color="#f4fbff" emissive="#eaf6ff" emissiveIntensity={0.12 + ledOn * 1.1} />
         </mesh>
+        {/* glass shelves */}
         {[0.55, 1.15, 1.75].map((y) => (
           <mesh key={y} position={[0, y, 0.1]} material={GLASS}>
-            <boxGeometry args={[1.1, 0.04, 0.8]} />
+            <boxGeometry args={[1.12, 0.03, 0.82]} />
           </mesh>
         ))}
-        <mesh position={[0, 2.02, 0.1]}>
-          <boxGeometry args={[1.05, 0.03, 0.05]} />
-          <meshStandardMaterial color="#eaf6ff" emissive="#dcefff" emissiveIntensity={selected ? 3 : 0.3} />
-        </mesh>
+        {/* LED strips top + per-shelf */}
+        {[2.02, 1.55, 0.95].map((y, i) => (
+          <mesh key={i} position={[0, y, 0.34]}>
+            <boxGeometry args={[1.05, 0.02, 0.03]} />
+            <meshStandardMaterial color="#eaf6ff" emissive="#dcefff" emissiveIntensity={0.25 + ledOn * 3} />
+          </mesh>
+        ))}
+        {/* inventory-driven food */}
+        <FridgeInterior items={items} />
+        {/* cold-air wisp + interior light when open */}
+        <ColdAir position={[0, 0.2, 0.5]} on={selected} />
+        {ledOn > 0.05 && <pointLight position={[0, 1.3, 0.35]} intensity={ledOn * 2.4} distance={2.2} decay={2} color="#eef7ff" />}
+
+        {/* doors with rubber seals, premium handles, and door-shelf drinks */}
         <group ref={left} position={[-0.65, 1.1, 0.5]}>
           <mesh position={[0.325, 0, 0]} castShadow material={BLACK}>
             <boxGeometry args={[0.65, 2.2, 0.08]} />
           </mesh>
+          <mesh position={[0.325, 0, -0.045]}>
+            <boxGeometry args={[0.58, 2.05, 0.02]} />
+            <meshStandardMaterial color="#0a0b0d" roughness={0.9} />
+          </mesh>
           <Handle position={[0.58, 0, 0.08]} length={1.0} vertical />
+          {doorDrinks.slice(0, 3).map((it, i) => (
+            <Bottle key={i} position={[0.34, 0.2 - i * 0.5, 0.12]} color={categorize(it.name) === "water" ? "#bfe0ff" : "#d68a3a"} fill={fillFrom(it.quantity)} h={0.34} />
+          ))}
         </group>
         <group ref={right} position={[0.65, 1.1, 0.5]}>
           <mesh position={[-0.325, 0, 0]} castShadow material={BLACK}>
             <boxGeometry args={[0.65, 2.2, 0.08]} />
           </mesh>
+          <mesh position={[-0.325, 0, -0.045]}>
+            <boxGeometry args={[0.58, 2.05, 0.02]} />
+            <meshStandardMaterial color="#0a0b0d" roughness={0.9} />
+          </mesh>
           <Handle position={[-0.58, 0, 0.08]} length={1.0} vertical />
         </group>
-        {selected && lightsOn && <pointLight position={[0, 1.2, 0.3]} intensity={2} distance={2} color="#eaf6ff" />}
       </group>
     </Hoverable>
   );
@@ -418,6 +715,7 @@ function Scene({
   onSelect,
   labels,
   controls,
+  inventory,
   lightsOn,
   night,
   water,
@@ -430,6 +728,7 @@ function Scene({
   onSelect: (k: KitchenObject) => void;
   labels: Record<KitchenObject, string>;
   controls: KitchenControlLabels;
+  inventory: FridgeInventory;
   lightsOn: boolean;
   night: boolean;
   water: boolean;
@@ -740,7 +1039,7 @@ function Scene({
       <Pantry selected={selected === "pantry"} onSelect={onSelect} label={labels.pantry} />
 
       {/* Fridge (doors open) + freezer (drawer slides out) */}
-      <Fridge selected={selected === "fridge"} onSelect={onSelect} label={labels.fridge} lightsOn={lightsOn} />
+      <Fridge selected={selected === "fridge"} onSelect={onSelect} label={labels.fridge} items={inventory.fridge} />
       <Freezer selected={selected === "freezer"} onSelect={onSelect} label={labels.freezer} />
 
       {/* Faceted angular island — front drawer opens when selected */}
@@ -824,14 +1123,18 @@ export default function Kitchen3D({
   onSelect,
   labels,
   controls,
+  inventory,
   modelUrl,
 }: {
   selected: KitchenObject | null;
   onSelect: (k: KitchenObject) => void;
   labels: Record<KitchenObject, string>;
   controls: KitchenControlLabels;
+  inventory: FridgeInventory;
   modelUrl?: string | null;
 }) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const controlsRef = useRef<any>(null);
   const [lightsOn, setLightsOn] = useState(true);
   const [night, setNight] = useState(false);
   const [water, setWater] = useState(false);
@@ -889,6 +1192,7 @@ export default function Kitchen3D({
                 onSelect={onSelect}
                 labels={labels}
                 controls={controls}
+                inventory={inventory}
                 lightsOn={lightsOn}
                 night={night}
                 water={water}
@@ -905,24 +1209,29 @@ export default function Kitchen3D({
             <ContactShadows position={[0, 0.01, 0]} opacity={0.5} scale={22} blur={2.6} far={10} resolution={1024} color="#000000" />
           </ModelBoundary>
         ) : (
-          <Scene
-            selected={selected}
-            onSelect={onSelect}
-            labels={labels}
-            controls={controls}
-            lightsOn={lightsOn}
-            night={night}
-            water={water}
-            stove={stove}
-            oven={oven}
-            onToggleWater={() => setWater((v) => !v)}
-            onToggleStove={() => setStove((v) => !v)}
-          />
+          <>
+            <Scene
+              selected={selected}
+              onSelect={onSelect}
+              labels={labels}
+              controls={controls}
+              inventory={inventory}
+              lightsOn={lightsOn}
+              night={night}
+              water={water}
+              stove={stove}
+              oven={oven}
+              onToggleWater={() => setWater((v) => !v)}
+              onToggleStove={() => setStove((v) => !v)}
+            />
+            <CameraFocus controlsRef={controlsRef} focus={selected} />
+          </>
         )}
 
         <OrbitControls
+          ref={controlsRef}
           enablePan={false}
-          minDistance={4}
+          minDistance={2.4}
           maxDistance={14}
           minPolarAngle={0.5}
           maxPolarAngle={Math.PI / 2.15}
