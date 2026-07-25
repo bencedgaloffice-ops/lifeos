@@ -550,6 +550,66 @@ export type KitchenItem = {
   location: "fridge" | "pantry" | "freezer";
   category: string | null;
   created_at: string;
+  /** When it was bought — drives freshness/aging, not just the expiry date. */
+  purchase_date: string | null;
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  /** What it cost, in HUF — feeds the Treasury grocery-spend link. */
+  price_huf: number | null;
+  /** Which chain it came from. */
+  store_id: string | null;
+};
+
+/** A Hungarian grocery chain (shared reference data, read-only to users). */
+export type Store = {
+  id: string;
+  slug: string;
+  name: string;
+  kind: "hypermarket" | "discount" | "wholesale" | "supermarket";
+  /** 1 = cheapest .. 3 = priciest */
+  price_level: number;
+  color: string;
+  country: string;
+  strengths: string | null;
+  created_at: string;
+};
+
+/** A price the user actually observed for an item at a given chain. */
+export type StorePrice = {
+  id: string;
+  user_id: string;
+  store_id: string;
+  item_name: string;
+  unit: string | null;
+  price_huf: number;
+  observed_at: string;
+  created_at: string;
+};
+
+export type Recipe = {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string | null;
+  steps: string[];
+  minutes: number | null;
+  servings: number;
+  calories: number | null;
+  protein_g: number | null;
+  cuisine: string | null;
+  is_favourite: boolean;
+  created_at: string;
+};
+
+export type RecipeIngredient = {
+  id: string;
+  recipe_id: string;
+  name: string;
+  quantity: string | null;
+  optional: boolean;
+  created_at: string;
 };
 
 export type ShoppingListItem = {
@@ -560,6 +620,9 @@ export type ShoppingListItem = {
   quantity: string | null;
   checked: boolean;
   created_at: string;
+  /** Which chain to buy this at (cheapest known, or user's choice). */
+  store_id: string | null;
+  estimated_price_huf: number | null;
 };
 
 export type NutritionEntry = {

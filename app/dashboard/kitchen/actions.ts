@@ -87,3 +87,48 @@ export async function logSuggestedMeal(input: {
   revalidatePath("/dashboard/nutrition");
   revalidatePath("/dashboard");
 }
+
+/* ---------------- Hungarian store intelligence ---------------- */
+
+/** Record a price the user actually saw at a chain. This is what makes the
+ * cheapest-store recommendation real rather than invented. */
+export async function recordStorePrice(fd: FormData) {
+  const { supabase, user } = await requireUser();
+  const itemName = String(fd.get("item_name") ?? "").trim();
+  const storeId = String(fd.get("store_id") ?? "");
+  const price = Number(fd.get("price_huf"));
+  if (!itemName || !storeId || !Number.isFinite(price) || price <= 0) return;
+
+  await supabase.from("store_prices").insert({
+    user_id: user.id,
+    store_id: storeId,
+    item_name: itemName,
+    unit: (String(fd.get("unit") ?? "").trim() || null) as string | null,
+    price_huf: price,
+  });
+  refresh();
+}
+
+export async function deleteStorePrice(id: string) {
+  const { supabase } = await requireUser();
+  await supabase.from("store_prices").delete().eq("id", id);
+  refresh();
+}
+
+/** Pin a shopping-list item to a specific chain (overrides the suggestion). */
+export async function setShoppingItemStore(id: string, storeId: string | null) {
+  const { supabase } = await requireUser();
+  await supabase.from("shopping_list_items").update({ store_id: storeId }).eq("id", id);
+  refresh();
+}
+
+/** Accept the whole suggested plan in one go. */
+export async function applyStorePlan(plan: { itemId: string; storeId: string }[]) {
+  const { supabase } = await requireUser();
+  await Promise.all(
+    plan.map(({ itemId, storeId }) =>
+      supabase.from("shopping_list_items").update({ store_id: storeId }).eq("id", itemId),
+    ),
+  );
+  refresh();
+}

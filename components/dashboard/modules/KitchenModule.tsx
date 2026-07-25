@@ -14,12 +14,13 @@ import {
   Sparkles,
   Check,
 } from "lucide-react";
-import type { KitchenItem, ShoppingListItem } from "@/lib/types";
+import type { KitchenItem, ShoppingListItem, Store, StorePrice } from "@/lib/types";
 import type { SuggestedMeal } from "@/app/dashboard/kitchen/suggestions";
 import { formatDate } from "@/lib/format";
 import { useLocale } from "@/lib/i18n/LocaleProvider";
 import { ModuleHeader, Panel, Pill, EmptyState, Field, inputClass, Segmented } from "@/components/dashboard/ui";
 import { Kitchen3DCanvas, type KitchenObject } from "@/components/three/Kitchen3DCanvas";
+import { SmartShopping } from "@/components/dashboard/kitchen/SmartShopping";
 import {
   createKitchenItem,
   deleteKitchenItem,
@@ -33,6 +34,8 @@ type Props = {
   items: KitchenItem[];
   shoppingList: ShoppingListItem[];
   suggestions: SuggestedMeal[];
+  stores: Store[];
+  prices: StorePrice[];
 };
 
 const locationIcons = { fridge: Refrigerator, pantry: Archive, freezer: Snowflake } as const;
@@ -59,13 +62,13 @@ function expiryTone(dateStr: string | null): "amber" | null {
   return days <= 3 ? "amber" : null;
 }
 
-export function KitchenModule({ items, shoppingList, suggestions }: Props) {
+export function KitchenModule({ items, shoppingList, suggestions, stores, prices }: Props) {
   const { t, locale } = useLocale();
   const [, startTransition] = useTransition();
   const [openItem, setOpenItem] = useState<null | "fridge" | "pantry" | "freezer">(null);
   const [openList, setOpenList] = useState(false);
   const [logged, setLogged] = useState<Set<string>>(new Set());
-  const [view, setView] = useState<"world" | "manager">("world");
+  const [view, setView] = useState<"world" | "manager" | "shopping">("world");
   // Start with nothing selected so the page opens on the wide room view —
   // selecting an object flies the camera to it, which would otherwise hide
   // the whole kitchen behind a close-up on first load.
@@ -118,6 +121,7 @@ export function KitchenModule({ items, shoppingList, suggestions }: Props) {
       options={[
         { value: "world", label: t("kitchen.viewWorld") },
         { value: "manager", label: t("kitchen.viewManager") },
+        { value: "shopping", label: t("kitchen.viewShopping") },
       ]}
     />
   );
@@ -192,6 +196,20 @@ export function KitchenModule({ items, shoppingList, suggestions }: Props) {
               )}
             </div>
           )}
+      </div>
+    );
+  }
+
+  if (view === "shopping") {
+    return (
+      <div>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <ModuleHeader icon={ChefHat} title={t("kitchen.title")} subtitle={t("kitchen.smartShoppingSubtitle")} accent="kitchen" />
+          {toggle}
+        </div>
+        <div className="mt-4">
+          <SmartShopping stores={stores} prices={prices} shoppingList={shoppingList} />
+        </div>
       </div>
     );
   }
