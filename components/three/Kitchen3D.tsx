@@ -1123,7 +1123,10 @@ function useEdgeSound(value: boolean, fire: (rising: boolean) => void) {
       prev.current = value;
       fire(value);
     }
-  });
+    // Only when the value actually flips — without deps this re-ran on every
+    // render of the appliance, which is every frame that changes `lit`.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
 }
 
 /* --------------------------------------------------------- door mechanics */
@@ -1403,16 +1406,16 @@ function FreezerDrawer({
     playRails(0.55);
   });
 
-  useFrame(() => {
-    if (!d.current) return;
-    d.current.position.z = travel.current;
-  });
+  // Integrate and apply in the same callback. Split across two useFrame calls
+  // the apply ran first and rendered the *previous* frame's position, which
+  // showed up as the drawer lagging a frame behind the spring.
   useFrame((_, dt) => {
     const step = Math.min(dt, 0.05);
     // Heavier mass than a door, and soft-close damping as it returns home.
     const damping = open ? 13 : 13 + (1 - travel.current / 0.46) * 22;
     vel.current += ((open ? 0.46 : 0) - travel.current) * 52 * step - vel.current * damping * step;
     travel.current = Math.max(0, travel.current + vel.current * step);
+    if (d.current) d.current.position.z = travel.current;
   });
 
   const iw = width - wall * 2;
@@ -1622,6 +1625,20 @@ function Fridge({
   const FRESH_Y = FRESH_BOTTOM + FRESH_H / 2;
   const IW = W - WALL * 2;
   const IH = FRESH_H - WALL * 2;
+
+  /* Depth budget. The cavity runs from CAV_BACK to CAV_FRONT (the door plane).
+     Door bins protrude BIN_D into that cavity when the doors are shut, so the
+     shelves have to stop short of them — in a real French-door fridge the
+     shelves are deliberately shallower than the box for exactly this reason.
+     Deriving both from one budget keeps them from ever intersecting again. */
+  const CAV_FRONT = D / 2;
+  const CAV_BACK = -D / 2 + WALL;
+  const BIN_D = 0.135;
+  const SHELF_D = CAV_FRONT - BIN_D - 0.02 - CAV_BACK;
+  const SHELF_Z = CAV_BACK + SHELF_D / 2;
+  /** Where an LED channel sits, just off the liner's back wall. */
+  const LED_Z = CAV_BACK + 0.06 - SHELF_Z;
+
   /** Shelf heights in world space, inside the fresh compartment. */
   const SH = [FRESH_BOTTOM + 0.5, FRESH_BOTTOM + 0.92, FRESH_BOTTOM + 1.32];
 
@@ -1690,20 +1707,20 @@ function Fridge({
 
         {/* ---------- glass shelves on moulded supports ---------- */}
         {SH.map((y, si) => (
-          <group key={y} position={[0, y, 0.055]}>
+          <group key={y} position={[0, y, SHELF_Z]}>
             <mesh material={SHELF_GLASS}>
-              <boxGeometry args={[IW - 0.03, 0.014, D - WALL - 0.09]} />
+              <boxGeometry args={[IW - 0.03, 0.014, SHELF_D]} />
             </mesh>
-            <mesh position={[0, 0, (D - WALL - 0.09) / 2]} material={GOLD_MAT}>
+            <mesh position={[0, 0, SHELF_D / 2]} material={GOLD_MAT}>
               <boxGeometry args={[IW - 0.03, 0.02, 0.012]} />
             </mesh>
             {[-(IW - 0.03) / 2 + 0.008, (IW - 0.03) / 2 - 0.008].map((x) => (
               <mesh key={x} position={[x, -0.012, 0]} material={LINER}>
-                <boxGeometry args={[0.016, 0.022, D - WALL - 0.1]} />
+                <boxGeometry args={[0.016, 0.022, SHELF_D - 0.01]} />
               </mesh>
             ))}
-            <LedStrip position={[0, 0.2, -(D - WALL) / 2 + 0.06]} length={IW - 0.16} lit={lit} />
-            {si === 2 && <TempSensor position={[(IW - 0.03) / 2 - 0.1, 0.13, -(D - WALL) / 2 + 0.07]} lit={lit} />}
+            <LedStrip position={[0, 0.2, LED_Z]} length={IW - 0.16} lit={lit} />
+            {si === 2 && <TempSensor position={[(IW - 0.03) / 2 - 0.1, 0.13, LED_Z + 0.01]} lit={lit} />}
           </group>
         ))}
 
@@ -1837,23 +1854,23 @@ function Fridge({
         ))}
 
         {/* ---------- CRISPER DRAWER on real slides ---------- */}
-        <DrawerRails width={IW - 0.06} depth={D - WALL - 0.1} y={FRESH_BOTTOM + 0.26} />
-        <group position={[0, FRESH_BOTTOM + 0.1, 0.06]}>
+        <DrawerRails width={IW - 0.06} depth={SHELF_D} y={FRESH_BOTTOM + 0.26} />
+        <group position={[0, FRESH_BOTTOM + 0.1, SHELF_Z]}>
           <mesh material={LINER}>
-            <boxGeometry args={[IW - 0.09, 0.012, D - WALL - 0.12]} />
+            <boxGeometry args={[IW - 0.09, 0.012, SHELF_D - 0.02]} />
           </mesh>
-          <mesh position={[0, 0.09, (D - WALL - 0.12) / 2]} material={CLEAR_PLASTIC}>
+          <mesh position={[0, 0.09, (SHELF_D - 0.02) / 2]} material={CLEAR_PLASTIC}>
             <boxGeometry args={[IW - 0.09, 0.19, 0.01]} />
           </mesh>
           {[-(IW - 0.09) / 2, (IW - 0.09) / 2].map((x) => (
             <mesh key={x} position={[x, 0.09, 0]} material={CLEAR_PLASTIC}>
-              <boxGeometry args={[0.01, 0.19, D - WALL - 0.12]} />
+              <boxGeometry args={[0.01, 0.19, SHELF_D - 0.02]} />
             </mesh>
           ))}
-          <mesh position={[0, 0.15, (D - WALL - 0.12) / 2 + 0.008]} material={GOLD_MAT}>
+          <mesh position={[0, 0.15, (SHELF_D - 0.02) / 2 + 0.008]} material={GOLD_MAT}>
             <boxGeometry args={[0.3, 0.018, 0.014]} />
           </mesh>
-          <mesh position={[(IW - 0.09) / 2 - 0.16, 0.16, (D - WALL - 0.12) / 2 + 0.008]} material={RAIL_MAT}>
+          <mesh position={[(IW - 0.09) / 2 - 0.16, 0.16, (SHELF_D - 0.02) / 2 + 0.008]} material={RAIL_MAT}>
             <boxGeometry args={[0.07, 0.012, 0.008]} />
           </mesh>
         </group>
@@ -2016,15 +2033,24 @@ function Fridge({
               </group>
             )}
 
-            {/* retaining bins, and bottles standing in them (left door only) */}
+            {/* Retaining bins, and bottles standing in them (left door only).
+                Local -z points into the cabinet, so the bins must sit at a
+                NEGATIVE z to protrude into the cavity — at a positive z they
+                were buried in the door's insulation and the bottles floated out
+                in front of the closed doors. The bins are also flipped 180° so
+                their retaining wall faces away from the door, which is the way
+                round a real door bin holds a bottle in. */}
             {[FRESH_H / 2 - 0.42, 0, -FRESH_H / 2 + 0.42].map((y, bi) => {
               const bottle = di === 0 ? drinks[bi] : undefined;
+              const binZ = -0.012 - BIN_D / 2;
               return (
                 <group key={y}>
-                  <DoorBin position={[(d.s * W) / 4, y, 0.008]} width={W / 2 - 0.09} />
+                  <group position={[(d.s * W) / 4, y, binZ]} rotation={[0, Math.PI, 0]}>
+                    <DoorBin position={[0, 0, 0]} width={W / 2 - 0.09} depth={BIN_D} />
+                  </group>
                   {bottle && (
                     <Bottle
-                      position={[(d.s * W) / 4 - 0.16 + bi * 0.06, y + 0.16, 0.01]}
+                      position={[(d.s * W) / 4 - 0.16 + bi * 0.06, y + 0.16, binZ]}
                       place={placeItem(bottle.id, urgencyOf(bottle))}
                       colour={categorize(bottle.name) === "water" ? "#c4e2f7" : "#c8873a"}
                       fill={fillFrom(bottle.quantity)}
@@ -2535,8 +2561,10 @@ function Scene({
       <pointLight position={[-5.6, 2.2, 0.4]} intensity={day ? 5 : 1.4} distance={13} decay={2} color={day ? "#f2f7ff" : "#9fb4ff"} />
 
       {/* CENTRE: chef's cooking zone, on axis */}
+      {/* Width kept inside the flanking tall cabinets (which start at
+          x = +/-1.055) — at 3.0 this panel ran straight through them. */}
       <mesh position={[0, 1.72, -3.34]}>
-        <planeGeometry args={[3.0, 1.0]} />
+        <planeGeometry args={[2.06, 1.0]} />
         <meshStandardMaterial
           map={marbleWhite}
           emissive="#ffbf6a"
@@ -2547,7 +2575,7 @@ function Scene({
       </mesh>
       {[2.24, 1.2].map((y) => (
         <mesh key={y} position={[0, y, -3.32]} material={GOLD_MAT}>
-          <boxGeometry args={[3.1, 0.04, 0.05]} />
+          <boxGeometry args={[2.1, 0.04, 0.05]} />
         </mesh>
       ))}
       <pointLight position={[0, 1.7, -2.9]} intensity={lightsOn ? 0.8 : 0.25} distance={4} decay={2} color="#ffc178" />
@@ -2562,7 +2590,7 @@ function Scene({
         </group>
       ))}
       <mesh position={[0, 0.93, -3.02]} castShadow material={blackMarbleMat}>
-        <boxGeometry args={[2.3, 0.06, 0.78]} />
+        <boxGeometry args={[2.1, 0.06, 0.78]} />
       </mesh>
 
       {/* range hood: warm wood + gold */}
