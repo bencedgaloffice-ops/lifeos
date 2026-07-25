@@ -195,7 +195,7 @@ function SidebarContent({
         ))}
       </div>
 
-      <nav className="flex flex-1 flex-col gap-1">
+      <nav className="nav-scroll -mr-2 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain pr-2">
         {sectionNav.map((item) => (
           <NavLink key={item.href} item={item} pathname={pathname} onNavigate={onNavigate} />
         ))}
@@ -234,7 +234,7 @@ function NavLink({
       href={item.href}
       onClick={onNavigate}
       className={cn(
-        "group relative flex items-center gap-3 rounded-2xl px-3.5 py-3 transition-all duration-300",
+        "group relative flex items-center gap-3 rounded-2xl px-3.5 py-3 transition-all duration-300 hover:translate-x-0.5",
         active ? "glass text-white" : "text-white/50 hover:bg-white/[0.04] hover:text-white",
       )}
     >
@@ -243,7 +243,7 @@ function NavLink({
       )}
       <Icon
         className={cn(
-          "h-[18px] w-[18px] transition-colors",
+          "h-[18px] w-[18px] transition-transform duration-300 group-hover:scale-110",
           active ? "text-accent-soft" : "text-white/50 group-hover:text-white",
         )}
         strokeWidth={1.75}
