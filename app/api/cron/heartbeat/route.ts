@@ -38,7 +38,11 @@ export async function GET(request: Request) {
   const supabase = createAdminClient();
   const now = new Date();
   const cadences = dueCadences(now);
-  const scheduled = cadences.flatMap((c) => scheduledAgents(c));
+  // The Executive curates what the specialists produced this pass, so it must
+  // run after them regardless of registration or cadence order.
+  const scheduled = cadences
+    .flatMap((c) => scheduledAgents(c))
+    .sort((a, b) => (a.id === "executive" ? 1 : 0) - (b.id === "executive" ? 1 : 0));
 
   // Users to consider: anyone with pending events (reactive) plus everyone with
   // a profile (scheduled). For a single-user install these collapse to one.

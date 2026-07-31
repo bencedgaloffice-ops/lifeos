@@ -9,7 +9,8 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
-import { buildBriefing, speakBriefing, type Signal } from "@/lib/jarvis/briefing";
+import { buildBriefing, speakBriefing, MAX_SIGNALS, type Signal } from "@/lib/jarvis/briefing";
+import { listOpenRecommendations } from "@/lib/ai-core/recommendations";
 import { rankRecipes } from "@/lib/kitchen/chef";
 import type { KitchenItem, Recipe, RecipeIngredient } from "@/lib/types";
 
@@ -88,6 +89,31 @@ export async function getBriefing(): Promise<Briefing> {
     cookableNow,
   });
 
+  // Fold in what the background agents have already worked out. These run on
+  // the heartbeat and persist to `recommendations`; surfacing them here means
+  // the home banner reflects the agents' findings, not only the live rules.
+  // Runs under the user's client, so RLS scopes it — no explicit user filter.
+  const recs = await listOpenRecommendations(supabase, 20);
+  const recSignals: Signal[] = recs.map((r) => ({
+    id: `rec:${r.id}`,
+    urgency: r.urgency,
+    text: r.body ? `${r.title} — ${r.body}` : r.title,
+    route: r.action?.route,
+    kind: r.kind || r.agent,
+  }));
+
+  // Merge both pools, most urgent first, one per kind, capped — the same
+  // restraint buildBriefing applies, now across rules and agents together.
+  const seen = new Set<string>();
+  const merged = [...recSignals, ...signals]
+    .sort((a, b) => b.urgency - a.urgency)
+    .filter((sgnl) => {
+      if (seen.has(sgnl.kind)) return false;
+      seen.add(sgnl.kind);
+      return true;
+    })
+    .slice(0, MAX_SIGNALS);
+
   const name = (profile as { display_name: string | null } | null)?.display_name || "Bence";
-  return { signals, spoken: speakBriefing(signals, name, now) };
+  return { signals: merged, spoken: speakBriefing(merged, name, now) };
 }

@@ -56,17 +56,17 @@ export async function saveRecommendations(
   }
 }
 
-/** Open recommendations, ranked by confidence × urgency (most pressing first). */
+/** Open recommendations, ranked by confidence × urgency (most pressing first).
+ * Pass userId when calling from the service-role cron (RLS is off there); under
+ * a user session it's redundant but harmless. */
 export async function listOpenRecommendations(
   supabase: SupabaseClient,
   limit = 50,
+  userId?: string,
 ): Promise<Recommendation[]> {
-  const { data, error } = await supabase
-    .from("recommendations")
-    .select("*")
-    .eq("status", "open")
-    .order("created_at", { ascending: false })
-    .limit(200);
+  let q = supabase.from("recommendations").select("*").eq("status", "open");
+  if (userId) q = q.eq("user_id", userId);
+  const { data, error } = await q.order("created_at", { ascending: false }).limit(200);
   if (error) {
     console.error("listOpenRecommendations failed:", error.message);
     return [];

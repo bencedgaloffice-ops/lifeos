@@ -18,3 +18,6 @@ export { healthAgent } from "./health";
 export { projectsAgent } from "./projects";
 export { farmAgent } from "./farm";
 export { marriageAgent } from "./marriage";
+// The Executive reads what the others produce, so it registers last and the
+// heartbeat runs it last (see the ordering in the cron).
+export { executiveAgent } from "./executive";

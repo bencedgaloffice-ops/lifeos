@@ -25,7 +25,10 @@ export type Signal = {
   text: string;
   /** Where to send the user if they want to act on it. */
   route?: string;
-  kind: "expiry" | "shift" | "date" | "shopping" | "goal" | "finance" | "cook";
+  /** A short category used only for dedup — one signal per kind. The rule
+   * engine uses a fixed set; persisted agent recommendations merged in by
+   * getBriefing bring their own kinds, so this is a free string. */
+  kind: string;
 };
 
 /** Below this, a signal is real but not worth an interruption. */
