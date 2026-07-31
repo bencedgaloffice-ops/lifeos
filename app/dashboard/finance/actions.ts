@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { emit } from "@/lib/ai-core/events";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -154,6 +155,14 @@ export async function createTransaction(formData: FormData) {
     direction,
     description: description ?? (categoryName || null),
     occurred_at: occurredDate ? new Date(occurredDate).toISOString() : new Date().toISOString(),
+  });
+
+  // Let the AI Core notice. Best-effort: a lost event must never fail the ledger.
+  await emit(supabase, user.id, direction === "in" ? "IncomeAdded" : "ExpenseAdded", {
+    amount,
+    currency,
+    category: categoryName || null,
+    description: description ?? (categoryName || null),
   });
 
   // Keep the account balance in sync like a real ledger.
