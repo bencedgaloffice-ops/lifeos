@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { AICompanion } from "@/components/dashboard/modules/AICompanion";
+import { ActivityFeed } from "@/components/ai/ActivityFeed";
 import { formatCurrency } from "@/lib/format";
 import { getServerLocale, tServer } from "@/lib/i18n/server";
 import type { AiMemory } from "@/lib/types";
@@ -45,10 +46,13 @@ export default async function AIPage() {
   const greeting = tr("ai.greeting").replace("{{name}}", name);
 
   return (
-    <AICompanion
-      insights={insights}
-      memories={(memories as AiMemory[]) ?? []}
-      greeting={greeting}
-    />
+    <div className="space-y-4">
+      <AICompanion
+        insights={insights}
+        memories={(memories as AiMemory[]) ?? []}
+        greeting={greeting}
+      />
+      <ActivityFeed />
+    </div>
   );
 }
