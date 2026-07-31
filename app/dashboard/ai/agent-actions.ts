@@ -25,6 +25,7 @@ import type { PermissionLevel } from "@/lib/jarvis/types";
 import { runAgent, isAgentConfigured, type ImageInput, type ToolOutcome } from "@/lib/jarvis/agent";
 import { toolsFor, findTool, type AgentId } from "@/lib/jarvis/tools";
 import { route, briefFor, labelFor, CORE_BRIEF } from "@/lib/jarvis/agents";
+import { recall } from "@/lib/ai-core/memory";
 
 async function requireUser() {
   const supabase = await createClient();
@@ -160,29 +161,10 @@ async function recallMemory(supabase: SupabaseClient, userId: string, args: Args
   const about = s(args, "about") ?? "";
   const limit = Math.min(40, n(args, "limit") ?? 12);
 
-  // Trigram-ish match on the topic, then top up with the most important facts
-  // so recall never comes back empty just because the phrasing missed.
-  const { data: matched } = await supabase
-    .from("ai_memory")
-    .select("id, key, content, importance, created_at")
-    .ilike("content", `%${about}%`)
-    .order("importance", { ascending: false, nullsFirst: false })
-    .limit(limit);
-
-  const { data: important } = await supabase
-    .from("ai_memory")
-    .select("id, key, content, importance, created_at")
-    .order("importance", { ascending: false, nullsFirst: false })
-    .limit(8);
-
-  type Row = { id: string; key: string | null; content: string; importance: number | null };
-  const seen = new Set<string>();
-  const facts: Row[] = [];
-  for (const r of [...((matched as Row[]) ?? []), ...((important as Row[]) ?? [])]) {
-    if (seen.has(r.id)) continue;
-    seen.add(r.id);
-    facts.push(r);
-  }
+  // Semantic-first recall with a trigram/importance fallback — one definition
+  // in lib/ai-core/memory, shared with any future agent. Falls back cleanly
+  // when no embeddings provider is configured.
+  const facts = await recall(supabase, userId, about, limit);
   if (!facts.length) return { ok: true, content: "Nothing remembered about that yet." };
 
   // Mark what was actually referenced, so recall can rank by usefulness later.

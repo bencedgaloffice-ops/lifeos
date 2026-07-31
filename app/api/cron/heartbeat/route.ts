@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { drainEvents, markProcessed } from "@/lib/ai-core/events";
 import { reactorsFor, scheduledAgents } from "@/lib/ai-core/registry";
 import { runAgentJob, dueCadences } from "@/lib/ai-core/dispatch";
+import { backfillEmbeddings } from "@/lib/ai-core/memory";
 import "@/lib/ai-core/agents"; // side effect: register every agent
 
 export const maxDuration = 60;
@@ -80,11 +81,16 @@ export async function GET(request: Request) {
     }
   }
 
+  // Give embeddings to any memory rows still missing them (no-op without a
+  // provider key). Global, since an embedding is a property of the text.
+  const embedded = await backfillEmbeddings(supabase, 32);
+
   return NextResponse.json({
     users: allUsers.size,
     cadences,
     scheduledAgents: scheduled.map((a) => a.id),
     eventsHandled,
     recommendations,
+    embedded,
   });
 }
