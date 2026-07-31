@@ -48,9 +48,13 @@ export async function buildGrounding(
   userId: string,
   { brief, locale = "en", now = new Date() }: { brief: string; locale?: "en" | "hu"; now?: Date },
 ): Promise<Grounding> {
+  // Both queries filter by the user explicitly. Under a user session RLS would
+  // do it anyway, but this builder is also called from the heartbeat cron on a
+  // service-role client where RLS is off — without the filter that would read
+  // every user's memory. Explicit scoping is correct under both clients.
   const [{ data: profile }, { data: topFacts }] = await Promise.all([
     supabase.from("profiles").select("display_name, preferred_currency").eq("id", userId).maybeSingle(),
-    supabase.from("ai_memory").select("key, content").order("importance", { ascending: false }).limit(14),
+    supabase.from("ai_memory").select("key, content").eq("user_id", userId).order("importance", { ascending: false }).limit(14),
   ]);
 
   const displayName = (profile as { display_name?: string } | null)?.display_name || "Bence";
