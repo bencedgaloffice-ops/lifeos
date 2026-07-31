@@ -23,9 +23,7 @@
  */
 
 import { wireFormat, type JarvisTool } from "./tools";
-
-const API_URL = "https://api.anthropic.com/v1/messages";
-const MODEL = "claude-sonnet-5";
+import { callMessages, isAnthropicConfigured } from "@/lib/ai-core/anthropic";
 
 /** Hard ceiling on tool round trips, so a confused model cannot loop forever. */
 const MAX_STEPS = 8;
@@ -63,7 +61,7 @@ type ContentBlock =
 type Message = { role: "user" | "assistant"; content: string | ContentBlock[] };
 
 export function isAgentConfigured(): boolean {
-  return Boolean(process.env.ANTHROPIC_API_KEY);
+  return isAnthropicConfigured();
 }
 
 /**
@@ -115,38 +113,19 @@ export async function runAgent({
   const steps: AgentStep[] = [];
 
   for (let step = 0; step < MAX_STEPS; step++) {
-    let data: {
-      content?: ContentBlock[];
-      stop_reason?: string;
-    };
+    // A tool round trip can be slow, so give it more headroom than a one-shot
+    // chat call. Null back means the call failed after its retry — surface it
+    // as an error stop rather than an empty answer.
+    const data = await callMessages({
+      system,
+      messages,
+      tools: wireFormat(tools),
+      maxTokens,
+      timeoutMs: 45_000,
+    });
+    if (!data) return { answer: null, steps, stop: "error" };
 
-    try {
-      const res = await fetch(API_URL, {
-        method: "POST",
-        headers: {
-          "x-api-key": process.env.ANTHROPIC_API_KEY!,
-          "anthropic-version": "2023-06-01",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({
-          model: MODEL,
-          max_tokens: maxTokens,
-          system,
-          tools: wireFormat(tools),
-          messages,
-        }),
-      });
-      if (!res.ok) {
-        console.error("Jarvis agent API error", res.status, await res.text().catch(() => ""));
-        return { answer: null, steps, stop: "error" };
-      }
-      data = await res.json();
-    } catch (err) {
-      console.error("Jarvis agent call failed", err);
-      return { answer: null, steps, stop: "error" };
-    }
-
-    const blocks = data.content ?? [];
+    const blocks = (data.content as ContentBlock[] | undefined) ?? [];
     const toolUses = blocks.filter((b): b is Extract<ContentBlock, { type: "tool_use" }> => b.type === "tool_use");
 
     // No tools wanted — this is the answer.
@@ -180,32 +159,19 @@ export async function runAgent({
   /* Out of steps. Rather than returning nothing, ask for a plain answer with
      tools withheld — the model has the gathered data in context and can almost
      always still say something useful. */
-  try {
-    const res = await fetch(API_URL, {
-      method: "POST",
-      headers: {
-        "x-api-key": process.env.ANTHROPIC_API_KEY!,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: maxTokens,
-        system: `${system}\n\nYou have run out of tool calls. Answer now from what you already gathered, and say plainly if something is still missing.`,
-        messages,
-      }),
-    });
-    if (res.ok) {
-      const data = (await res.json()) as { content?: ContentBlock[] };
-      const text = (data.content ?? [])
-        .filter((b): b is Extract<ContentBlock, { type: "text" }> => b.type === "text")
-        .map((b) => b.text)
-        .join("\n")
-        .trim();
-      return { answer: text || null, steps, stop: "step_limit" };
-    }
-  } catch {
-    /* fall through */
+  const data = await callMessages({
+    system: `${system}\n\nYou have run out of tool calls. Answer now from what you already gathered, and say plainly if something is still missing.`,
+    messages,
+    maxTokens,
+    timeoutMs: 30_000,
+  });
+  if (data) {
+    const text = ((data.content as ContentBlock[] | undefined) ?? [])
+      .filter((b): b is Extract<ContentBlock, { type: "text" }> => b.type === "text")
+      .map((b) => b.text)
+      .join("\n")
+      .trim();
+    return { answer: text || null, steps, stop: "step_limit" };
   }
   return { answer: null, steps, stop: "step_limit" };
 }
