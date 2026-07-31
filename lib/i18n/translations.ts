@@ -517,6 +517,8 @@ const en = {
       ranSuffix: "ran",
       recsCount: "{{n}} suggestion(s)",
       noRuns: "No agent runs yet. They run on a schedule and when your data changes.",
+      runs24h: "runs / 24h",
+      okRate: "ok",
     },
   },
   lifeScore: {
@@ -2019,6 +2021,8 @@ const hu: typeof en = {
       ranSuffix: "lefutott",
       recsCount: "{{n}} javaslat",
       noRuns: "Még nem futott ügynök. Ütemezetten futnak, és amikor változik az adatod.",
+      runs24h: "futás / 24ó",
+      okRate: "sikeres",
     },
   },
   lifeScore: {

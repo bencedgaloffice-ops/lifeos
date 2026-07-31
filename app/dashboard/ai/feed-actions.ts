@@ -35,15 +35,20 @@ export type AgentRunLite = {
   created_at: string;
 };
 
+/** A cheap health readout for the last 24h — the observability strip. */
+export type AgentHealth = { runs24h: number; okRate: number | null };
+
 export type ActivityFeed = {
   recommendations: Recommendation[];
   notifications: NotificationRow[];
   runs: AgentRunLite[];
+  health: AgentHealth;
 };
 
 export async function getActivityFeed(): Promise<ActivityFeed> {
   const supabase = await client();
-  const [recommendations, notifications, { data: runs }] = await Promise.all([
+  const since = new Date(Date.now() - 86_400_000).toISOString();
+  const [recommendations, notifications, { data: runs }, { count: runs24h }, { count: ok24h }] = await Promise.all([
     listOpenRecommendations(supabase, 12),
     listNotifications(supabase, { limit: 12 }),
     supabase
@@ -51,8 +56,17 @@ export async function getActivityFeed(): Promise<ActivityFeed> {
       .select("id, agent, trigger, ok, ms, detail, created_at")
       .order("created_at", { ascending: false })
       .limit(12),
+    supabase.from("agent_runs").select("id", { count: "exact", head: true }).gte("created_at", since),
+    supabase.from("agent_runs").select("id", { count: "exact", head: true }).gte("created_at", since).eq("ok", true),
   ]);
-  return { recommendations, notifications, runs: ((runs as AgentRunLite[]) ?? []) };
+
+  const total = runs24h ?? 0;
+  return {
+    recommendations,
+    notifications,
+    runs: (runs as AgentRunLite[]) ?? [],
+    health: { runs24h: total, okRate: total ? Math.round(((ok24h ?? 0) / total) * 100) : null },
+  };
 }
 
 export async function dismissRecommendation(id: string) {

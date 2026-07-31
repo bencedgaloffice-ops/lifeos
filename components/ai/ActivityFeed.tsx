@@ -63,14 +63,30 @@ export function ActivityFeed() {
             <p className="text-[0.7rem] text-white/40">{t("ai.feed.subtitle")}</p>
           </div>
         </div>
-        {unread.length > 1 && (
-          <button
-            onClick={() => optimistic(readAllNotifications, (f) => ({ ...f, notifications: f.notifications.map((n) => ({ ...n, read_at: new Date().toISOString() })) }))}
-            className="text-[0.7rem] text-white/40 transition-colors hover:text-white/80"
-          >
-            {t("ai.feed.markAllRead")}
-          </button>
-        )}
+        <div className="flex items-center gap-3">
+          {feed.health.runs24h > 0 && (
+            <span className="hidden items-center gap-1.5 font-mono text-[0.6rem] text-white/35 sm:inline-flex">
+              <span className="text-white/55">{feed.health.runs24h}</span> {t("ai.feed.runs24h")}
+              {feed.health.okRate !== null && (
+                <>
+                  <span className="text-white/20">·</span>
+                  <span className={feed.health.okRate === 100 ? "text-emerald-400/70" : "text-amber-400/70"}>
+                    {feed.health.okRate}%
+                  </span>{" "}
+                  {t("ai.feed.okRate")}
+                </>
+              )}
+            </span>
+          )}
+          {unread.length > 1 && (
+            <button
+              onClick={() => optimistic(readAllNotifications, (f) => ({ ...f, notifications: f.notifications.map((n) => ({ ...n, read_at: new Date().toISOString() })) }))}
+              className="text-[0.7rem] text-white/40 transition-colors hover:text-white/80"
+            >
+              {t("ai.feed.markAllRead")}
+            </button>
+          )}
+        </div>
       </div>
 
       {!hasAnything && <p className="py-6 text-center text-sm text-white/40">{t("ai.feed.empty")}</p>}
