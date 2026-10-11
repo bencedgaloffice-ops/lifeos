@@ -44,7 +44,7 @@ export function Landing() {
   }
 
   return (
-    <main className="relative h-[100svh] w-full overflow-hidden bg-base">
+    <main id="main" className="relative h-[100svh] w-full overflow-hidden bg-base">
       {/* The Earth — centerpiece of the whole experience */}
       <div className="absolute inset-0">
         <EarthCanvas />
@@ -97,7 +97,7 @@ export function Landing() {
             type="button"
             onClick={enter}
             aria-label={t("landing.enter")}
-            className="group relative inline-flex items-center gap-3 rounded-full px-9 py-4 text-[0.95rem] font-medium text-white transition-all duration-500 ease-premium hover:-translate-y-0.5"
+            className="group relative inline-flex items-center gap-3 rounded-full px-4 sm:px-6 py-3 sm:py-4 text-[0.95rem] font-medium text-white transition-all duration-500 ease-premium hover:-translate-y-0.5"
             style={{
               background: "rgba(255,255,255,0.06)",
               border: "1px solid rgba(255,255,255,0.14)",
@@ -128,6 +128,7 @@ export function Landing() {
           <motion.div
             key="warp"
             aria-hidden
+            inert
             className="pointer-events-none absolute inset-0 z-40"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -136,7 +137,7 @@ export function Landing() {
             {/* Expanding light burst — blooms from the globe's core as the
                 camera arrives, peaking bright and blue-white by mid-warp. */}
             <motion.div
-              className="absolute left-1/2 top-1/2 h-[45vmax] w-[45vmax] -translate-x-1/2 -translate-y-1/2 rounded-full"
+              className="absolute left-1/2 top-1/2 h-[min(45vmax,85vw)] w-[min(45vmax,85vw)] -translate-x-1/2 -translate-y-1/2 rounded-full"
               initial={{ scale: 0.12, opacity: 0 }}
               animate={{ scale: [0.12, 1.6, 4], opacity: [0, 0.95, 1] }}
               transition={{ duration: 1.45, ease: [0.4, 0, 0.5, 1], times: [0, 0.5, 1] }}

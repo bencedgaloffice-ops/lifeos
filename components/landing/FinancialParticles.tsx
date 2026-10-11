@@ -80,7 +80,15 @@ export function FinancialParticles() {
   const [particles, setParticles] = useState<Particle[] | null>(null);
 
   useEffect(() => {
-    setParticles(generateParticles(16));
+    function updateParticles() {
+      const isMobile = window.innerWidth < 768;
+      const count = isMobile ? 8 : 16;
+      setParticles(generateParticles(count));
+    }
+
+    updateParticles();
+    window.addEventListener("resize", updateParticles);
+    return () => window.removeEventListener("resize", updateParticles);
   }, []);
 
   if (!particles) return null;

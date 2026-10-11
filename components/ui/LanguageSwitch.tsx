@@ -27,7 +27,7 @@ export function LanguageSwitch({ className }: { className?: string }) {
             aria-label={localeLabels[l]}
             title={localeLabels[l]}
             className={cn(
-              "relative z-10 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 font-medium transition-colors duration-300",
+              "relative z-10 inline-flex items-center gap-1.5 rounded-full px-2.5 py-2 font-medium transition-colors duration-300",
               active ? "text-black" : "text-white/55 hover:text-white",
             )}
           >
